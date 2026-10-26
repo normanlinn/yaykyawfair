@@ -3,9 +3,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Baloo+2:wght@500;600;800&family=Padauk:wght@400;700&display=swap">
 <style>
-/* Your fonts: Walone for Myanmar script, Brandon Text for Latin. The build inlines them for the single-page artifact. */
-@font-face{font-family:"Walone";src:url("fonts/Z06-Walone-Regular.ttf") format("truetype");font-weight:400;font-display:swap}
-@font-face{font-family:"Walone";src:url("fonts/Z06-Walone-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+/* Fonts: Padauk (Unicode Myanmar, from Google Fonts) with Pyidaungsu as a local fallback; Brandon Text for Latin. The build inlines Brandon Text for the single-page artifact. */
 @font-face{font-family:"Brandon Text";src:url("fonts/BrandonText-Regular.otf") format("opentype");font-weight:400;font-display:swap}
 @font-face{font-family:"Brandon Text";src:url("fonts/BrandonText-Bold.otf") format("opentype");font-weight:700;font-display:swap}
 /* Layout: one full-screen night street canvas; glassy plum HUD panels pinned to the corners, gold for money and signage, lantern red for calls to action. */
@@ -20,12 +18,38 @@
   --lantern:#ff5a4e;
   --jade:#3fc7a5;
   --display:"Bungee","Arial Black",system-ui,sans-serif;
-  --body:"Brandon Text","Baloo 2","Trebuchet MS",system-ui,sans-serif;
-  --mm:"Walone","Padauk","Noto Sans Myanmar","Myanmar Text",sans-serif;
+  --body:"Brandon Text","Baloo 2","Padauk","Pyidaungsu","Trebuchet MS",system-ui,sans-serif;
+  --mm:"Padauk","Pyidaungsu","Myanmar Text","Noto Sans Myanmar",sans-serif;
   color-scheme:dark;
 }
 html,body{height:100%;margin:0;overflow:hidden;background:var(--night);color:var(--ink);font-family:var(--body);-webkit-user-select:none;user-select:none;touch-action:none}
-#game{position:fixed;inset:0;display:block;width:100%;height:100%}
+#world,#game{position:fixed;inset:0;display:block;width:100%;height:100%;touch-action:none}
+#world{cursor:grab}#world.drag{cursor:grabbing}
+/* name tags and speech bubbles float over the 3D view */
+#tags{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+#tags .tag,#tags .bub{position:absolute;left:0;top:0;transform-origin:50% 100%;will-change:transform}
+#tags .tag{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(13,10,36,.8);border:1px solid rgba(63,199,165,.8);white-space:nowrap}
+#tags .tag.me{background:rgba(122,31,43,.9);border-color:transparent;color:#ffe7a3}
+#tags .bub{max-width:230px;width:max-content;font-size:15px;line-height:1.35;padding:6px 11px;border-radius:14px;background:#fff3d6;color:#2a1606;box-shadow:0 4px 14px rgba(0,0,0,.35);text-align:center;overflow-wrap:anywhere}
+#tags .bub::after{content:"";position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-bottom:0;border-top-color:#fff3d6}
+#tags .bub.npc{background:rgba(255,243,214,.82);font-size:13px}
+#tags .bub.npc::after{border-top-color:rgba(255,243,214,.82)}
+#tags .bub small{display:block;font-size:11px;color:#7a4a2a}
+/* chat */
+#chat{position:fixed;left:calc(10px + env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:min(360px,calc(100vw - 150px));display:flex;flex-direction:column;gap:6px;pointer-events:none}
+#chatLog{display:flex;flex-direction:column;gap:3px;max-height:150px;overflow:hidden;justify-content:flex-end}
+#chat.open #chatLog{max-height:220px;overflow-y:auto;pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;justify-content:flex-start}
+.cl{font-size:14px;line-height:1.35;background:rgba(13,10,36,.66);border-radius:8px;padding:3px 8px;width:max-content;max-width:100%;overflow-wrap:anywhere;transition:opacity .6s}
+.cl b{color:var(--jade);margin-right:6px}.cl.me b{color:var(--gold)}.cl.sys{color:var(--muted);font-size:12px}
+.cl.old{opacity:0}#chat.open .cl.old{opacity:1}
+#chatQuick{display:flex;flex-wrap:wrap;gap:5px;pointer-events:auto}
+#chatQuick button{font-size:14px;padding:5px 9px;border-radius:999px;font-weight:600}
+#chatQuick button small{display:block;font-size:10px;color:var(--muted);font-weight:600}
+#chatForm{display:flex;gap:6px;pointer-events:auto}
+#chatIn{flex:1;min-width:0;font:600 16px var(--body);color:var(--ink);background:var(--panel-solid);border:1px solid var(--gold);border-radius:10px;padding:8px 10px;-webkit-user-select:text;user-select:text}
+body.touch #chat{bottom:calc(160px + env(safe-area-inset-bottom,0px))}
+body.touch #chat.open{bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:5}
+#bChat{background:var(--jade);color:#0d0a24;border-color:transparent}
 button{font-family:var(--body);font-weight:700;color:var(--ink);background:var(--panel-solid);border:1px solid var(--line);border-radius:10px;padding:.45em .85em;font-size:15px;cursor:pointer;line-height:1.1}
 button:hover{border-color:var(--gold)}
 button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
@@ -138,7 +162,9 @@ body.inplay #journey,body.inplay #goal{display:none}
 @media (prefers-reduced-motion:reduce){.toast{animation:none}}
 </style>
 
-<canvas id="game" aria-label="Yay Kyaw Nights game view"></canvas>
+<canvas id="world" aria-label="Yay Kyaw Nights, the fair in 3D"></canvas>
+<canvas id="game" hidden aria-label="Game booth"></canvas>
+<div id="tags" aria-hidden="true"></div>
 
 <div id="hud" hidden>
   <div class="stats">
@@ -153,6 +179,7 @@ body.inplay #journey,body.inplay #goal{display:none}
   <div id="goal"></div>
 </div>
 <div id="tools" hidden>
+  <button id="bChat">Chat<kbd>T</kbd></button>
   <button id="bAv">Outfit</button>
   <button id="bWave">Wave<kbd>Q</kbd></button>
   <button id="bBag">Bag<kbd>B</kbd></button>
@@ -164,6 +191,11 @@ body.inplay #journey,body.inplay #goal{display:none}
 <canvas id="mini" width="240" height="346" hidden></canvas>
 <div id="prompt" hidden></div>
 <div id="toasts" aria-live="polite"></div>
+<div id="chat" hidden>
+  <div id="chatLog" aria-live="polite"></div>
+  <div id="chatQuick" hidden></div>
+  <form id="chatForm" hidden autocomplete="off"><input id="chatIn" maxlength="120" enterkeyhint="send" placeholder="စကားပြောရန်… type in Burmese or English" aria-label="Chat message"><button class="cta" type="submit">Send</button></form>
+</div>
 <div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="act" aria-label="Interact">GO</button><button id="waveT">Wave</button></div>
 <div id="sceneBar" hidden><span id="sceneCap"></span><button id="sceneAlt" class="cta" hidden></button><button id="sceneExit">Leave</button></div>
 <div id="photoUI" hidden><div class="vf"><span id="vfText">PHOTO MODE</span></div><div class="bar"><button id="photoExit">Done</button><button id="shutter" aria-label="Take photo"></button><button id="photoHide">Hide me</button></div></div>
@@ -177,7 +209,7 @@ body.inplay #journey,body.inplay #goal{display:none}
     <div class="mmt">ရေကျော်ညများ</div>
     <p>The sun has set over the street fair. Lanterns are glowing, the carts are steaming and the fireworks start at 9:30 PM. Wander, ride, play and collect a night to remember.</p>
     <button class="cta" id="start">Enter the fair</button>
-    <small>Move with WASD or arrows, E or Space to interact. On a phone, use the stick and the GO button.</small>
+    <small>Move with WASD or arrows, drag to look around, E or Space to interact, T to chat. On a phone, use the stick and the GO button.</small>
   </div>
 </div>
 
