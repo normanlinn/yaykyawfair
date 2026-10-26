@@ -113,16 +113,27 @@ export function setChatter(level: number): void {
   if (A.c && A.chat) A.chat.gain.setTargetAtTime(clamp(level, 0, 1) * 0.16, A.c.currentTime, 0.6);
 }
 
-/** Classic two-ring bicycle bell; volume falls off with distance. */
+/** Bicycle bell, a bright "cling cling": two quick metallic strikes. Volume falls off with distance. */
 export function bell(vol: number): void {
   if (!A.c || vol <= 0.01) return;
   const t = A.c.currentTime;
-  for (const off of [0, 0.17]) {
-    [2650, 3960, 5420].forEach((f, i) => tone(f, 0.55 - i * 0.14, 'sine', vol * [0.16, 0.08, 0.045][i], t + off));
+  for (const off of [0, 0.15]) {
+    noiseHit(0.03, vol * 0.18, 6000, t + off, 'highpass'); // the striker's click
+    [3150, 4720, 6900, 8650].forEach((f, i) => tone(f, 0.42 - i * 0.08, 'sine', vol * [0.2, 0.1, 0.06, 0.03][i], t + off));
   }
 }
+/** Motorbike horn, a short nasal "tee tee". */
+export function horn(vol: number): void {
+  if (!A.c || !A.m || vol <= 0.01) return;
+  const C = A.c, t = C.currentTime;
+  const lp = C.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400; lp.connect(A.m);
+  for (const off of [0, 0.22]) {
+    tone(415, 0.15, 'square', vol * 0.07, t + off, lp); tone(495, 0.15, 'square', vol * 0.06, t + off, lp);
+  }
+  setTimeout(() => { try { lp.disconnect(); } catch { /* gone */ } }, 900);
+}
 
-export type Sfx = 'coin' | 'ding' | 'pop' | 'throw' | 'miss' | 'toot' | 'launch' | 'boom' | 'crackle' | 'shutter' | 'whee';
+export type Sfx = 'coin' | 'ding' | 'pop' | 'throw' | 'miss' | 'toot' | 'launch' | 'boom' | 'crackle' | 'shutter' | 'whee' | 'chat';
 export function sfx(k: Sfx): void {
   if (!A.c) return;
   const t = A.c.currentTime;
@@ -137,6 +148,7 @@ export function sfx(k: Sfx): void {
     case 'boom': noiseHit(1.3, 0.7, 380, t); tone(70, 0.8, 'sine', 0.35, t, null, 35); break;
     case 'crackle': for (let i = 0; i < 8; i++) noiseHit(0.04, 0.15, 4000, t + 0.15 + Math.random() * 0.6, 'highpass'); break;
     case 'shutter': noiseHit(0.06, 0.4, 5000, t, 'highpass'); tone(2400, 0.03, 'square', 0.04, t + 0.07); break;
+    case 'chat': tone(1046, 0.09, 'sine', 0.05, t); tone(1568, 0.12, 'sine', 0.04, t + 0.07); break;
     case 'whee': tone(700, 0.6, 'sawtooth', 0.02, t, null, 1100); break;
   }
 }

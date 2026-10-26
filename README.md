@@ -1,8 +1,8 @@
 # Yay Kyaw Nights
 
-A walkable night street-fair game inspired by Yangon's Yay Kyaw, written in TypeScript and drawn on an HTML canvas.
+A walkable 3D night street-fair game inspired by Yangon's Yay Kyaw, written in TypeScript with Three.js.
 
-You dress up as a small icon person and walk through a crowd of families, vendors and bikers. The fair has eight zones: Ferris wheel, carousel, Food Street, pirate ship, game booths, Kids Corner, the music stage and photo booth, and the Finale View. Along the way you can:
+You dress up as a small icon person and walk through a crowd of families, vendors, bicycles and motorbikes. The fair has eight zones: Ferris wheel, carousel, Food Street, pirate ship, game booths, Kids Corner, the music stage and photo booth, and the Finale View. Along the way you can:
 
 - ride the Ferris wheel, carousel, pirate ship and the mini train
 - play ring toss and balloon darts to win tickets, then trade them for prizes
@@ -25,12 +25,16 @@ All sound is synthesized with the Web Audio API, so there are no audio files:
 
 - a crowd murmur and quiet tonal, Burmese-like chatter that you can't make out
 - a saing waing-style band at the stage
-- bicycle bells from the bikers on the main street
+- bicycles ring a bright "cling cling" bell and motorbikes honk "tee tee" when you are in their way
 - fireworks
 
 ## Multiplayer
 
 When the game runs as a claude.ai artifact, it uses the artifact `room` capability. Everyone who has the page open at the same time shares the fair and sees each other's characters and names, and they can wave with Q. Run anywhere else, the game is single-player.
+
+### Chat
+
+Press T (or the Chat button) to talk to the other players in Burmese or English. Messages show as speech bubbles over your head and in the chat log. There are quick Burmese phrases too, such as မင်္ဂလာပါ (hello) and မီးပန်း ကြည့်ရအောင် (let's watch the fireworks). People in the crowd chat to each other in Burmese as you walk past. Chat travels inside each player's presence, so view-only members can talk as well.
 
 ## Develop
 
@@ -43,18 +47,22 @@ npm run serve       # build, then serve dist/ on http://localhost:8000
 
 | Path | What it holds |
 | --- | --- |
-| `src/main.ts` | world, game loop, rides, mini-games, bikes, avatar creator, multiplayer |
-| `src/people.ts` | icon people drawing and avatar types |
+| `src/main.ts` | game loop, input and camera, rides, mini-games, bikes, avatar creator, multiplayer and chat |
+| `src/world3d.ts` | the Three.js scene: rides, stalls, lanterns, Shwedagon skyline, crowd, fireworks |
+| `src/layout.ts` | the fair's floor plan and colliders |
+| `src/people.ts` | avatar types (and the 2D icon people used on souvenir photos) |
 | `src/audio.ts` | Web Audio engine |
 | `src/util.ts` | math and canvas helpers |
 | `src/index.html` | page markup and styles; the build injects the bundled script |
-| `fonts/` | Z06-Walone (Myanmar) and Brandon Text (Latin) |
+| `fonts/` | Brandon Text (Latin). Myanmar text uses Padauk from Google Fonts, with Pyidaungsu as a local fallback (Unicode only) |
 
 ## Controls
 
 | Key | Action |
 | --- | --- |
 | WASD / arrows | walk (Shift to hurry) |
+| drag / wheel | look around, zoom |
+| T / Enter | chat |
 | E / Space | interact |
 | P | photo mode |
 | C | camera |
@@ -62,4 +70,4 @@ npm run serve       # build, then serve dist/ on http://localhost:8000
 | Q | wave |
 | Esc | leave a ride or game |
 
-On touch screens there is an on-screen stick and a GO button.
+On touch screens there is an on-screen stick and a GO button. Drag anywhere else to look around and pinch to zoom.
