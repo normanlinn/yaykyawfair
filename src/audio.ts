@@ -117,9 +117,16 @@ export function setChatter(level: number): void {
 export function bell(vol: number): void {
   if (!A.c || vol <= 0.01) return;
   const t = A.c.currentTime;
-  for (const off of [0, 0.17]) {
-    [2650, 3960, 5420].forEach((f, i) => tone(f, 0.55 - i * 0.14, 'sine', vol * [0.16, 0.08, 0.045][i], t + off));
+  for (const off of [0, 0.24]) {
+    [2100, 3150, 4620].forEach((f, i) => tone(f, 0.55 - i * 0.14, 'sine', vol * [0.16, 0.08, 0.045][i], t + off));
   }
+}
+
+/** A short two-note squeeze horn: tee tee. Uses the same master mute as all sound. */
+export function horn(vol: number): void {
+  if(!A.c || vol <= .01) return;
+  const t=A.c.currentTime;
+  for(const off of [0,.25]) { tone(740,.16,'square',vol*.055,t+off,null,700); tone(1110,.14,'sine',vol*.04,t+off); }
 }
 
 export type Sfx = 'coin' | 'ding' | 'pop' | 'throw' | 'miss' | 'toot' | 'launch' | 'boom' | 'crackle' | 'shutter' | 'whee';
