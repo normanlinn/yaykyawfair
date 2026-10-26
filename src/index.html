@@ -174,6 +174,7 @@ body,button,input,select,textarea,kbd{font-family:var(--body)}
 @media(max-width:560px){#tools>button,#moreControls>summary{font-size:14px;padding:8px 10px}#tools>button>span{display:none}#goal{font-size:13px}}
 #modal{z-index:40}#toasts{z-index:45}#photoUI{z-index:20}#sceneBar{z-index:14}#title{z-index:20}
 body:has(#modal:not([hidden])) #tools{visibility:hidden}
+.genderOptions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.genderOptions button{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;padding:7px 3px!important;border-radius:12px!important;font-size:12px!important;line-height:1.5;background:#252b32!important;color:#e8ddc7!important}.genderOptions button canvas{width:65px;height:82px;max-width:100%}.genderOptions button[aria-pressed="true"]{border:2px solid #edce97!important;background:#3f4241!important;box-shadow:0 0 0 2px #edce9720}
 </style>
 
 <canvas id="game" aria-label="Yay Kyaw Nights game view"></canvas>

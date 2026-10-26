@@ -1,6 +1,6 @@
 // Yay Kyaw Nights: a walkable night street fair inspired by Yangon's Yay Kyaw.
 import { Ctx, TAU, rand, pick, clamp, lerp, srng, rr, el, circ, ln, ks, hexA, MMF, DISP, BODY, $ } from './util';
-import { SHIRTS, LONS, SKINS, BALLOONS, AV_SHIRTS, AV_LONS, person, PersonOpts, Avatar, DEFAULT_AVATAR, avatarOpts, cleanAvatar, randomAvatar } from './people';
+import { SHIRTS, LONS, SKINS, BALLOONS, AV_SHIRTS, AV_LONS, person, PersonOpts, Avatar, DEFAULT_AVATAR, avatarOpts, cleanAvatar, randomAvatar, genderStartingLook } from './people';
 import { spaceCrowd } from './motion';
 import { friends } from './friends';
 import { World3D, type Actor } from './world3d';
@@ -612,9 +612,9 @@ function openAvatar(first: boolean, after?: () => void): void {
   };
   const row=(label: string)=>{ const r=document.createElement('div'); r.className='avrow'; r.innerHTML=`<span class="lbl">${label}</span>`; const box=document.createElement('div'); box.className='seg wrap'; r.appendChild(box); opts.appendChild(r); return box; };
   const choice=<K extends keyof Avatar>(label: string, key: K, vals: Array<[Avatar[K],string]>)=>{
-    const box=row(label);
-    vals.forEach(([v,l])=>{ const b=document.createElement('button'); b.type='button'; b.innerHTML=l; b.setAttribute('aria-pressed',String(a[key]===v));
-      b.onclick=()=>{ a[key]=v; box.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b))); draw(); }; box.appendChild(b); });
+    const box=row(label);if(key==='gender')box.classList.add('genderOptions');
+    vals.forEach(([v,l])=>{ const b=document.createElement('button'); b.type='button';if(key==='gender'){const c=document.createElement('canvas');c.width=120;c.height=150;const g=c.getContext('2d');const look=avatarOpts(cleanAvatar({...a,...genderStartingLook(v as Avatar['gender'])}));if(world3d&&use3d)g.drawImage(world3d.portrait(look),0,0,120,150);else{g.scale(2,2);person(g,30,71,{...look,s:1.5});}b.append(c,document.createTextNode(l));}else b.innerHTML=l; b.setAttribute('aria-pressed',String(a[key]===v));
+      b.onclick=()=>{ a[key]=v; if(key==='gender'){Object.assign(a,genderStartingLook(a.gender));build();}else box.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b))); draw(); }; box.appendChild(b); });
   };
   const swatches=(label: string, key: 'skin'|'shirt'|'lon', cols: readonly string[])=>{
     const box=row(label); box.classList.add('sws');
