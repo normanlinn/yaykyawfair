@@ -535,7 +535,7 @@ function nameTag(c: Ctx, x: number, y: number, name: string, self: boolean): voi
 }
 function loadFonts(): void {
   if(!document.fonts) return;
-  ['400 14px "Padauk"','700 14px "Padauk"','400 16px "Padauk"'].forEach(f=>{ document.fonts.load(f,'ရေကျော် Aa').catch(()=>{ /* fallback fonts stay */ }); });
+  ['400 14px "Pyidaungsu"','700 14px "Pyidaungsu"','400 14px "Padauk"'].forEach(f=>{ document.fonts.load(f,'ရေကျော် Aa').catch(()=>{ /* fallback fonts stay */ }); });
 }
 
 // ---------- bicycles on the main street ----------

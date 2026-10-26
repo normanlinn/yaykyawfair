@@ -36,7 +36,7 @@ export function hexA(h: string, a: number): string {
   return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-export const MMF = '"Padauk","Pyidaungsu","Noto Sans Myanmar","Myanmar Text",sans-serif';
+export const MMF = '"Pyidaungsu","Padauk","Noto Sans Myanmar","Myanmar Text",sans-serif';
 export const DISP = MMF;
 export const BODY = MMF;
 

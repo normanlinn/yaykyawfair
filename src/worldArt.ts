@@ -1,3 +1,4 @@
+import { MMF } from './util';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as THREE from 'three';
 
@@ -131,7 +132,7 @@ export class FairArt {
   private board(parent: THREE.Object3D, text: string, x: number, y: number, z: number, width: number, height: number) {
     const c = document.createElement('canvas'); c.width = 768; c.height = 128; const g = c.getContext('2d')!;
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = this.anisotropy;
-    const paint = () => { g.fillStyle = '#143b39'; g.fillRect(0, 0, 768, 128); g.strokeStyle = '#dab778'; g.lineWidth = 5; g.strokeRect(8, 8, 752, 112); g.font = '700 38px Padauk, sans-serif'; g.textAlign = 'center'; g.fillStyle = '#fff0c9'; g.fillText(text, 384, 78, 720); t.needsUpdate = true; }; paint(); document.fonts.ready.then(paint);
+    const paint = () => { g.fillStyle = '#143b39'; g.fillRect(0, 0, 768, 128); g.strokeStyle = '#dab778'; g.lineWidth = 5; g.strokeRect(8, 8, 752, 112); g.font = '700 38px '+MMF; g.textAlign = 'center'; g.fillStyle = '#fff0c9'; g.fillText(text, 384, 78, 720); t.needsUpdate = true; }; paint(); document.fonts.ready.then(paint);
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshStandardMaterial({ map: t, emissive: '#d6ac6c', emissiveMap: t, emissiveIntensity: .25, roughness: .8, side: THREE.DoubleSide })); sign.position.set(x, y, z); parent.add(sign);
   }
   private papers=new Map<string,THREE.MeshBasicMaterial>();
