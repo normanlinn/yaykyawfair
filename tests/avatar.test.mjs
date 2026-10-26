@@ -22,3 +22,14 @@ test('every gender can retain every outfit and travels to the renderer', () => {
     assert.equal(look.head, 'flower');
   }
 });
+
+test('male and female starting styles differ and can still be customized', async () => {
+  const { genderStartingLook, bodyProfile } = await import('data:text/javascript;base64,' + Buffer.from(bundled.outputFiles[0].text).toString('base64'));
+  const male = genderStartingLook('male'), female = genderStartingLook('female');
+  assert.notEqual(male.hair, female.hair);
+  assert.notEqual(male.outfit, female.outfit);
+  assert.ok(bodyProfile('male').shoulders > bodyProfile('female').shoulders * 1.3);
+  assert.ok(bodyProfile('male').waist > bodyProfile('female').waist * 1.3);
+  assert.equal(cleanAvatar({ ...male, outfit: 'htamein', hair: 'long' }).outfit, 'htamein');
+  assert.equal(cleanAvatar({ ...female, outfit: 'taikpon', hair: 'short' }).hair, 'short');
+});

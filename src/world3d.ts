@@ -2,7 +2,7 @@ import { FairArt } from './worldArt';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { movementHeading, turnToward } from './motion';
 import * as THREE from 'three';
-import { PersonOpts } from './people';
+import { PersonOpts, bodyProfile } from './people';
 type Zone = { x: number; y: number; w: number; h: number; name: string; my: string; n: number; g: string };
 export type Actor = { id: string; x: number; y: number; look: PersonOpts; moving?: boolean; name?: string; wave?: boolean; bike?: boolean; face?: number; speed?: number; heading?: number };
 /** Real geometry, perspective camera and animated rides, sharing the original game's coordinates. */
@@ -104,11 +104,13 @@ export class World3D {
   private avatar(look:PersonOpts,bike:boolean){
     const root=new THREE.Group(),body=new THREE.Group();body.name='body';root.add(body);
     const skin=look.skin,hair='#221b22',top=look.shirt,wrap=look.lon;
-    const shoulders=look.gender==='male'?.9:look.gender==='female'?.76:.83;
+    const profile=bodyProfile(look.gender),shoulders=profile.shoulders;
     const lower=bike?2.4:1.7, torso=bike?3.55:3.7, head=bike?5.2:5.45;
     // Rounded cloth silhouettes and a clear wrapped waist rather than rectangular blocks.
     const skirt=new THREE.Mesh(new THREE.CylinderGeometry(look.outfit==='htamein'?.68:.85,look.outfit==='htamein'?.78:.72,bike?1.25:2.5,12),this.cloth(wrap,look.pat||'plain'));skirt.position.set(0,lower,0);skirt.castShadow=skirt.receiveShadow=true;body.add(skirt);
-    const shirt=this.sphere(body,0,torso,0,shoulders,1.02,.5,top);
+    const shirtPoints=[new THREE.Vector2(profile.hip,-.95),new THREE.Vector2(profile.waist,-.45),new THREE.Vector2(profile.waist+.04,0),new THREE.Vector2(shoulders,.55),new THREE.Vector2(shoulders*.82,.82),new THREE.Vector2(.24,.95)];
+    const shirt=new THREE.Mesh(new THREE.LatheGeometry(shirtPoints,20),this.mat(top));shirt.scale.z=.62;shirt.position.y=torso;shirt.castShadow=shirt.receiveShadow=true;body.add(shirt);
+    this.sphere(body,0,torso+1,0,profile.neck,.35,profile.neck,skin);
     this.block(body,0,torso+.82,.43,.22,.38,.12,'#f9e8ca');
     if(look.outfit==='taikpon'){
       this.block(body,0,torso,.53,.08,1.4,.08,'#ac957d');
@@ -118,12 +120,15 @@ export class World3D {
       this.block(body,.33,torso,.53,.07,1.1,.06,'#f4d6ba');
     }else this.sphere(body,.15,lower+1.1,.65,.24,.16,.13,wrap);
     // A continuous woven texture wraps around the garment, including its back.
-    this.sphere(body,0,head,0,.71,.88,.64,skin);
-    this.sphere(body,0,head+.48,-.13,.73,.49,.63,hair);
+    const male=look.gender==='male',female=look.gender==='female';
+    const facePoints=male?[[0,-.88],[.38,-.83],[.65,-.57],[.77,-.2],[.75,.36],[.61,.73],[.3,.9],[0,.94]]:female?[[0,-.92],[.21,-.86],[.43,-.64],[.64,-.28],[.67,.3],[.55,.7],[.25,.9],[0,.94]]:[[0,-.9],[.29,-.82],[.56,-.57],[.72,-.1],[.68,.4],[.5,.77],[0,.94]];
+    const face=new THREE.Mesh(new THREE.LatheGeometry(facePoints.map(([r,y])=>new THREE.Vector2(r,y)),24),this.mat(skin));face.scale.z=.87;face.position.y=head;face.castShadow=true;body.add(face);
+    this.sphere(body,0,head+.52,-.12,profile.face+.01,.46,.59,hair);
     // Eyes, brows, nose and a gentle smile make individual faces readable.
-    for(const x of [-.28,.28]){this.sphere(body,x,head+.05,.64,.065,.09,.04,'#221b22');this.block(body,x,head+.23,.64,.2,.035,.03,hair);}
-    this.sphere(body,0,head-.09,.72,.085,.13,.1,skin);this.block(body,0,head-.38,.65,.22,.035,.025,'#834e44');
-    if(look.thanaka)for(const x of [-.47,.47])this.sphere(body,x,head-.18,.55,.13,.16,.035,'#e9cf91');
+    const eyeX=male?.29:female?.24:.27,eyeZ=male?.65:female?.57:.61;
+    for(const x of [-eyeX,eyeX]){this.sphere(body,x,head+.05,eyeZ,.055,.075,.035,'#221b22');const brow=this.block(body,x,head+.23,eyeZ,.2,male?.055:.025,.03,hair);brow.rotation.z=male?(x<0?-.07:.07):0;}
+    this.sphere(body,0,head-.09,eyeZ+.08,male?.1:.075,.13,.1,skin);this.block(body,0,head-.38,eyeZ-.03,male?.24:.19,.025,.025,'#834e44');
+    if(look.thanaka)for(const x of [-profile.face*.63,profile.face*.63])this.sphere(body,x,head-.18,eyeZ-.12,.13,.16,.035,'#e9cf91');
     if(look.hair==='long')this.sphere(body,0,head-.15,-.42,.82,1.05,.4,hair);
     if(look.hair==='bun'||look.bun)this.sphere(body,0,head+.65,-.58,.4,.4,.38,hair);
     if(look.head==='flower'||look.flower)for(let i=0;i<5;i++){const a=i/5*Math.PI*2;this.sphere(body,.6+Math.cos(a)*.16,head+.55+Math.sin(a)*.16,.25,.12,.12,.08,'#f4c647');}
@@ -135,7 +140,7 @@ export class World3D {
       const arm=new THREE.Group();arm.name=x>0?'rightArm':'leftArm';arm.position.set(x*(shoulders+.02),torso+.35,0);body.add(arm);
       this.sphere(arm,x*.12,-.25,0,.21,.38,.23,top);
       if(bike){this.tube(arm,[x*.1,-.4,0],[x*.1,-.6,.8],.16,skin);this.tube(arm,[x*.1,-.6,.8],[x*.02,-.35,1.35],.15,skin);}
-      else this.sphere(arm,x*.16,-.85,.08,.17,.42,.18,skin);
+      else this.sphere(arm,x*.16,-.85,.08,profile.arm,.42,profile.arm,skin);
     }
     if(look.bag){this.tube(body,[-.7,torso+.7,.58],[.9,lower+.1,.58],.06,'#c38e57');this.block(body,1,lower+.1,.2,.7,1,.3,'#b3574e');for(let i=0;i<3;i++)this.block(body,1,lower-.2+i*.25,.38,.6,.06,.03,'#e4c996');}
     if(!bike){for(const x of [-.38,.38]){this.block(body,x,.32,.12,.4,.5,.35,skin);this.block(body,x,.09,.25,.53,.15,.8,'#302c2b');}}

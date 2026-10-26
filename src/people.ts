@@ -54,6 +54,19 @@ export function cleanAvatar(raw: unknown): Avatar {
 export const AV_SHIRTS = ['#f4b63f', '#ffffff', '#ff5a4e', '#f7b7c3', '#9fd3f0', '#3fc7a5', '#cfc3f2', '#2d7bb6', '#1b1420', '#e98b6d'];
 export const AV_LONS = ['#7a2e5c', '#6b2335', '#2f5d50', '#283a6b', '#4b2c63', '#1f6f78', '#5a3a24', '#c23b4b', '#3c5a2a'];
 
+/** Distinct starting styles; users can override every field afterward. */
+export function genderStartingLook(gender: Gender): Partial<Avatar> {
+  if(gender==='male') return {gender,hair:'short',outfit:'longyi',head:'none',pat:'check'};
+  if(gender==='female') return {gender,hair:'bun',outfit:'htamein',head:'flower',pat:'acheik'};
+  return {gender};
+}
+/** Silhouette data is independent from clothing choices. */
+export function bodyProfile(gender?: Gender) {
+  if(gender==='male') return {shoulders:1.02,waist:.82,hip:.83,neck:.25,arm:.2,face:.77};
+  if(gender==='female') return {shoulders:.73,waist:.55,hip:.77,neck:.19,arm:.15,face:.67};
+  return {shoulders:.86,waist:.71,hip:.8,neck:.22,arm:.17,face:.72};
+}
+
 export function avatarOpts(a: Avatar): PersonOpts {
   return {
     gender: a.gender, skin: a.skin, shirt: a.shirt, lon: a.lon, pat: a.pat, hair: a.hair, bun: a.hair === 'bun',
