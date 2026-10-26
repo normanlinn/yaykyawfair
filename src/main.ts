@@ -635,6 +635,7 @@ function openAvatar(first: boolean, after?: () => void): void {
   opts.appendChild(nr);
   (nr.querySelector('input') as HTMLInputElement).addEventListener('input',e=>{ nameVal=(e.target as HTMLInputElement).value; draw(); });
   nr.querySelector('input').addEventListener('keydown',e=>e.stopPropagation());
+  choice('Gender / ကျား၊ မ','gender',[['male','ကျား · Male'],['female','မ · Female'],['unspecified','မသတ်မှတ် · Unspecified']]);
   choice('Outfit','outfit',[['longyi','Longyi + shirt'],['htamein','Htamein + eingyi'],['taikpon','Taikpon jacket']]);
   swatches('Top colour','shirt',AV_SHIRTS);
   swatches('Longyi / htamein colour','lon',AV_LONS);
@@ -1251,7 +1252,7 @@ function drawWorld(dt){
   if(use3d && !S.photo) {
     try {
       if(!world3d) world3d=new World3D(ZONES,COL,IT.map(it=>({x:it.x,y:it.y,label:it.label().replace(/<[^>]*>/g,'')})));
-      const actors: Actor[] = NPC.slice(0,S.settings.density==='low'?14:S.settings.density==='high'?44:28).map((n,i)=>({id:'npc'+i,x:n.x,y:n.y,look:{...n,pat:(i%3===0?'check':i%3===1?'stripe':'acheik'),outfit:i%3===0?'taikpon':i%3===1?'htamein':'longyi',hair:n.bun?'bun':i%4===0?'long':'short',thanaka:i%3!==0,head:i%9===0?'flower':n.hat?'hat':'none',bag:i%7===0},moving:n.moving,heading:Math.atan2(n.tx-n.x,n.ty-n.y),face:n.face,name:'',wave:false,bike:false}));
+      const actors: Actor[] = NPC.slice(0,S.settings.density==='low'?14:S.settings.density==='high'?44:28).map((n,i)=>({id:'npc'+i,x:n.x,y:n.y,look:{...n,gender:i%3===0?'male':i%3===1?'female':'unspecified',pat:(i%3===0?'check':i%3===1?'stripe':'acheik'),outfit:i%3===0?'taikpon':i%3===1?'htamein':'longyi',hair:n.bun?'bun':i%4===0?'long':'short',thanaka:i%3!==0,head:i%9===0?'flower':n.hat?'hat':'none',bag:i%7===0},moving:n.moving,heading:Math.atan2(n.tx-n.x,n.ty-n.y),face:n.face,name:'',wave:false,bike:false}));
       if(!P.hidden) actors.push({id:'me',x:P.x,y:P.y,look:AV(),moving:P.moving,face:P.face,name:S.settings.name||'သင်',wave:T<P.waveUntil,bike:false});
       for(const r of REMOTE.values()) if(r.where==='walk'||r.where==='train') actors.push({id:r.peer,x:r.x,y:r.y,look:avatarOpts(r.av),moving:r.moving,face:r.face,name:r.name||'Friend',wave:T<r.waveUntil,bike:false});
       for(let i=0;i<BIKES.length;i++){const b=BIKES[i]; actors.push({id:'bike'+i,x:b.x,y:b.y,look:b.rider,moving:true,face:b.dir,name:'',wave:false,bike:true,speed:b.cur});}

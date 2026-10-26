@@ -6,6 +6,7 @@ export const LONS = ['#6b2335', '#2f5d50', '#283a6b', '#4b2c63', '#1f6f78', '#5a
 export const SKINS = ['#d9a77a', '#c58c5c', '#a8714a', '#e4b98f', '#8d5a3b', '#b7835a'] as const;
 export const BALLOONS = ['#ff5a4e', '#f4b63f', '#3fc7a5', '#8fb4ff', '#ff8ad8'] as const;
 
+export type Gender = 'male' | 'female' | 'unspecified';
 export type Hair = 'short' | 'bun' | 'long';
 /** Lower wrap is drawn the same way for everyone; the outfit decides the top and how the wrap falls. */
 export type Outfit = 'longyi' | 'htamein' | 'taikpon';
@@ -13,6 +14,7 @@ export type Headwear = 'none' | 'gaungbaung' | 'flower' | 'hat' | 'cap';
 export type Pattern = 'plain' | 'stripe' | 'check' | 'acheik';
 
 export interface PersonOpts {
+  gender?: Gender;
   s?: number; bob?: number; step?: number; t?: number; face?: number;
   shirt: string; lon: string; skin: string;
   pat?: Pattern; hair?: Hair; bun?: boolean; capc?: string; outfit?: Outfit; head?: Headwear; gbc?: string;
@@ -22,14 +24,17 @@ export interface PersonOpts {
 
 /** The player's chosen look. */
 export interface Avatar {
+  gender: Gender;
   skin: string; hair: Hair; outfit: Outfit; head: Headwear;
   shirt: string; lon: string; pat: Pattern;
   thanaka: boolean; glasses: boolean; bag: boolean;
 }
 export const DEFAULT_AVATAR: Avatar = {
+  gender: 'unspecified',
   skin: '#c58c5c', hair: 'short', outfit: 'longyi', head: 'none', shirt: '#f4b63f', lon: '#7a2e5c', pat: 'check',
   thanaka: true, glasses: false, bag: false,
 };
+const GENDERS: Gender[] = ['male', 'female', 'unspecified'];
 const HAIRS: Hair[] = ['short', 'bun', 'long'];
 const OUTFITS: Outfit[] = ['longyi', 'htamein', 'taikpon'];
 const HEADS: Headwear[] = ['none', 'gaungbaung', 'flower', 'hat', 'cap'];
@@ -40,6 +45,7 @@ export function cleanAvatar(raw: unknown): Avatar {
   const col = (v: unknown, d: string) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : d);
   const one = <T extends string>(v: unknown, list: T[], d: T): T => (list.includes(v as T) ? (v as T) : d);
   return {
+    gender: one(a.gender, GENDERS, 'unspecified'),
     skin: col(a.skin, DEFAULT_AVATAR.skin), hair: one(a.hair, HAIRS, 'short'), outfit: one(a.outfit, OUTFITS, 'longyi'),
     head: one(a.head, HEADS, 'none'), shirt: col(a.shirt, DEFAULT_AVATAR.shirt), lon: col(a.lon, DEFAULT_AVATAR.lon),
     pat: one(a.pat, PATS, 'plain'), thanaka: a.thanaka === true, glasses: a.glasses === true, bag: a.bag === true,
@@ -50,7 +56,7 @@ export const AV_LONS = ['#7a2e5c', '#6b2335', '#2f5d50', '#283a6b', '#4b2c63', '
 
 export function avatarOpts(a: Avatar): PersonOpts {
   return {
-    skin: a.skin, shirt: a.shirt, lon: a.lon, pat: a.pat, hair: a.hair, bun: a.hair === 'bun',
+    gender: a.gender, skin: a.skin, shirt: a.shirt, lon: a.lon, pat: a.pat, hair: a.hair, bun: a.hair === 'bun',
     outfit: a.outfit, head: a.head, thanaka: a.thanaka, glasses: a.glasses, bag: a.bag,
     flower: a.head === 'flower', hat: a.head === 'hat',
     capc: a.shirt === '#c23b4b' || a.shirt === '#ff5a4e' ? '#2d7bb6' : '#c23b4b',
@@ -59,7 +65,7 @@ export function avatarOpts(a: Avatar): PersonOpts {
 }
 export function randomAvatar(): Avatar {
   return {
-    skin: pick(SKINS), hair: pick(HAIRS), outfit: pick(OUTFITS), head: pick(HEADS), shirt: pick(AV_SHIRTS), lon: pick(AV_LONS),
+    gender: pick(GENDERS), skin: pick(SKINS), hair: pick(HAIRS), outfit: pick(OUTFITS), head: pick(HEADS), shirt: pick(AV_SHIRTS), lon: pick(AV_LONS),
     pat: pick(PATS), thanaka: Math.random() < 0.6, glasses: Math.random() < 0.2, bag: Math.random() < 0.35,
   };
 }
