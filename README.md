@@ -30,7 +30,9 @@ All sound is synthesized with the Web Audio API, so there are no audio files:
 
 ## 3D world and controls
 
-The default walking view uses Three.js geometry for the fair, animated Ferris wheel, carousel, pirate ship, mini train, bicycles and visitors. Avatars include woven longyi and htamein, taikpon details, thanaka, hairstyles, headwear and bags. The outfit editor previews the same 3D model used in the world. Visitors turn toward travel and keep personal space.
+The walking view has crisp antialiasing, directional shadows, locally generated paving and timber materials, striped market canopies, food displays, ribbed paper lanterns, a detailed music stage and physically mounted Myanmar signs. Static scenery is merged by material to reduce draw calls.
+
+The default walking view uses Three.js geometry for the fair, animated Ferris wheel, carousel, pirate ship, mini train, bicycles and visitors. Avatars include woven longyi and htamein, taikpon details, thanaka, hairstyles, headwear and bags. The outfit editor previews the same 3D model used in the world. Choose Male, Female or Unspecified independently of all clothing, hair and accessories. The choice is saved locally and included in multiplayer avatar updates; older saves default to Unspecified. Visitors turn toward travel and keep personal space.
 
 The bottom dock contains **Your look / ကိုယ့်ပုံစံ**, **Map / မြေပုံ**, **Friends / သူငယ်ချင်း** and **More / နောက်ထပ်**. More contains camera, bag, photo, 2D/3D toggle, sounds and settings. Devices without WebGL automatically use the original 2D view. Ride close-ups, mini-games and saved photos retain their original 2D artwork.
 
