@@ -36,8 +36,8 @@ export function hexA(h: string, a: number): string {
   return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-export const MMF = '"Walone","Padauk","Noto Sans Myanmar","Myanmar Text",sans-serif';
-export const DISP = '"Bungee","Arial Black",sans-serif';
-export const BODY = '"Brandon Text","Baloo 2","Trebuchet MS",sans-serif';
+export const MMF = '"Padauk","Pyidaungsu","Noto Sans Myanmar","Myanmar Text",sans-serif';
+export const DISP = MMF;
+export const BODY = MMF;
 
 export const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;

@@ -1,13 +1,8 @@
 <title>Yay Kyaw Nights</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Baloo+2:wght@500;600;800&family=Padauk:wght@400;700&display=swap">
 <style>
-/* Your fonts: Walone for Myanmar script, Brandon Text for Latin. The build inlines them for the single-page artifact. */
-@font-face{font-family:"Walone";src:url("fonts/Z06-Walone-Regular.ttf") format("truetype");font-weight:400;font-display:swap}
-@font-face{font-family:"Walone";src:url("fonts/Z06-Walone-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
-@font-face{font-family:"Brandon Text";src:url("fonts/BrandonText-Regular.otf") format("opentype");font-weight:400;font-display:swap}
-@font-face{font-family:"Brandon Text";src:url("fonts/BrandonText-Bold.otf") format("opentype");font-weight:700;font-display:swap}
+/* Bundled Padauk supports Myanmar Unicode even without external font services. */
+@font-face{font-family:"Padauk";src:url("fonts/Padauk-Regular.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Padauk";src:url("fonts/Padauk-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
 /* Layout: one full-screen night street canvas; glassy plum HUD panels pinned to the corners, gold for money and signage, lantern red for calls to action. */
 :root{
   --night:#0d0a24;
@@ -21,7 +16,7 @@
   --jade:#3fc7a5;
   --display:"Bungee","Arial Black",system-ui,sans-serif;
   --body:"Brandon Text","Baloo 2","Trebuchet MS",system-ui,sans-serif;
-  --mm:"Walone","Padauk","Noto Sans Myanmar","Myanmar Text",sans-serif;
+  --mm:"Padauk","Pyidaungsu","Noto Sans Myanmar","Myanmar Text",sans-serif;
   color-scheme:dark;
 }
 html,body{height:100%;margin:0;overflow:hidden;background:var(--night);color:var(--ink);font-family:var(--body);-webkit-user-select:none;user-select:none;touch-action:none}
@@ -136,32 +131,77 @@ table.keys td{padding:3px 10px 3px 0;vertical-align:top}
 body.inplay #journey,body.inplay #goal{display:none}
 @media (max-width:560px){#mini{display:none}#hud{max-width:calc(100vw - 120px)}#tools{max-width:150px}#tools kbd,#bCam,#bSound,#bAv,#bWave{display:none}#toasts{top:calc(200px + env(safe-area-inset-top,0px))}.journey li{font-size:10px;padding:2px 6px}#goal{font-size:12px}}
 @media (prefers-reduced-motion:reduce){.toast{animation:none}}
+
+#world3d{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#world3d:not([hidden])~#game{opacity:0}
+#mini{width:144px;height:220px;cursor:pointer;box-shadow:0 12px 36px #0008;border-radius:16px}
+#mini.expanded{width:min(360px,82vw);height:min(550px,72dvh);right:50%;bottom:50%;transform:translate(50%,50%);z-index:15}
+#friends{position:fixed;z-index:25;right:12px;top:90px;width:min(400px,calc(100vw - 48px));max-height:calc(100dvh - 120px);overflow:auto;padding:16px;border:1px solid var(--gold);border-radius:18px;background:#20182ff5;box-shadow:0 16px 64px #0009;touch-action:pan-y;font-family:var(--mm)}
+#friends header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#friends p{font-size:14px;line-height:1.7}
+#friends input{box-sizing:border-box;min-width:0;width:100%;font:16px var(--mm);padding:9px;border-radius:9px;border:1px solid var(--line);background:#120f22;color:var(--ink);user-select:text;touch-action:auto}
+.roomActions{display:flex;flex-wrap:wrap;gap:8px}.roomActions input{flex:1;min-width:100px!important}
+#roomLink{margin-top:10px}#chatLog{list-style:none;padding:0;max-height:180px;overflow:auto;overflow-wrap:anywhere;user-select:text;touch-action:pan-y}#chatLog li{padding:6px 0;font:16px/1.7 var(--mm)}#chatForm{display:flex;gap:8px}
+@media(max-width:560px){#mini{display:block;width:100px;height:153px;bottom:155px;right:8px}#mini.expanded{width:min(360px,86vw);height:min(550px,70dvh);right:50%;bottom:50%}#tools{max-width:160px}#tools button{font-size:11px;padding:5px 7px}#friends{top:140px;max-height:calc(100dvh - 160px)}}
+
+/* A quiet travel-journal HUD and a single bottom action dock. */
+:root{--panel:rgba(22,25,35,.9);--panel-solid:#161923;--line:rgba(236,204,148,.22);--gold:#edce97;--muted:#bcb9b2;--display:"Brandon Text",system-ui,sans-serif;--body:"Brandon Text",system-ui,sans-serif}
+button{border-radius:10px;background:#252b32;font-weight:700;box-shadow:none}
+#hud{top:18px;left:18px;gap:8px;max-width:calc(100vw - 36px)}
+.stats{background:var(--panel);backdrop-filter:blur(16px);border:1px solid var(--line);padding:10px 4px;border-radius:16px;gap:0;width:max-content}
+.stat{border:0;border-radius:0;background:none;padding:0 18px;min-width:45px;border-right:1px solid var(--line)}.stat:last-child{border:0}.stat .lbl{font-size:9px;letter-spacing:.16em}.stat b{font:700 19px var(--body);color:#f7ebd5}
+.journey{display:none}#goal{background:transparent;border:0;padding:0 4px;color:#f2e8d7;text-shadow:0 2px 5px #000;font-size:13px;max-width:340px;line-height:1.4}
+#tools{inset:auto auto 20px 50%;transform:translateX(-50%);max-width:none;flex-wrap:nowrap;gap:5px;align-items:center;justify-content:center;padding:7px;background:var(--panel);border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(20px);z-index:12;box-shadow:0 12px 40px #0005}
+#tools>button,#moreControls>summary{white-space:nowrap;display:flex;align-items:center;gap:8px;background:transparent;border:0;border-radius:12px;padding:13px 16px;font-size:14px;color:#f4ebda;cursor:pointer;list-style:none}
+#tools>button:hover,#moreControls>summary:hover{background:#ffffff10}#tools>button>span{font-size:20px;color:var(--gold)}#moreControls{position:relative}#moreControls summary::-webkit-details-marker{display:none}
+.morePanel{position:absolute;right:0;bottom:58px;width:230px;display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:12px;border-radius:16px;border:1px solid var(--line);background:#171b25f5;box-shadow:0 10px 40px #0008}
+#tools .morePanel button{display:block!important;padding:11px 8px;font-size:13px}#tools .morePanel kbd{display:inline;margin-left:5px}
+#friends{top:auto;bottom:100px;max-height:calc(100dvh - 125px);border-color:var(--line);background:#171b25f5}
+#prompt{bottom:105px;border-radius:12px;border-color:#edce9780;background:#171b25ee;font-size:15px}
+#mini{bottom:20px;border-color:var(--line);filter:saturate(.8)}#mini.expanded{bottom:50%}
+#title .in{max-width:550px}#title h1{font-family:var(--body);letter-spacing:-.04em}#title .eyebrow{letter-spacing:.24em;color:var(--gold)}
+#modal .card{background:#1b202bf7;border:1px solid var(--line);border-radius:24px;box-shadow:0 24px 100px #0009}
+.avprev canvas{background:radial-gradient(ellipse at 50% 35%,#394446,#161b25);border:1px solid var(--line)}
+.avrow .lbl{letter-spacing:.1em;color:#e2cda9}.seg button[aria-pressed="true"]{background:#edce97;color:#20252b;border-color:#edce97}
+.avpresets{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:8px}.avpresets button{padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px}.avpresets canvas{width:58px;height:70px}
+@media(max-width:560px){#hud{top:12px;left:12px;max-width:calc(100vw - 24px)}.stat{padding:0 12px;min-width:36px}.stat b{font-size:17px}#goal{max-width:250px;font-size:12px}.stats{padding:8px 0}#tools{bottom:calc(10px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 24px);padding:5px;width:max-content;gap:0;border-radius:16px}#tools>button,#moreControls>summary{display:flex!important;font-size:12px;padding:9px 10px;gap:5px}#tools>button>span{font-size:17px}#moreControls>summary span{display:none}#mini{width:100px;height:153px;bottom:200px}#mini.expanded{bottom:50%;width:min(360px,86vw);height:min(550px,70dvh)}#stick{width:104px;height:104px;left:18px;bottom:80px}#act{width:72px;height:72px;right:20px;bottom:91px}#waveT{right:103px;bottom:83px;padding:7px 10px}#prompt{bottom:198px;max-width:calc(100vw - 140px);left:14px;transform:none;font-size:12px}#friends{top:auto;bottom:76px;max-height:calc(100dvh - 160px)}.morePanel{bottom:47px}.avgrid{gap:12px}.avpresets{grid-template-columns:repeat(3,1fr)}}
+
+:root{--display:"Padauk","Pyidaungsu",sans-serif;--body:"Padauk","Pyidaungsu",sans-serif}
+body,button,input,select,textarea,kbd{font-family:var(--body)}
+#title h1{font-size:clamp(40px,8vw,78px);line-height:1.45;letter-spacing:0}#title .mm{font-size:20px}#title .in{padding:25px}
+#mini{border:0;box-shadow:0 10px 35px #0006;border-radius:20px}#mini.expanded{box-shadow:0 0 0 100vmax #090e1b99,0 20px 80px #0009}
+#tools>button,#moreControls>summary{font-size:16px;line-height:1.4}.stat b{font-family:var(--body)}
+@media(max-width:560px){#tools>button,#moreControls>summary{font-size:14px;padding:8px 10px}#tools>button>span{display:none}#goal{font-size:13px}}
+#modal{z-index:40}#toasts{z-index:45}#photoUI{z-index:20}#sceneBar{z-index:14}#title{z-index:20}
+body:has(#modal:not([hidden])) #tools{visibility:hidden}
 </style>
 
 <canvas id="game" aria-label="Yay Kyaw Nights game view"></canvas>
 
 <div id="hud" hidden>
   <div class="stats">
-    <div class="stat"><span class="lbl">Kyat</span><b id="kyat">15,000</b></div>
-    <div class="stat"><span class="lbl">Tickets</span><b id="tix">0</b></div>
-    <div class="stat"><span class="lbl">Time</span><b id="clock">6:30 PM</b></div>
-    <div class="stat" id="pStat" hidden><span class="lbl">Players</span><b id="players">1</b></div>
+    <div class="stat"><span class="lbl">ကျပ်</span><b id="kyat">15,000</b></div>
+    <div class="stat"><span class="lbl">လက်မှတ်</span><b id="tix">0</b></div>
+    <div class="stat"><span class="lbl">အချိန်</span><b id="clock">6:30 PM</b></div>
+    <div class="stat" id="pStat" hidden><span class="lbl">ကစားသူ</span><b id="players">1</b></div>
   </div>
   <ol class="journey" id="journey">
     <li data-s="arrive">Arrive</li><li data-s="discover">Discover</li><li data-s="play">Play</li><li data-s="finale">Finale</li>
   </ol>
   <div id="goal"></div>
 </div>
-<div id="tools" hidden>
-  <button id="bAv">Outfit</button>
-  <button id="bWave">Wave<kbd>Q</kbd></button>
-  <button id="bBag">Bag<kbd>B</kbd></button>
-  <button id="bPhoto">Photo<kbd>P</kbd></button>
-  <button id="bCam">View<kbd>C</kbd></button>
-  <button id="bSet">Settings</button>
-  <button id="bSound">Sound on</button>
-</div>
-<canvas id="mini" width="240" height="346" hidden></canvas>
+<nav id="tools" hidden aria-label="Fair controls">
+  <button id="bAv"><span aria-hidden="true">✿</span> ကိုယ့်ပုံစံ</button>
+  <button id="bMap" aria-expanded="false"><span aria-hidden="true">⌖</span> မြေပုံ</button>
+  <button id="bFriends"><span aria-hidden="true">☏</span> သူငယ်ချင်း</button>
+  <details id="moreControls"><summary>••• <span>နောက်ထပ်</span></summary><div class="morePanel">
+    <button id="bWave">Wave<kbd>Q</kbd></button><button id="bBag">Bag<kbd>B</kbd></button>
+    <button id="bPhoto">Photo<kbd>P</kbd></button><button id="bCam">Camera<kbd>C</kbd></button>
+    <button id="b3d">3D view</button><button id="bBell">Cling cling<kbd>L</kbd></button><button id="bHorn">Tee tee<kbd>H</kbd></button>
+    <button id="bSet">Settings</button><button id="bSound">Sound on</button>
+  </div></details>
+</nav>
+<canvas id="mini" width="360" height="550" hidden aria-label="Fair map: gold is you, green is friends. Use Map to expand."></canvas>
 <div id="prompt" hidden></div>
 <div id="toasts" aria-live="polite"></div>
 <div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="act" aria-label="Interact">GO</button><button id="waveT">Wave</button></div>
@@ -173,8 +213,8 @@ body.inplay #journey,body.inplay #goal{display:none}
 <div id="title">
   <div class="in">
     <div class="eyebrow">A love letter to Yangon</div>
-    <h1>Yay Kyaw Nights</h1>
-    <div class="mmt">ရေကျော်ညများ</div>
+    <h1 lang="my">ရေကျော်ညများ</h1>
+    <div class="mmt">Yay Kyaw Nights</div>
     <p>The sun has set over the street fair. Lanterns are glowing, the carts are steaming and the fireworks start at 9:30 PM. Wander, ride, play and collect a night to remember.</p>
     <button class="cta" id="start">Enter the fair</button>
     <small>Move with WASD or arrows, E or Space to interact. On a phone, use the stick and the GO button.</small>

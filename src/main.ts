@@ -1,7 +1,10 @@
 // Yay Kyaw Nights: a walkable night street fair inspired by Yangon's Yay Kyaw.
 import { Ctx, TAU, rand, pick, clamp, lerp, srng, rr, el, circ, ln, ks, hexA, MMF, DISP, BODY, $ } from './util';
 import { SHIRTS, LONS, SKINS, BALLOONS, AV_SHIRTS, AV_LONS, person, PersonOpts, Avatar, DEFAULT_AVATAR, avatarOpts, cleanAvatar, randomAvatar } from './people';
-import { A, audioInit, sfx, bell, setChatter, setMaster } from './audio';
+import { spaceCrowd } from './motion';
+import { friends } from './friends';
+import { World3D, type Actor } from './world3d';
+import { A, audioInit, sfx, bell, horn, setChatter, setMaster } from './audio';
 
 // ---------- canvas ----------
 const cv = $<HTMLCanvasElement>('game'), ctx = cv.getContext('2d');
@@ -532,7 +535,7 @@ function nameTag(c: Ctx, x: number, y: number, name: string, self: boolean): voi
 }
 function loadFonts(): void {
   if(!document.fonts) return;
-  ['400 14px "Walone"','700 14px "Walone"','400 14px "Brandon Text"','700 14px "Brandon Text"'].forEach(f=>{ document.fonts.load(f,'ရေကျော် Aa').catch(()=>{ /* fallback fonts stay */ }); });
+  ['400 14px "Padauk"','700 14px "Padauk"','400 16px "Padauk"'].forEach(f=>{ document.fonts.load(f,'ရေကျော် Aa').catch(()=>{ /* fallback fonts stay */ }); });
 }
 
 // ---------- bicycles on the main street ----------
@@ -540,16 +543,16 @@ interface Bike { x: number; y: number; dir: 1 | -1; sp: number; cur: number; rid
 const BIKES: Bike[] = [];
 function spawnBikes(): void {
   BIKES.length=0;
-  for(let i=0;i<6;i++){
+  for(let i=0;i<4;i++){
     const dir: 1 | -1 = i%2 ? 1 : -1;
-    BIKES.push({ x: dir<0 ? rand(975,1005) : rand(795,825), y: rand(420,2560), dir, sp: rand(70,105), cur: 80,
+    BIKES.push({ x: dir<0 ? rand(975,1005) : rand(795,825), y: rand(420,2560), dir, sp: rand(38,55), cur: 40,
       rider: { shirt:pick(SHIRTS), lon:pick(LONS), skin:pick(SKINS), hat:Math.random()<.3, bun:Math.random()<.4 },
-      col: pick(['#2d7bb6','#c23b4b','#3a9b7a','#1b1420','#e0a526']), bellCd: rand(3,12), pathCd: 0, ringT: 0, saika: i===5, ph: rand(0,9) });
+      col: pick(['#2d7bb6','#c23b4b','#3a9b7a','#1b1420','#e0a526']), bellCd: rand(3,12), pathCd: 0, ringT: 0, saika: i===3, ph: rand(0,9) });
   }
 }
 function ringBell(b: Bike): void {
   b.ringT=.8;
-  if(S.mode==='walk') bell(clamp(1-Math.hypot(P.x-b.x,P.y-b.y)/520,0,1));
+  if(S.mode==='walk'){ const vol=clamp(1-Math.hypot(P.x-b.x,P.y-b.y)/520,0,1); if(b.saika) horn(vol); else bell(vol); }
 }
 function inLane(b: Bike, x: number, y: number): number { // distance ahead, or -1
   const ahead=(y-b.y)*b.dir; return ahead>0&&ahead<130&&Math.abs(x-b.x)<24 ? ahead : -1;
@@ -558,7 +561,9 @@ function updateBikes(dt: number): void {
   for(const b of BIKES){
     let ahead=S.mode==='walk'&&!P.hidden ? inLane(b,P.x,P.y) : -1;
     for(const r of REMOTE.values()){ const a=inLane(b,r.x,r.y); if(a>=0&&(ahead<0||a<ahead)) ahead=a; }
-    const target=ahead<0 ? b.sp : ahead<45 ? 0 : 20;
+    for(const n of NPC){const a=inLane(b,n.x,n.y);if(a>=0&&(ahead<0||a<ahead)) ahead=a;}
+    for(const other of BIKES){if(other===b) continue;const a=inLane(b,other.x,other.y);if(a>=0&&(ahead<0||a<ahead)) ahead=a;}
+    const target=ahead<0 ? b.sp : clamp((ahead-38)*.8,0,b.sp);
     b.cur=lerp(b.cur,target,Math.min(1,dt*3));
     b.y+=b.dir*b.cur*dt;
     b.bellCd-=dt; b.pathCd-=dt; b.ringT=Math.max(0,b.ringT-dt);
@@ -600,7 +605,8 @@ function openAvatar(first: boolean, after?: () => void): void {
     pc.clearRect(0,0,220,260);
     const g=pc.createLinearGradient(0,0,0,260); g.addColorStop(0,'#2a1d4f'); g.addColorStop(1,'#140e2a'); pc.fillStyle=g; rr(pc,0,0,220,260,14); pc.fill();
     for(let k=0;k<6;k++){ pc.fillStyle=['#ff5a4e','#f4b63f','#3fc7a5'][k%3]; el(pc,22+k*35,26+Math.sin(k)*5,7,9); }
-    person(pc,110,228,{...avatarOpts(a),s:5.2});
+    if(world3d&&use3d) pc.drawImage(world3d.portrait(avatarOpts(a)),0,0,220,260);
+    else person(pc,110,228,{...avatarOpts(a),s:5.2});
     const nm=cleanName(nameVal);
     if(nm) nameTag(pc,110,246,nm,true);
   };
@@ -621,6 +627,9 @@ function openAvatar(first: boolean, after?: () => void): void {
   };
   let nameVal=S.settings.name;
   const build=()=>{ opts.innerHTML='';
+  const presets=document.createElement('div'); presets.className='avpresets';
+  const looks: Array<[string,Partial<Avatar>]>=[['ညပွဲ · Night out',{outfit:'longyi',shirt:'#ffffff',lon:'#2f5d50',pat:'check',hair:'short',head:'none',thanaka:true,bag:true}],['ပိတောက် · Padauk',{outfit:'htamein',shirt:'#f7b7c3',lon:'#7a2e5c',pat:'acheik',hair:'bun',head:'flower',thanaka:true,bag:false}],['တိုက်ပုံ · Taikpon',{outfit:'taikpon',shirt:'#f3efe6',lon:'#283a6b',pat:'stripe',hair:'short',head:'gaungbaung',thanaka:false,bag:false}]];
+  for(const [name,look] of looks){const b=document.createElement('button');b.type='button';const c=document.createElement('canvas');c.width=116;c.height=140;const g=c.getContext('2d');g.scale(2,2);person(g,29,66,{...avatarOpts(cleanAvatar({...a,...look})),s:1,t:0});b.append(c,document.createTextNode(name));b.onclick=()=>{Object.assign(a,look);build();draw();};presets.append(b);} opts.append(presets);
   const nr=document.createElement('div'); nr.className='avrow';
   nr.innerHTML=`<label class="lbl" for="avName">Your name</label><input id="avName" maxlength="${NAME_MAX}" autocomplete="nickname" placeholder="Shown above your head" value="${esc(nameVal)}">`;
   opts.appendChild(nr);
@@ -650,16 +659,15 @@ function openAvatar(first: boolean, after?: () => void): void {
 // ---------- multiplayer: everyone with the page open shares one fair ----------
 interface Remote { peer: string; name: string; av: Avatar; x: number; y: number; tx: number; ty: number; face: number; moving: boolean; where: string; balloon: string | null; wv: number; waveUntil: number }
 const REMOTE = new Map<string, Remote>();
-let room: typeof Claude.room | null = null;
+let room: { presence(value: Record<string, unknown>): Promise<unknown> } | null = null;
+let friendRoom: ReturnType<typeof friends>;
+let world3d: World3D | null = null, use3d = true, mapLarge = false;
 let lastSent='', presT=0, waveCount=0, roomReady=false;
 async function initRoom(): Promise<void> {
-  try{
-    const r=await window.claude?.use?.('room');
-    if(!r) return;
-    room=r;
-    r.onPeers(ch=>syncPeers(ch.peers), ()=>{ room=null; REMOTE.clear(); updatePlayers(); });
-    setTimeout(()=>{ roomReady=true; },2500); // the first deliveries list who was already here: no join toasts for them
-  }catch{ room=null; }
+  friendRoom = friends(peers => syncPeers(peers as unknown as Claude.room.Peer[]));
+  room = friendRoom;
+  roomReady = true;
+  $('bFriends').onclick = () => friendRoom.open();
 }
 function syncPeers(peers: readonly Claude.room.Peer[]): void {
   const seen=new Set<string>();
@@ -672,7 +680,9 @@ function syncPeers(peers: readonly Claude.room.Peer[]): void {
     let r=REMOTE.get(p.peer);
     if(!r){ r={peer:p.peer,name:'',av:DEFAULT_AVATAR,x,y,tx:x,ty:y,face:1,moving:false,where:'walk',balloon:null,wv:0,waveUntil:0}; REMOTE.set(p.peer,r);
       if(roomReady) toast(`<b>${esc(cleanName(pr.n)||'A friend')}</b> joined the fair.`); }
-    r.tx=x; r.ty=y; r.name=cleanName(pr.n); r.av=cleanAvatar(pr.av); r.face=pr.f===-1?-1:1;
+    r.tx=x; r.ty=y;
+    if(S.mode==='walk' && !TR.riding && Math.hypot(P.x-x,P.y-y)<22){const side=friendRoom?.id<p.peer?-1:1;const nx=P.x+side*27;if(!blocked(nx,P.y,7))P.x=nx;}
+    r.name=cleanName(pr.n); r.av=cleanAvatar(pr.av); r.face=pr.f===-1?-1:1;
     r.where=typeof pr.w==='string'?pr.w.slice(0,12):'walk';
     r.balloon=typeof pr.b==='string'&&(BALLOONS as readonly string[]).includes(pr.b)?pr.b:null;
     const wv=typeof pr.wv==='number'?pr.wv:0; if(wv!==r.wv){ if(r.wv!==0||wv>0) r.waveUntil=T+2.2; r.wv=wv; }
@@ -689,7 +699,7 @@ function sendPresence(dt: number): void {
   presT-=dt; if(presT>0) return; presT=.08;
   const where=S.mode==='walk'?(TR.riding?'train':'walk'):S.mode==='scene'?SC.kind:MG.kind;
   const msg={x:Math.round(P.x),y:Math.round(P.y),f:P.face,w:where,n:S.settings.name,av:S.settings.av as unknown as Record<string,unknown>,b:S.balloon,wv:waveCount};
-  const k=JSON.stringify(msg); if(k===lastSent) return; lastSent=k;
+  const k=JSON.stringify(msg); lastSent=k;
   room.presence(msg).catch(()=>{ lastSent=''; });
 }
 function wave(): void { if(S.mode!=='walk') return; P.waveUntil=T+2.2; waveCount++; }
@@ -713,7 +723,7 @@ function updateHUD(){
   const j=journey(); let nowSet=false;
   document.querySelectorAll<HTMLElement>('#journey li').forEach(li=>{ const k=li.dataset.s; li.classList.toggle('done',j[k]); const now=!j[k]&&!nowSet; li.classList.toggle('now',now); if(now) nowSet=true; });
   let g;
-  if(!j.discover) g=`Discover the fair: ${S.zones.length} of 8 zones found. Follow the signs off the main street.`;
+  if(!j.discover) g=`ပွဲဈေးလျှောက်ကြည့်ပါ · ${S.zones.length}/၈ နေရာ ရောက်ရှိပြီး`;
   else if(!j.play) g=`Play: ${S.rides?'ride done':'take a ride'}, ${S.games?'game played':'win tickets at a game booth'}.`;
   else if(!j.finale) g=S.showStarted?'Fireworks now! Go to the Finale View deck.':'Fireworks at 9:30 PM. Find a spot on the Finale View deck.';
   else g=`Collected: ${S.zones.length}/8 postcards, ${S.secrets.length}/6 secrets, ${S.photos.length} photos.`;
@@ -1108,17 +1118,19 @@ function finishGame(){ MG.done=true; setBar(`Round over. You won ${MG.won} ticke
 // ---------- input ----------
 const keys: Record<string, boolean> = {}; let touchMode=false;
 window.addEventListener('keydown',e=>{
-  if(S.mode==='title') return;
+  if(S.mode==='title'||e.isComposing||(e.target instanceof HTMLElement && (e.target.matches('input,textarea,select')||e.target.isContentEditable))) return;
   keys[e.code]=true;
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
   if(e.repeat) return;
   if(!$('modal').hidden){ if(e.code==='Escape') closeModal(); return; }
-  if(e.code==='Escape'){ if(S.photo) exitPhotoMode(); else if(S.mode==='scene') endScene(); else if(S.mode==='mg') endGame(); return; }
+  if(e.code==='Escape'){ if(mapLarge){$('bMap').click();return;} if(S.photo) exitPhotoMode(); else if(S.mode==='scene') endScene(); else if(S.mode==='mg') endGame(); return; }
   if(e.code==='KeyE'||e.code==='Space'||e.code==='Enter'){ if(document.activeElement&&document.activeElement.tagName==='BUTTON'&&e.code!=='KeyE') return; press(); }
   if(e.code==='KeyP'){ S.photo?exitPhotoMode():enterPhotoMode(); }
   if(e.code==='KeyC'){ S.settings.cam=S.settings.cam==='close'?'wide':'close'; saveSettings(); }
   if(e.code==='KeyB'&&S.mode==='walk') openBag();
   if(e.code==='KeyQ'&&S.mode==='walk') wave();
+  if(e.code==='KeyH') horn(1);
+  if(e.code==='KeyL') bell(1);
   if(e.code==='KeyM'){ S.settings.mini=!S.settings.mini; saveSettings(); syncChrome(); }
 });
 window.addEventListener('keyup',e=>{ keys[e.code]=false; });
@@ -1152,6 +1164,11 @@ $('bSet').onclick=openSettings;
 $('bAv').onclick=()=>{ if(S.mode==='walk') openAvatar(false); };
 $('bWave').onclick=()=>wave();
 $('waveT').addEventListener('pointerdown',e=>{ e.preventDefault(); wave(); });
+$('bBell').onclick=()=>{ audioInit(S.settings.sound); bell(1); };
+$('bHorn').onclick=()=>{ audioInit(S.settings.sound); horn(1); };
+$('b3d').onclick=()=>{ use3d=!use3d; $('b3d').textContent=use3d?'3D view':'2D view'; };
+$('bMap').onclick=()=>{ S.settings.mini=true; mapLarge=!mapLarge; mini.classList.toggle('expanded',mapLarge); $('bMap').setAttribute('aria-expanded',String(mapLarge)); syncChrome(); };
+document.addEventListener('ykn-3d-lost',()=>{use3d=false; $('b3d').textContent='2D view'; toast('3D is unavailable on this device. Continuing in 2D.');});
 $('bSound').onclick=()=>{ audioInit(S.settings.sound); setSound(!S.settings.sound); };
 
 function syncChrome(){
@@ -1198,6 +1215,7 @@ function frame(now){
     if(S.mode==='scene'&&SC.kind==='finale'&&S.showStarted) S.finaleSeen=S.finaleSeen||S.showDone;
   }
   updFireworks(dt);
+  if(world3d) world3d.canvas.hidden=true;
   if(S.mode==='scene') drawScene(dt);
   else if(S.mode==='mg') drawMG(dt);
   else drawWorld(dt);
@@ -1227,7 +1245,21 @@ function drawWorld(dt){
   }
   TR.u+=dt*.55;
   NPC.forEach(n=>updateNPC(n,dt));
+  spaceCrowd(NPC,[...(S.mode==='walk'?[P]:[]),...REMOTE.values()],blocked);
   updateBikes(dt);
+  for(const r of REMOTE.values()){ const k=Math.min(1,dt*8); r.moving=Math.hypot(r.tx-r.x,r.ty-r.y)>1.5; r.x=lerp(r.x,r.tx,k); r.y=lerp(r.y,r.ty,k); }
+  if(use3d && !S.photo) {
+    try {
+      if(!world3d) world3d=new World3D(ZONES,COL,IT.map(it=>({x:it.x,y:it.y,label:it.label().replace(/<[^>]*>/g,'')})));
+      const actors: Actor[] = NPC.slice(0,S.settings.density==='low'?14:S.settings.density==='high'?44:28).map((n,i)=>({id:'npc'+i,x:n.x,y:n.y,look:{...n,pat:(i%3===0?'check':i%3===1?'stripe':'acheik'),outfit:i%3===0?'taikpon':i%3===1?'htamein':'longyi',hair:n.bun?'bun':i%4===0?'long':'short',thanaka:i%3!==0,head:i%9===0?'flower':n.hat?'hat':'none',bag:i%7===0},moving:n.moving,heading:Math.atan2(n.tx-n.x,n.ty-n.y),face:n.face,name:'',wave:false,bike:false}));
+      if(!P.hidden) actors.push({id:'me',x:P.x,y:P.y,look:AV(),moving:P.moving,face:P.face,name:S.settings.name||'သင်',wave:T<P.waveUntil,bike:false});
+      for(const r of REMOTE.values()) if(r.where==='walk'||r.where==='train') actors.push({id:r.peer,x:r.x,y:r.y,look:avatarOpts(r.av),moving:r.moving,face:r.face,name:r.name||'Friend',wave:T<r.waveUntil,bike:false});
+      for(let i=0;i<BIKES.length;i++){const b=BIKES[i]; actors.push({id:'bike'+i,x:b.x,y:b.y,look:b.rider,moving:true,face:b.dir,name:'',wave:false,bike:true,speed:b.cur});}
+      world3d.render(T,P,actors,S.settings.cam==='wide',Array.from({length:4},(_,i)=>{const [x,y]=trackPos(TR.u-i*.16),[nx,ny]=trackPos(TR.u-i*.16+.01);return{x,y,angle:Math.atan2(nx-x,ny-y)};}));
+      if(S.mode==='walk'){ checkWorld(); if(S.settings.mini) drawMini(); }
+      return;
+    } catch { use3d=false; if(world3d) world3d.canvas.hidden=true; $('b3d').textContent='2D view'; toast('3D could not start. The fair is still playable in 2D.'); }
+  }
   // camera
   const baseZ=clamp(Math.min(VW,VH)/620,.75,1.7)*(S.settings.cam==='wide'?.62:1);
   zoom=lerp(zoom,baseZ,Math.min(1,dt*4));
@@ -1258,7 +1290,7 @@ function drawWorld(dt){
   for(let i=0;i<4;i++){ const [x,y]=trackPos(TR.u-i*.16); list.push({y,car:i,x}); }
   if(!P.hidden) list.push({y:P.y,player:true});
   for(const b of BIKES) if(b.y>vy0&&b.y<vy1+40&&b.x>vx0&&b.x<vx1) list.push({y:b.y,bike:b});
-  for(const r of REMOTE.values()){ const k=Math.min(1,dt*8); r.moving=Math.hypot(r.tx-r.x,r.ty-r.y)>1.5; r.x=lerp(r.x,r.tx,k); r.y=lerp(r.y,r.ty,k);
+  for(const r of REMOTE.values()){
     if((r.where==='walk'||r.where==='train')&&r.x>vx0&&r.x<vx1&&r.y>vy0&&r.y<vy1) list.push({y:r.y,remote:r}); }
   list.sort((a,b)=>a.y-b.y);
   for(const d of list){
@@ -1311,21 +1343,54 @@ function drawLighting(dark){
   for(const [sx,sy,r,c] of vis){ if(!c) continue; const g=ctx.createRadialGradient(sx,sy,0,sx,sy,r*.7); g.addColorStop(0,hexA(c,.16)); g.addColorStop(1,hexA(c,0)); ctx.fillStyle=g; ctx.fillRect(sx-r,sy-r,r*2,r*2); }
   ctx.globalCompositeOperation='source-over';
 }
+let mapTarget: number | null = null;
+mini.tabIndex=0;mini.setAttribute('role','button');mini.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter'||e.key===' '){e.preventDefault();$('bMap').click();}else if(mapLarge&&/^[1-8]$/.test(e.key)){mapTarget=Number(e.key);}});
+mini.addEventListener('click',e=>{
+  if(!mapLarge){$('bMap').click(); return;}
+  const bounds=mini.getBoundingClientRect(), x=(e.clientX-bounds.left)/bounds.width*mini.width, y=(e.clientY-bounds.top)/bounds.height*mini.height;
+  const z=ZONES.find(z=>x>mapX(z.x)&&x<mapX(z.x+z.w)&&y>mapY(z.y)&&y<mapY(z.y+z.h));
+  mapTarget=z?z.n:null;
+});
+const mapX=(x:number)=>20+x/WW*320, mapY=(y:number)=>55+y/WH*420;
 function drawMini(){
-  const w=mini.width, h=mini.height, s=w/WW;
-  mx.clearRect(0,0,w,h); mx.fillStyle='#1a1430'; mx.fillRect(0,0,w,h);
-  mx.fillStyle='#0f1838'; mx.fillRect(0,0,w,NORTH*s);
-  mx.fillStyle='#3a3350'; mx.fillRect(ROAD.x*s,NORTH*s,ROAD.w*s,h);
-  ZONES.forEach(z=>{ const has=S.zones.includes(z.id); mx.fillStyle=has?'rgba(244,182,63,.35)':'rgba(255,255,255,.08)'; rr(mx,z.x*s,z.y*s,z.w*s,z.h*s,6); mx.fill();
-    mx.fillStyle=has?'#ffe7a3':'rgba(255,255,255,.4)'; mx.font='700 18px '+BODY; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText(String(z.n),(z.x+z.w/2)*s,(z.y+z.h/2)*s); });
-  mx.fillStyle='#3fc7a5'; for(const r of REMOTE.values()){ mx.beginPath(); mx.arc(r.x*s,r.y*s,5,0,TAU); mx.fill(); }
-  mx.fillStyle='#ff5a4e'; mx.beginPath(); mx.arc(P.x*s,P.y*s,6,0,TAU); mx.fill(); mx.strokeStyle='#fff'; mx.lineWidth=2; mx.stroke();
+  const w=mini.width,h=mini.height;
+  mx.clearRect(0,0,w,h);mx.fillStyle='#182c31';rr(mx,0,0,w,h,22);mx.fill();
+  mx.fillStyle='#eddfbd';mx.textAlign='left';mx.font='700 24px '+MMF;mx.fillText('ရေကျော် လမ်းညွှန်',22,37);
+  mx.font='400 12px '+BODY;mx.fillStyle='#b9b9a8';mx.fillText('A NIGHT TO WANDER',23,56);mx.textAlign='right';mx.fillText('N ↑',w-24,37);
+  mx.save();rr(mx,15,70,w-30,399,14);mx.clip();mx.fillStyle='#243b3b';mx.fillRect(15,70,w-30,399);
+  // A park-like illustrated map: paths, gardens and recognizable little landmarks.
+  mx.strokeStyle='#71877a';mx.lineWidth=2;mx.beginPath();mx.moveTo(mapX(900),mapY(NORTH));mx.lineTo(mapX(900),mapY(WH));mx.stroke();
+  mx.strokeStyle='#b7ac8a';mx.lineWidth=11;mx.lineCap='round';mx.beginPath();mx.moveTo(mapX(900),mapY(NORTH));mx.lineTo(mapX(900),mapY(WH));mx.stroke();
+  mx.strokeStyle='#e7d4a3';mx.lineWidth=1;mx.setLineDash([2,7]);mx.stroke();mx.setLineDash([]);
+  for(let i=0;i<48;i++){const x=26+(i*71%300),y=87+(i*53%360);if(Math.abs(x-mapX(900))<22)continue;mx.fillStyle=i%2?'#37554a':'#304c43';circ(mx,x,y,3+i%3);}
+  const colors=['#dfb38c','#d2b2b2','#dfa77c','#92b5b8','#c8b47e','#9fbd98','#c8a6b6','#e2cb83'];
+  const names=['ချားရဟတ်','မြင်းစီးရဟတ်','စားသောက်တန်း','သင်္ဘော','ကစားပွဲ','ကလေးကွင်း','ဂီတစင်','မီးပန်း'];
+  ZONES.forEach((z,i)=>{
+    const x=mapX(z.x+z.w/2),y=mapY(z.y+z.h/2)-7,found=S.zones.includes(z.id);
+    mx.strokeStyle='#a69779';mx.lineWidth=3;mx.beginPath();mx.moveTo(x,y+14);mx.lineTo(mapX(900),y+14);mx.stroke();
+    mx.fillStyle=colors[i]+'22';mx.beginPath();mx.ellipse(x,y,43,29,0,0,TAU);mx.fill();
+    mx.strokeStyle=colors[i];mx.fillStyle=colors[i];mx.lineWidth=2;
+    if(i===0){mx.beginPath();mx.arc(x,y-4,18,0,TAU);mx.stroke();for(let k=0;k<8;k++){const a=k/8*TAU;ln(mx,x,y-4,x+Math.cos(a)*18,y-4+Math.sin(a)*18);circ(mx,x+Math.cos(a)*18,y-4+Math.sin(a)*18,2);mx.fill();}ln(mx,x,y-4,x-11,y+23);ln(mx,x,y-4,x+11,y+23);}
+    else if(i===1){mx.beginPath();mx.moveTo(x-23,y-9);mx.lineTo(x,y-25);mx.lineTo(x+23,y-9);mx.closePath();mx.fill();for(const k of [-14,0,14])ln(mx,x+k,y-9,x+k,y+16);mx.fillRect(x-24,y+16,48,4);}
+    else if(i===2||i===4){mx.fillRect(x-19,y-2,38,23);for(let k=0;k<5;k++){mx.fillStyle=k%2?'#f1dfb7':colors[i];mx.fillRect(x-23+k*9,y-13,9,12);}mx.fillStyle='#243b3b';mx.fillRect(x-11,y+3,22,12);}
+    else if(i===3){mx.beginPath();mx.moveTo(x-24,y);mx.quadraticCurveTo(x,y+36,x+24,y);mx.closePath();mx.fill();ln(mx,x,y,x,y-24);mx.beginPath();mx.moveTo(x+2,y-23);mx.lineTo(x+16,y-6);mx.lineTo(x+2,y-6);mx.closePath();mx.fill();}
+    else if(i===5){mx.fillRect(x-24,y,48,16);mx.fillRect(x-10,y-13,15,13);for(const k of [-14,14]){circ(mx,x+k,y+19,5);mx.fill();}ln(mx,x+14,y,x+14,y-12);}
+    else if(i===6){mx.fillRect(x-22,y-6,44,25);mx.beginPath();mx.moveTo(x-26,y-8);mx.lineTo(x,y-26);mx.lineTo(x+26,y-8);mx.closePath();mx.stroke();mx.font='700 23px '+BODY;mx.textAlign='center';mx.fillText('♪',x,y+13);}
+    else{for(let k=0;k<10;k++){const a=k/10*TAU;ln(mx,x+Math.cos(a)*7,y+Math.sin(a)*7,x+Math.cos(a)*23,y+Math.sin(a)*23);}circ(mx,x,y,3);mx.fill();}
+    mx.textAlign='center';mx.font='700 16px '+MMF;mx.fillStyle='#f2e4c7';mx.fillText(names[i]+(found?' ✓':''),x,y+43,126);
+    if(mapTarget===z.n){mx.strokeStyle='#ffe3a1';mx.lineWidth=2;mx.setLineDash([3,4]);mx.beginPath();mx.arc(x,y,30,0,TAU);mx.stroke();mx.setLineDash([]);}
+  });
+  if(mapTarget){const z=ZONES[mapTarget-1];mx.strokeStyle='#ffe3a1';mx.lineWidth=2;mx.setLineDash([3,5]);mx.beginPath();mx.moveTo(mapX(P.x),mapY(P.y));mx.lineTo(mapX(z.x+z.w/2),mapY(z.y+z.h/2));mx.stroke();mx.setLineDash([]);}
+  for(const r of REMOTE.values()){mx.fillStyle='#77dfc2';circ(mx,mapX(r.x),mapY(r.y),4);mx.fill();mx.strokeStyle='#fff';mx.lineWidth=1;mx.stroke();}
+  const px=mapX(P.x),py=mapY(P.y);mx.strokeStyle='rgba(255,220,130,.4)';mx.lineWidth=2;mx.beginPath();mx.arc(px,py,9+Math.sin(T*3)*2,0,TAU);mx.stroke();mx.fillStyle='#ffe5a1';circ(mx,px,py,5);mx.fill();mx.restore();
+  mx.font='400 16px '+MMF;mx.textAlign='left';mx.fillStyle='#ffe5a1';circ(mx,26,491,4);mx.fill();mx.fillText('သင်',37,497);mx.fillStyle='#77dfc2';circ(mx,94,491,4);mx.fill();mx.fillText('သူငယ်ချင်း',105,497);mx.textAlign='right';mx.fillStyle='#e8dfc6';mx.fillText(S.zones.length+' / ၈ နေရာ',w-23,497);
+  mx.textAlign='center';mx.fillStyle='#bdc6b8';mx.font='400 16px '+MMF;mx.fillText(mapTarget?names[mapTarget-1]+' သို့ သွားရန်':mapLarge?'သွားလိုသောနေရာကို နှိပ်ပါ':'မြေပုံချဲ့ကြည့်ရန် နှိပ်ပါ',w/2,529);
 }
 
 // ---------- boot ----------
 function startGameFlow(){
   $('title').hidden=true; S.mode='walk'; audioInit(S.settings.sound); setSound(S.settings.sound);
-  P.x=900; P.y=2545; camX=P.x; camY=P.y-200;
+  P.x=rand(850,950); P.y=2545; camX=P.x; camY=P.y-200;
   syncChrome(); updateHUD();
   const welcome=()=>{ setTimeout(()=>toast(`<span class="z">Welcome${S.settings.name?', '+esc(S.settings.name):''}!</span>Eight zones, six hidden secrets, and fireworks at 9:30 PM.`,true),300); };
   if(!S.settings.avDone) openAvatar(true,welcome); else welcome();
