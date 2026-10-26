@@ -1,6 +1,8 @@
 <title>Yay Kyaw Nights</title>
 <style>
-/* Bundled Padauk supports Myanmar Unicode even without external font services. */
+/* Pyidaungsu is bundled locally; Padauk is retained as the fallback. */
+@font-face{font-family:"Pyidaungsu";src:url("fonts/Pyidaungsu-Regular.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Pyidaungsu";src:url("fonts/Pyidaungsu-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
 @font-face{font-family:"Padauk";src:url("fonts/Padauk-Regular.ttf") format("truetype");font-weight:400;font-display:swap}
 @font-face{font-family:"Padauk";src:url("fonts/Padauk-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
 /* Layout: one full-screen night street canvas; glassy plum HUD panels pinned to the corners, gold for money and signage, lantern red for calls to action. */
@@ -16,7 +18,7 @@
   --jade:#3fc7a5;
   --display:"Bungee","Arial Black",system-ui,sans-serif;
   --body:"Brandon Text","Baloo 2","Trebuchet MS",system-ui,sans-serif;
-  --mm:"Padauk","Pyidaungsu","Noto Sans Myanmar","Myanmar Text",sans-serif;
+  --mm:"Pyidaungsu","Padauk","Noto Sans Myanmar","Myanmar Text",sans-serif;
   color-scheme:dark;
 }
 html,body{height:100%;margin:0;overflow:hidden;background:var(--night);color:var(--ink);font-family:var(--body);-webkit-user-select:none;user-select:none;touch-action:none}
@@ -166,7 +168,7 @@ button{border-radius:10px;background:#252b32;font-weight:700;box-shadow:none}
 .avpresets{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:8px}.avpresets button{padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px}.avpresets canvas{width:58px;height:70px}
 @media(max-width:560px){#hud{top:12px;left:12px;max-width:calc(100vw - 24px)}.stat{padding:0 12px;min-width:36px}.stat b{font-size:17px}#goal{max-width:250px;font-size:12px}.stats{padding:8px 0}#tools{bottom:calc(10px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 24px);padding:5px;width:max-content;gap:0;border-radius:16px}#tools>button,#moreControls>summary{display:flex!important;font-size:12px;padding:9px 10px;gap:5px}#tools>button>span{font-size:17px}#moreControls>summary span{display:none}#mini{width:100px;height:153px;bottom:200px}#mini.expanded{bottom:50%;width:min(360px,86vw);height:min(550px,70dvh)}#stick{width:104px;height:104px;left:18px;bottom:80px}#act{width:72px;height:72px;right:20px;bottom:91px}#waveT{right:103px;bottom:83px;padding:7px 10px}#prompt{bottom:198px;max-width:calc(100vw - 140px);left:14px;transform:none;font-size:12px}#friends{top:auto;bottom:76px;max-height:calc(100dvh - 160px)}.morePanel{bottom:47px}.avgrid{gap:12px}.avpresets{grid-template-columns:repeat(3,1fr)}}
 
-:root{--display:"Padauk","Pyidaungsu",sans-serif;--body:"Padauk","Pyidaungsu",sans-serif}
+:root{--display:"Pyidaungsu","Padauk",sans-serif;--body:"Pyidaungsu","Padauk",sans-serif}
 body,button,input,select,textarea,kbd{font-family:var(--body)}
 #title h1{font-size:clamp(40px,8vw,78px);line-height:1.45;letter-spacing:0}#title .mm{font-size:20px}#title .in{padding:25px}
 #mini{border:0;box-shadow:0 10px 35px #0006;border-radius:20px}#mini.expanded{box-shadow:0 0 0 100vmax #090e1b99,0 20px 80px #0009}

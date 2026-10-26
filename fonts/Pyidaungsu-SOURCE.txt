@@ -1,0 +1,4 @@
+Pyidaungsu 2.5.3, unmodified Regular and Bold fonts.
+Source: MCF NLP
+https://github.com/mcfnlp/Pyidaungsu/tree/master/Pyidaungsu2.5.3/Release
+License notice extracted from the font name table; full SIL OFL 1.1 text included in Pyidaungsu-OFL.txt.

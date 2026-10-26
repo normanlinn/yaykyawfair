@@ -38,7 +38,7 @@ The bottom dock contains **Your look / ကိုယ့်ပုံစံ**, **Ma
 
 The illustrated map shows landmarks, discoveries, your position and connected friends. Expand it and tap a zone to mark a destination. The dotted line is a direction guide, not an obstacle-aware route. With the map focused, Enter expands/collapses it and number keys 1–8 mark zones. Escape closes the expanded map.
 
-Padauk is bundled and is the primary font throughout the interface and canvas labels, with Pyidaungsu and system Myanmar fonts as fallbacks. Its SIL Open Font License is in `fonts/Padauk-OFL.txt` and is copied into the deployment.
+Pyidaungsu 2.5.3 Regular and Bold are bundled and are the primary fonts throughout the interface, map, chat and 3D sign textures. Padauk and system Myanmar fonts are fallbacks. Both fonts’ SIL Open Font License notices are copied into the deployment. The Pyidaungsu files are unmodified releases from MCF NLP; provenance is in `fonts/Pyidaungsu-SOURCE.txt`.
 
 ## Multiplayer and Myanmar chat
 
@@ -79,7 +79,7 @@ npm run serve       # build, then serve dist/ on http://localhost:8000
 | `src/audio.ts` | Web Audio engine |
 | `src/util.ts` | math and canvas helpers |
 | `src/index.html` | page markup and styles; the build injects the bundled script |
-| `fonts/` | Bundled Padauk and license; legacy font assets |
+| `fonts/` | Bundled Pyidaungsu and Padauk with license notices; legacy font assets |
 
 ## Controls
 

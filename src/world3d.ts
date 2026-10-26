@@ -1,3 +1,4 @@
+import { MMF } from './util';
 import { FairArt } from './worldArt';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { movementHeading, turnToward } from './motion';
@@ -78,8 +79,8 @@ export class World3D {
   private label(text: string) {
     const c = document.createElement('canvas'); c.width = 512; c.height = 128; const g = c.getContext('2d')!;
     g.fillStyle = '#182c31'; g.roundRect(0, 0, 512, 128, 18); g.fill(); g.strokeStyle = '#b7a17a'; g.lineWidth = 2; g.stroke();
-    g.fillStyle = '#ffe8ac'; g.textAlign = 'center'; g.font = 'bold 27px Padauk, Pyidaungsu, sans-serif';
-    const paint=()=>{g.clearRect(0,0,512,128);g.fillStyle='#182c31';g.beginPath();g.roundRect(0,0,512,128,18);g.fill();g.strokeStyle='#b7a17a';g.stroke();g.fillStyle='#f0dfbc';g.font='bold 27px Padauk, Pyidaungsu, sans-serif';text.split('\n').forEach((line,i)=>g.fillText(line,256,text.includes('\n')?47+i*48:76,480));};paint();
+    g.fillStyle = '#ffe8ac'; g.textAlign = 'center'; g.font = 'bold 27px '+MMF;
+    const paint=()=>{g.clearRect(0,0,512,128);g.fillStyle='#182c31';g.beginPath();g.roundRect(0,0,512,128,18);g.fill();g.strokeStyle='#b7a17a';g.stroke();g.fillStyle='#f0dfbc';g.font='bold 27px '+MMF;text.split('\n').forEach((line,i)=>g.fillText(line,256,text.includes('\n')?47+i*48:76,480));};paint();
     const texture=new THREE.CanvasTexture(c);texture.colorSpace=THREE.SRGBColorSpace;const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: true, transparent:true })); sprite.scale.set(15, 3.75, 1);document.fonts.ready.then(()=>{paint();sprite.material.map!.needsUpdate=true;});return sprite;
   }
   private sphere(parent:THREE.Object3D,x:number,y:number,z:number,rx:number,ry:number,rz:number,color:string){const m=new THREE.Mesh(this.ball,this.mat(color));m.position.set(x,y,z);m.scale.set(rx,ry,rz);m.castShadow=m.receiveShadow=true;parent.add(m);return m;}
