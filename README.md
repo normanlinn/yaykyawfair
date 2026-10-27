@@ -9,6 +9,13 @@ You dress up as a small icon person and walk through a crowd of families, vendor
 - buy mohinga, mont lin ma yar, shwe yin aye and other snacks with kyat
 - collect zone postcards, find six hidden secrets and take photos
 - watch the fireworks finale at 9:30 PM game time
+- make a Thadingyut wish (ဆုတောင်း) at the wish stall by the Finale View: send it up on a paper fire balloon (1,000 Ks) or float it on the pond as a candle lantern (500 Ks)
+
+## Thadingyut wishes
+
+Write a wish in Myanmar or English and it glows over the fair with your name. The sky and pond start with a handful of sample Burmese wishes. Walk near a balloon or lantern to read it.
+
+On claude.ai every wish is saved in the artifact's shared store, so everyone sees everyone's wishes and they stay forever (up to 50 per person). Elsewhere (for example on Vercel) wishes are saved in your browser.
 
 ## Character creator
 
@@ -65,11 +72,12 @@ npm run serve       # build, then serve dist/ on http://localhost:8000
 | `src/world3d.ts` | the Three.js scene: rides, stalls, lanterns, Shwedagon skyline, crowd, fireworks |
 | `src/layout.ts` | the fair's floor plan and colliders |
 | `src/friends.ts` | PeerJS friend rooms used outside claude.ai |
+| `src/wishes.ts` | Thadingyut wishes: sample wishes and where wishes are saved |
 | `src/people.ts` | avatar types (and the 2D icon people used on souvenir photos) |
 | `src/audio.ts` | Web Audio engine |
 | `src/util.ts` | math and canvas helpers |
 | `src/index.html` | page markup and styles; the build injects the bundled script |
-| `fonts/` | Pyidaungsu 2.5.3 (bundled, the primary Myanmar font), Padauk (fallback) and Brandon Text (Latin). Both Myanmar fonts are Unicode and ship with their SIL Open Font License notices; Pyidaungsu provenance is in `fonts/Pyidaungsu-SOURCE.txt` |
+| `fonts/` | KhitHaung (Regular, Medium, SemiBold, Bold; the Myanmar font, applied to Myanmar letters only), Pyidaungsu 2.5.3 and Padauk (fallbacks) and Brandon Text (Latin). All three Myanmar fonts are Unicode; Pyidaungsu and Padauk and ship with their SIL Open Font License notices; Pyidaungsu provenance is in `fonts/Pyidaungsu-SOURCE.txt` |
 
 ## Controls
 
