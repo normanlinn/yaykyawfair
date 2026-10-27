@@ -307,6 +307,43 @@ button:active{transform:scale(.94)}
 @keyframes pick{0%{transform:scale(.85)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
 .confetti{position:fixed;z-index:60;width:8px;height:12px;pointer-events:none;border-radius:2px}
 @media (prefers-reduced-motion:reduce){#title .tsky,.confetti{display:none}#title .in>*,#title h1,#title .mmt,#title .cta,.avopts .avrow,.avprev::before,.seg button[aria-pressed="true"],.sw[aria-pressed="true"],#fwAsk{animation:none!important}#title h1{background:none;color:var(--gold)}}
+/* narrower screens: keep the HUD clear of the buttons on the right */
+@media (max-width:1000px){.stat .lbl .mm{display:none}.stat{padding:6px 10px 5px;gap:6px}#hud{max-width:calc(100vw - min(440px,46vw) - 30px)}}
+/* phones held sideways: everything smaller and tucked into the corners so the fair fills the screen */
+@media (max-height:500px) and (orientation:landscape){
+  #hud{gap:4px;max-width:calc(50vw - 20px)}
+  .stat{padding:4px 8px 3px;gap:5px}.stat i{font-size:14px}.stat .lbl{font-size:8.5px}.stat b{font-size:14px}
+  .quest{padding:5px 8px 6px;gap:4px}.qh{display:none}
+  .journey li{min-width:46px;font-size:8.5px;gap:2px}.journey .jl small{display:none}.journey .lamp{width:12px;height:15px;font-size:8px}.journey li::before{top:7px}
+  #goal{font-size:11px;max-width:min(300px,45vw)}#goal>b{font-size:8.5px}
+  #tools{max-width:48vw;gap:4px}#tools button{padding:4px 8px;font-size:11.5px}#tools kbd,#bCam,#bSound,#bWave{display:none}
+  #mini{width:96px;height:96px;bottom:auto;top:calc(76px + env(safe-area-inset-top,0px));border-radius:12px}
+  #toasts{top:calc(70px + env(safe-area-inset-top,0px));width:min(46vw,380px)}
+  #sceneBar{max-width:62vw;padding:6px 10px;font-size:12px}#sceneBar button{padding:5px 10px}
+  #prompt{font-size:13px;padding:6px 12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));max-width:52vw}
+  #stick{width:100px;height:100px;left:calc(18px + env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+  #chat{width:min(300px,40vw);left:calc(130px + env(safe-area-inset-left,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+  #fwAsk{top:calc(56px + env(safe-area-inset-top,0px));padding:10px 12px}
+  #updBar{bottom:calc(60px + env(safe-area-inset-bottom,0px))}
+  #modal{padding:8px}#modal .card{max-height:calc(100% - 8px)}
+  #friends{top:56px;max-height:calc(100dvh - 70px)}
+  #timeMenu{top:calc(50px + env(safe-area-inset-top,0px));max-height:calc(100dvh - 60px);overflow:auto}
+  #title{padding:8px}#title .in{gap:6px;max-width:640px}#title .eyebrow{font-size:10px}
+  #title h1{font-size:clamp(34px,13vh,64px)}#title .mmt{font-size:clamp(18px,6vh,26px);line-height:1.4}
+  #title p{font-size:12.5px;line-height:1.35}#title .cta{font-size:16px;padding:10px 22px}#title small:last-child{display:none}
+}
+/* a phone held upright: suggest turning it sideways (you can carry on upright if you prefer) */
+#rotate{display:none}
+@media (orientation:portrait) and (max-width:600px) and (pointer:coarse){
+  body:not(.portraitOK) #rotate{display:flex;position:fixed;inset:0;z-index:80;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;background:radial-gradient(ellipse at 50% 110%,rgba(244,182,63,.28),transparent 60%),rgba(12,8,32,.94)}
+}
+#rotate .ph{width:58px;height:96px;border:3px solid var(--gold);border-radius:12px;position:relative;animation:turnph 2.4s ease-in-out infinite;box-shadow:0 0 24px rgba(244,182,63,.35)}
+#rotate .ph::after{content:"";position:absolute;left:50%;bottom:6px;width:14px;height:3px;border-radius:2px;background:var(--gold);transform:translateX(-50%)}
+@keyframes turnph{0%,20%{transform:rotate(0)}50%,80%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
+#rotate b{font-family:var(--display);font-weight:400;font-size:22px;color:var(--gold);letter-spacing:.03em}
+#rotate .mm{font-family:var(--mm);font-size:17px;line-height:1.7}
+#rotate p{margin:0;color:var(--muted);font-size:14px;max-width:30ch}
+@media (prefers-reduced-motion:reduce){#rotate .ph{animation:none;transform:rotate(-90deg)}}
 </style>
 
 <canvas id="world" aria-label="Yay Kyaw Nights, the fair in 3D"></canvas>
@@ -351,6 +388,7 @@ button:active{transform:scale(.94)}
   <div id="chatQuick" hidden></div>
   <form id="chatForm" hidden autocomplete="off"><input id="chatIn" maxlength="120" enterkeyhint="send" placeholder="စကားပြောရန်… type in Burmese or English" aria-label="Chat message"><button class="cta" type="submit">Send</button></form>
 </div>
+<div id="rotate" role="dialog" aria-label="Turn your phone sideways"><div class="ph" aria-hidden="true"></div><b>Turn your phone sideways</b><span class="mm">ဖုန်းကို ဘေးတိုက်လှည့်ပြီး ကစားပါ</span><p>The fair is wide. Hold your phone sideways to see more of it, with the stick on the left and GO on the right.</p><button id="rotateOK">Play upright anyway</button></div>
 <div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="act" aria-label="Interact">GO</button><button id="waveT">Wave</button></div>
 <div id="sceneBar" hidden><span id="sceneCap"></span><button id="sceneAlt" class="cta" hidden></button><button id="sceneExit">Leave</button></div>
 <div id="photoUI" hidden><div class="vf"><span id="vfText">PHOTO MODE</span></div><div class="bar"><button id="photoExit">Done</button><button id="shutter" aria-label="Take photo"></button><button id="photoHide">Hide me</button></div></div>
