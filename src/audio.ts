@@ -177,7 +177,7 @@ export function horn(vol: number): void {
   setTimeout(() => { try { lp.disconnect(); } catch { /* gone */ } }, 900);
 }
 
-export type Sfx = 'coin' | 'ding' | 'pop' | 'throw' | 'miss' | 'toot' | 'launch' | 'boom' | 'crackle' | 'shutter' | 'whee' | 'chat' | 'bump' | 'zap' | 'fizz' | 'clank' | 'scream';
+export type Sfx = 'coin' | 'ding' | 'pop' | 'throw' | 'miss' | 'toot' | 'launch' | 'boom' | 'crackle' | 'shutter' | 'whee' | 'chat' | 'bump' | 'zap' | 'fizz' | 'clank' | 'scream' | 'chuff' | 'clack' | 'whistle';
 export function sfx(k: Sfx): void {
   if (!A.c) return;
   const t = A.c.currentTime;
@@ -198,6 +198,9 @@ export function sfx(k: Sfx): void {
     case 'zap': for (let i = 0; i < 5; i++) noiseHit(0.03, 0.18, 5200, t + i * 0.035 + Math.random() * 0.02, 'highpass'); tone(110, 0.25, 'sawtooth', 0.03, t); break;
     case 'fizz': noiseHit(1.4, 0.08, 3000, t, 'highpass'); break;
     case 'clank': noiseHit(0.08, 0.35, 1800, t); tone(260, 0.3, 'square', 0.05, t, null, 180); break;
+    case 'chuff': noiseHit(0.22, 0.16, 520, t, 'bandpass'); noiseHit(0.1, 0.06, 1800, t + 0.02, 'highpass'); break;
+    case 'clack': noiseHit(0.03, 0.12, 2600, t, 'bandpass'); noiseHit(0.03, 0.1, 2200, t + 0.11, 'bandpass'); break;
+    case 'whistle': for (const [f, d] of [[880, 0], [1109, 0], [1319, 0]] as Array<[number, number]>) { tone(f, 0.42, 'sine', 0.035, t + d); tone(f, 0.75, 'sine', 0.03, t + 0.5, null, f * 0.97); } break;
     case 'scream': for (let i = 0; i < 3; i++) tone(820 + i * 140, 1.0, 'sawtooth', 0.012, t + i * 0.05, null, 1150 + i * 120); break;
   }
 }

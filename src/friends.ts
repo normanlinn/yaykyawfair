@@ -7,7 +7,15 @@ const text = (v: unknown, max: number) => typeof v === 'string' ? v.replace(/[\u
 // when they leave, the others race to take it over. A full fair spills into the next one.
 const PUBLIC = (n: number) => `ykn-public-fair-v1-${n}`;
 const SHARDS = 4, PUBLIC_MAX = 12, ROOM_MAX = 8;
-const WW = 2500, WH = 2600;
+const WW = 3900, WH = 2600;
+// STUN finds a direct route between browsers; TURN relays the data when two networks (for example mobile data and home
+// wi-fi) can't reach each other directly. These are free public servers.
+const OPTS = { debug: 1, config: { iceServers: [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  { urls: 'turn:eu-0.turn.peerjs.com:3478', username: 'peerjs', credential: 'peerjsp' },
+  { urls: 'turn:us-0.turn.peerjs.com:3478', username: 'peerjs', credential: 'peerjsp' },
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turns:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+] } };
 
 /** WebRTC multiplayer: a shared public fair, plus small invitation-only rooms for friends. The host relays state; no chat history is stored. */
 export function friends(onPeers: (peers: Guest[]) => void, onStatus?: (s: string) => void) {
@@ -112,7 +120,7 @@ export function friends(onPeers: (peers: Guest[]) => void, onStatus?: (s: string
   function joinPublic(n: number) {
     leave(true); mode = 'public'; shard = n; max = PUBLIC_MAX; get('roomLeave').hidden = true;
     status('Joining the public fair…');
-    const instance = new Peer(); peer = instance;
+    const instance = new Peer(OPTS); peer = instance;
     timer = setTimeout(() => { if (!active && peer === instance) { leave(true); status('Could not reach the public fair. Trying again…'); rejoin(15000); } }, 20000);
     instance.on('open', id => { if (peer !== instance) return; self = id; attach(instance.connect(PUBLIC(n), { reliable: true })); });
     instance.on('error', (e: { type?: string }) => {
@@ -123,7 +131,7 @@ export function friends(onPeers: (peers: Guest[]) => void, onStatus?: (s: string
   }
   function claimPublic(n: number) {
     leave(true); mode = 'public'; shard = n; max = PUBLIC_MAX;
-    const instance = new Peer(PUBLIC(n)); peer = instance;
+    const instance = new Peer(PUBLIC(n), OPTS); peer = instance;
     timer = setTimeout(() => { if (!active && peer === instance) { leave(true); rejoin(10000); } }, 20000);
     instance.on('open', id => { if (peer === instance) becomeHost(instance, id); });
     instance.on('error', (e: { type?: string }) => {
@@ -133,7 +141,7 @@ export function friends(onPeers: (peers: Guest[]) => void, onStatus?: (s: string
     instance.on('disconnected', () => { if (peer === instance) instance.reconnect(); }); // keep relaying; just re-register the id
   }
   function startRoom(code?: string) {
-    leave(true); mode = 'room'; max = ROOM_MAX; const instance = code ? new Peer() : new Peer('ykn-' + crypto.randomUUID()); peer = instance;
+    leave(true); mode = 'room'; max = ROOM_MAX; const instance = code ? new Peer(OPTS) : new Peer('ykn-' + crypto.randomUUID(), OPTS); peer = instance;
     status('Connecting…'); get('roomLeave').hidden = false;
     get<HTMLButtonElement>('roomCreate').disabled = get<HTMLButtonElement>('roomJoin').disabled = true;
     timer = setTimeout(() => { if (!active) { leave(); status('Could not connect. Check the code or try another network.'); } }, 20000);
@@ -161,6 +169,7 @@ export function friends(onPeers: (peers: Guest[]) => void, onStatus?: (s: string
   return {
     get id() { return self; },
     get isPublic() { return mode === 'public'; },
+    get connected() { return active; },
     open() { panel.hidden = !panel.hidden; },
     presence(value: Presence) {
       last = value;
