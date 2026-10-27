@@ -149,14 +149,58 @@ export function friends(onPeers: (peers: Guest[]) => void, onStatus?: (s: string
     instance.on('error', () => { if (peer !== instance) return; leave(); status('Room unavailable. Check the invite or create a new room.'); });
     instance.on('disconnected', () => { if (peer === instance) instance.reconnect(); });
   }
-  get('roomCreate').onclick = () => startRoom();
-  get('roomLeave').onclick = () => joinPublic(0);
-  get('roomJoin').onclick = () => { const value = get<HTMLInputElement>('roomCode').value.trim(); if (/^ykn-[a-z0-9-]{1,50}$/i.test(value)) startRoom(value); else status('Paste the room code from your friend’s invite link.'); };
+  // ---- the relay: on the deployed site everyone meets through the game's own server (api/fair), which works on every
+  // network. WebRTC above is the fallback for copies without the server (or when it is down).
+  const RELAY = 'api/fair', cid = Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('');
+  let relay: 'try' | 'on' | 'off' = location.protocol === 'http:' || location.protocol === 'https:' ? 'try' : 'off';
+  let relayRoom = 'public', relayT: ReturnType<typeof setTimeout> | undefined, relayBusy = false, relayFails = 0, others = 0;
+  function relayStart(room: string) {
+    leave(true); clearTimeout(relayT); relayRoom = room; mode = room === 'public' ? 'public' : 'room';
+    get('roomLeave').hidden = mode === 'public';
+    if (mode === 'room') { const url = new URL(location.href); url.searchParams.set('room', room); get<HTMLInputElement>('roomLink').value = url.href; get('roomLink').hidden = get('roomCopy').hidden = false; }
+    status(mode === 'public' ? 'Joining the public fair…' : 'Opening your room…');
+    relayTick();
+  }
+  function relayBye() { if (relay === 'on' && active) try { navigator.sendBeacon(RELAY, new Blob([JSON.stringify({ id: cid, room: relayRoom, bye: 1 })], { type: 'application/json' })); } catch { /* leaving anyway */ } }
+  async function relayTick() {
+    clearTimeout(relayT);
+    if (relay === 'off') return;
+    if (document.hidden && relay === 'on') { relayT = setTimeout(relayTick, 5000); return; }
+    if (relayBusy) return; relayBusy = true;
+    const room = relayRoom;
+    try {
+      const r = await fetch(RELAY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: cid, room, p: last }), cache: 'no-store' });
+      if (r.status === 404 || r.status === 405 || r.status === 503) throw new Error('no relay');
+      if (!r.ok) throw new Error('relay ' + r.status);
+      const j = await r.json() as { peers?: Array<{ id: string; p: unknown }> };
+      if (room !== relayRoom) return;
+      relay = 'on'; relayFails = 0; active = true; self = cid; host = false;
+      states.clear(); states.set(cid, last);
+      for (const e of (j.peers || []).slice(0, 40)) { const p = presence(e.p); if (typeof e.id === 'string' && p) states.set(e.id, p); }
+      others = states.size - 1; peers();
+      if (mode === 'public') status(others ? `Public fair: ${others + 1} playing now.` : 'Public fair: you are the only one here right now. Others appear as soon as they open the game.');
+      else status(others ? `Private room: ${others + 1} here.` : 'Private room open. Send your friends the invite link.');
+    } catch (e) {
+      relayFails++;
+      if (relay === 'try' && ((e as Error).message === 'no relay' || relayFails >= 3)) { relay = 'off'; relayBusy = false; startPeer(relayRoom); return; } // no server here: use WebRTC
+      if (relay === 'on') { active = relayFails < 4; status('Connection trouble. Trying again…'); }
+    } finally { relayBusy = false; }
+    // about once a second when others are here, slower when you are on your own
+    if ((relay as string) !== 'off') relayT = setTimeout(relayTick, others ? 900 : relay === 'try' ? 1500 : 3000);
+  }
+  function startPeer(room: string) { if (room === 'public') joinPublic(0); else startRoom(room); }
+  addEventListener('pagehide', relayBye);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && relay === 'on') relayTick(); });
+  const newRoom = () => 'ykn-' + crypto.randomUUID();
+  get('roomCreate').onclick = () => { if (relay !== 'off') { relayBye(); relayStart(newRoom()); } else startRoom(); };
+  get('roomLeave').onclick = () => { if (relay !== 'off') { relayBye(); relayStart('public'); } else joinPublic(0); };
+  get('roomJoin').onclick = () => { const value = get<HTMLInputElement>('roomCode').value.trim(); if (/^ykn-[a-z0-9-]{1,50}$/i.test(value)) { if (relay !== 'off') { relayBye(); relayStart(value); } else startRoom(value); } else status('Paste the room code from your friend’s invite link.'); };
   get('friendsClose').onclick = () => { panel.hidden = true; };
   get('roomCopy').onclick = async () => { try { await navigator.clipboard.writeText(get<HTMLInputElement>('roomLink').value); status('Invite copied. Send it to your friends.'); } catch { get<HTMLInputElement>('roomLink').select(); status('Select and copy the invite link above.'); } };
   let sentAt = 0;
   get<HTMLFormElement>('fChatForm').onsubmit = e => {
     e.preventDefault(); const input = get<HTMLInputElement>('fChatText'), body = text(input.value, 240).trim();
+    if (relay === 'on') { status('Use the chat box at the bottom of the game: everyone in the fair sees it.'); return; }
     if (!active || !body || Date.now() - sentAt < 1000) return; sentAt = Date.now(); input.value = '';
     const name = text(last.n, 28) || 'Player';
     if (host) { line(name, body); for (const c of links.values()) send(c, { type: 'chat', name, text: body }); }
@@ -164,15 +208,19 @@ export function friends(onPeers: (peers: Guest[]) => void, onStatus?: (s: string
   };
   panel.addEventListener('keydown', e => e.stopPropagation());
   const invite = new URLSearchParams(location.search).get('room');
-  if (invite && /^ykn-[a-z0-9-]{1,50}$/i.test(invite)) { get<HTMLInputElement>('roomCode').value = invite; startRoom(invite); }
-  else joinPublic(0);
+  const start = invite && /^ykn-[a-z0-9-]{1,50}$/i.test(invite) ? invite : 'public';
+  if (start !== 'public') get<HTMLInputElement>('roomCode').value = start;
+  setTimeout(() => { if (relay !== 'off') relayStart(start); else startPeer(start); }, 0); // after the caller has its handle
   return {
     get id() { return self; },
     get isPublic() { return mode === 'public'; },
     get connected() { return active; },
+    /** True when positions arrive about once a second (the relay), so other players should glide between updates. */
+    get slow() { return relay === 'on'; },
     open() { panel.hidden = !panel.hidden; },
     presence(value: Presence) {
       last = value;
+      if (relay !== 'off') return Promise.resolve(); // the next relay tick carries it
       if (active) { if (host) { states.set(self, value); snapshot(); } else for (const c of links.values()) send(c, { type: 'presence', value }); }
       return Promise.resolve();
     },
