@@ -4,6 +4,7 @@
 import * as esbuild from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
+import * as seo from './seo.mjs';
 
 const minify = process.argv.includes('--minify');
 const result = await esbuild.build({
@@ -17,8 +18,15 @@ const fontFiles = fs.existsSync('fonts') ? fs.readdirSync('fonts').filter(f => /
 for (const f of ['Padauk-OFL.txt','Pyidaungsu-OFL.txt','Pyidaungsu-SOURCE.txt']) if (fs.existsSync('fonts/'+f)) fs.copyFileSync('fonts/'+f, 'dist/fonts/'+f);
 for (const f of fontFiles) fs.copyFileSync(path.join('fonts', f), path.join('dist/fonts', f));
 
-const standalone = `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n</head>\n<body>\n${page}\n</body>\n</html>\n`;
+const standalone = `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n${seo.head('/')}\n</head>\n<body>\n${page.replace(/<title>[\s\S]*?<\/title>\s*/, '')}\n${seo.gameAbout}\n</body>\n</html>\n`;
 fs.writeFileSync('dist/index.html', standalone);
+
+// search engines and link previews: the /about/ landing page, robots.txt, sitemap.xml and the files in public/
+fs.mkdirSync('dist/about', { recursive: true });
+fs.writeFileSync('dist/about/index.html', seo.aboutPage);
+fs.writeFileSync('dist/robots.txt', seo.robots());
+fs.writeFileSync('dist/sitemap.xml', seo.sitemap());
+for (const f of fs.existsSync('public') ? fs.readdirSync('public') : []) fs.copyFileSync(path.join('public', f), path.join('dist', f));
 
 const mime = { ttf: 'font/ttf', otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2' };
 const inlined = page.replace(/url\("fonts\/([^"]+)"\)/g, (m, name) => {
