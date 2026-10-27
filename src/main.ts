@@ -72,8 +72,10 @@ IT.push({x:PHOTO.x,y:PHOTO.y+30,r:45,label:()=>`Souvenir photo booth · ${ks(500
 IT.push({x:FV.x,y:FV.y+10,r:110,label:()=>S.showStarted&&!S.showDone?'Watch the fireworks now!':S.showDone?'Watch the finale again':'Watch the skyline',act:()=>startScene('finale')});
 IT.push({x:UNCLE.x,y:UNCLE.y+10,r:45,label:()=>'Ask Uncle for pocket money',act:askUncle});
 IT.push({x:WISH_STALL.x,y:WISH_STALL.y+50,r:60,label:()=>'Make a Thadingyut wish · ဆုတောင်း',act:()=>openWish('sky')});
-IT.push({x:POND.x-POND.rx-34,y:POND.y,r:50,label:()=>'Look up at all the wishes',act:()=>startScene('wishes')});
-IT.push({x:POND.x,y:POND.y+POND.ry+28,r:80,label:()=>`Float a wish on the pond · ${ks(WISH_PRICE.water)}`,act:()=>openWish('water')});
+IT.push({x:POND.x-POND.rx-44,y:POND.y+POND.ry*.5,r:60,label:()=>'Look out over all the wishes',act:()=>startScene('wishes')});
+IT.push({x:POND.x-POND.rx-44,y:POND.y-POND.ry*.3,r:60,label:()=>'Look out over all the wishes',act:()=>startScene('wishes')});
+IT.push({x:POND.x+POND.rx+44,y:POND.y,r:70,label:()=>`Float a wish on the lake · ${ks(WISH_PRICE.water)}`,act:()=>openWish('water')});
+IT.push({x:WISH_STALL.x-150,y:WISH_STALL.y-40,r:70,label:()=>`Float a wish on the lake · ${ks(WISH_PRICE.water)}`,act:()=>openWish('water')});
 IT.push({x:DROP.x,y:DROP.y+100,r:60,label:()=>`Ride the drop tower · ${ks(1500)}`,act:()=>buyRide('drop',1500)});
 IT.push({x:SWINGER.x,y:SWINGER.y+SWINGER.R+40,r:60,label:()=>`Ride the wave swinger · ${ks(1200)}`,act:()=>buyRide('swinger',1200)});
 IT.push({x:BUMPER.x-40,y:BUMPER.y+BUMPER.h/2,r:55,label:()=>`Dodge the bumper cars for 30 seconds · ${ks(1000)}`,act:startDodge});
@@ -470,7 +472,7 @@ function refreshWishes(): void { setWishes(WISHES.map(w=>({id:w.id,k:w.k,born:wi
 async function initWishes(): Promise<void> {
   wishStore=await openWishes((all,fresh)=>{
     WISHES=all;
-    for(const w of fresh) if(!wishBorn.has(w.id)){ wishBorn.set(w.id,T); if(!w.mine&&S.mode==='walk') chatLine('',`A new wish ${w.k==='sky'?'rises into the sky':'floats on the pond'}: “${w.t}”`,true); }
+    for(const w of fresh) if(!wishBorn.has(w.id)){ wishBorn.set(w.id,T); if(!w.mine&&S.mode==='walk') chatLine('',`A new wish ${w.k==='sky'?'rises into the sky':'floats on the lake'}: “${w.t}”`,true); }
     refreshWishes();
   });
 }
@@ -502,7 +504,7 @@ function openWish(kind: WishKind): void {
     if(res==='full'||res==='failed'){ S.kyat+=WISH_PRICE[k]; updateHUD(); toast(res==='full'?'You have sent lots of wishes already. They will keep shining, so try again a little later.':'That wish could not be saved just now. Your kyat is back.'); go.disabled=false; return; }
     if(!wishBorn.has(res.id)) wishBorn.set(res.id,T);
     refreshWishes(); closeModal(); sfx('ding');
-    toast(k==='sky'?`<span class="z">ဆုတောင်းပြည့်ပါစေ</span>Your fire balloon is rising over the fair.`:`<span class="z">ဆုတောင်းပြည့်ပါစေ</span>Your lantern is drifting out across the pond.`,true);
+    toast(k==='sky'?`<span class="z">ဆုတောင်းပြည့်ပါစေ</span>Your fire balloon is rising over the fair.`:`<span class="z">ဆုတောင်းပြည့်ပါစေ</span>Your lantern is drifting slowly out across the Wishing Lake.`,true);
     if(!wishStore.shared) chatLine('','Your wish is saved in this browser. Open the game on claude.ai to share wishes with everyone.',true);
   };
   sync();
@@ -1232,7 +1234,7 @@ const MAP_MARKS: Array<{ x: number; y: number; icon: string; en: string; my: str
   {x:PS.px,y:PS.py,icon:'⛵',en:'Pirate ship',my:'သင်္ဘောလွှဲ'}, {x:TRK.cx,y:TRK.cy,icon:'🚂',en:'Mini train',my:'ရထားလေး'},
   {x:ST.x,y:ST.y,icon:'🎤',en:'Stage',my:'ဇာတ်စင်'}, {x:FV.x,y:FV.y,icon:'🎆',en:'Finale View',my:'မီးပန်းကြည့်ရာ'},
   {x:PHOTO.x,y:PHOTO.y,icon:'📸',en:'Photo booth',my:'ဓာတ်ပုံ',small:true}, {x:TOYS_AT.x,y:TOYS_AT.y,icon:'🧸',en:'Toys',my:'အရုပ်',small:true},
-  {x:WISH_STALL.x,y:WISH_STALL.y,icon:'🏮',en:'Wish stall',my:'ဆုတောင်း'}, {x:POND.x,y:POND.y,icon:'🪷',en:'Wishing pond',my:'ကန်'},
+  {x:WISH_STALL.x,y:WISH_STALL.y,icon:'🏮',en:'Wish stall',my:'ဆုတောင်း'}, {x:POND.x,y:POND.y,icon:'🪷',en:'Wishing Lake',my:'ဆုတောင်းကန်'},
   {x:UNCLE.x,y:UNCLE.y,icon:'👴',en:'Uncle',my:'ဦးလေး',small:true,tiny:true},
   {x:BUMPER.x+BUMPER.w/2,y:BUMPER.y+BUMPER.h/2,icon:'🚗',en:'Bumper cars',my:'ကားတိုက်'}, {x:DROP.x,y:DROP.y,icon:'🗼',en:'Drop tower',my:'မိုးပျံတာ'},
   {x:SWINGER.x,y:SWINGER.y,icon:'🎢',en:'Wave swinger',my:'လှိုင်းလွှဲ'},
