@@ -4,8 +4,8 @@ import * as THREE from 'three';
 import { TAU, srng, rand, pick, clamp, lerp, MMF, BODY, DISP } from './util';
 import { PersonOpts, bodyProfile } from './people';
 import {
-  M, WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, TR, ST, FV, PHOTO, TOYS_AT, ARCH_Y, SNACKS, CARTS, TEA_TABLES, BOOTHS, SECRETS,
-  STRINGS, TREES, POND, WISH_STALL, BUMPER, DROP, SWINGER, OC_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, trackPos,
+  M, WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, KIDS, TRAIN, STATION, TRAIN_OFF, TRACK_LEN, ST, FV, PHOTO, TOYS_AT, ARCH_Y, SNACKS, CARTS, TEA_TABLES, BOOTHS, SECRETS,
+  STRINGS, TREES, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, trackPos,
 } from './layout';
 
 // ---------------------------------------------------------------- basics
@@ -14,6 +14,15 @@ const scene = new THREE.Scene();
 export const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 900);
 const hemi = new THREE.HemisphereLight('#6f5aa8', '#22182c', 1.4);
 const moonLight = new THREE.DirectionalLight('#8fa6ff', 0.55);
+const sunLight = new THREE.DirectionalLight('#fff4e0', 0);
+const ambient = new THREE.AmbientLight('#4a3a6a', 0.5);
+// morning, afternoon, evening and night: what changes with the clock
+const tod = {
+  daySky: null as THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial> | null, stars: null as THREE.Points | null, moon: null as THREE.Sprite | null, sun: null as THREE.Sprite | null,
+  clouds: null as THREE.Group | null, halo: null as THREE.Sprite | null, city: [] as THREE.MeshBasicMaterial[],
+  ground: [] as Array<{ m: THREE.MeshLambertMaterial; night: THREE.Color; day: THREE.Color }>, last: -1,
+};
+function groundTint(m: THREE.MeshLambertMaterial, night: string, day: string): void { tod.ground.push({ m, night: new THREE.Color(night), day: new THREE.Color(day) }); }
 const X = (x: number) => x * M, Z = (y: number) => y * M;
 
 const matCache = new Map<string, THREE.Material>();
@@ -307,7 +316,7 @@ const anim = {
   wheel: null as THREE.Group, cabins: [] as THREE.Group[],
   carousel: null as THREE.Group, horses: [] as THREE.Group[],
   swing: null as THREE.Group, shipSeat: null as THREE.Object3D,
-  cars: [] as THREE.Group[], stageGlows: null as THREE.Points, stageLight: null as THREE.PointLight,
+  stageGlows: null as THREE.Points, stageLight: null as THREE.PointLight,
   band: [] as Rig[], dancers: [] as Rig[], hne: null as THREE.Mesh, secretSparkles: null as THREE.Points, steam: null as THREE.Points, lake: null as THREE.Mesh, pond: null as THREE.Mesh,
   wheelBulbs: null as THREE.Points, carouselBulbs: null as THREE.Points,
 };
@@ -325,9 +334,31 @@ function buildSkyAndCity(): void {
   const r = srng(21), sp: Array<[number, number, number, string, number]> = [];
   for (let i = 0; i < 700; i++) { const a = r() * TAU, el = 0.08 + r() * 1.3, R = 560; sp.push([45 + Math.cos(a) * Math.cos(el) * R, Math.sin(el) * R, 60 + Math.sin(a) * Math.cos(el) * R, '#fffbe8', 0.4 + r() * 0.6]); }
   const stars = makeGlows(sp, 3.2); (stars.material as THREE.PointsMaterial).sizeAttenuation = false; (stars.material as THREE.PointsMaterial).size = 2.2; (stars.material as THREE.PointsMaterial).fog = false;
-  scene.add(stars);
+  scene.add(stars); tod.stars = stars;
   const moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTex(128, 128, c => { c.fillStyle = '#fff6d6'; c.beginPath(); c.arc(64, 64, 40, 0, TAU); c.fill(); c.globalCompositeOperation = 'destination-out'; c.beginPath(); c.arc(80, 54, 36, 0, TAU); c.fill(); }), fog: false, depthWrite: false }));
-  moon.scale.setScalar(36); moon.position.set(160, 170, -260); scene.add(moon);
+  moon.scale.setScalar(36); moon.position.set(160, 170, -260); scene.add(moon); tod.moon = moon;
+  // the daytime sky: a gradient dome that fades in over the night sky, with the sun and a few soft clouds
+  tod.daySky = new THREE.Mesh(new THREE.SphereGeometry(590, 32, 16), new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, transparent: true, fog: false,
+    uniforms: { top: { value: new THREE.Color() }, hor: { value: new THREE.Color() }, sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color() }, a: { value: 0 } },
+    vertexShader: 'varying vec3 vp; void main(){ vp = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform vec3 top; uniform vec3 hor; uniform vec3 sunDir; uniform vec3 sunCol; uniform float a; varying vec3 vp;
+      void main(){ float h = clamp(vp.y, 0.0, 1.0); vec3 c = mix(hor, top, pow(h, 0.5)); float s = max(dot(vp, sunDir), 0.0);
+        c += sunCol * (pow(s, 12.0) * 0.35 + pow(s, 3.0) * 0.12 * (1.0 - h)); if (vp.y < 0.0) c = hor * 0.92;
+        gl_FragColor = vec4(c, a);
+        #include <colorspace_fragment>
+      }`,
+  }));
+  tod.daySky.position.set(45, 0, 60); tod.daySky.renderOrder = -1; scene.add(tod.daySky);
+  tod.sun = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowSprite, color: '#fff2c8', transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending }));
+  tod.sun.scale.setScalar(60); scene.add(tod.sun);
+  tod.clouds = new THREE.Group(); scene.add(tod.clouds);
+  const cm = new THREE.SpriteMaterial({ map: glowSprite, color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, fog: false });
+  const rc = srng(5);
+  for (let i = 0; i < 16; i++) {
+    const a = rc() * TAU, R = 330 + rc() * 160, y = 110 + rc() * 90;
+    for (let k = 0; k < 4; k++) { const c = new THREE.Sprite(cm); c.position.set(45 + Math.cos(a) * R + (k - 1.5) * 24 + rc() * 10, y + rc() * 10, 60 + Math.sin(a) * R + rc() * 12); c.scale.set(70 + rc() * 40, 30 + rc() * 14, 1); tod.clouds.add(c); }
+  }
 
   // lake between the fence and the city
   const lake = new THREE.Mesh(new THREE.PlaneGeometry(400, 34), new THREE.MeshLambertMaterial({ color: '#0f1a3f', emissive: '#0a1030' }));
@@ -340,7 +371,7 @@ function buildSkyAndCity(): void {
   for (let i = 0; i < 70; i++) {
     const x = -70 + rb() * 230; if (x > 34 && x < 58) continue;
     const z = -6 - rb() * 45, h = 6 + rb() * 26, w = 4 + rb() * 7, d = 4 + rb() * 6;
-    const mat = new THREE.MeshBasicMaterial({ map: winTex[i % 3], color: '#bbbbbb' });
+    const mat = new THREE.MeshBasicMaterial({ map: winTex[i % 3], color: '#bbbbbb' }); tod.city.push(mat);
     box(w, h, d, mat, city, x, h / 2, z);
   }
   // Shwedagon Pagoda on its hill, glowing gold
@@ -354,7 +385,7 @@ function buildSkyAndCity(): void {
   const gold = new THREE.MeshLambertMaterial({ color: '#ffcf5a', emissive: '#a8640c', emissiveIntensity: 0.5 });
   add(new THREE.Mesh(new THREE.LatheGeometry(prof, 40), gold), pag, 0, 0, 0);
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowSprite, color: '#ffb84a', transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-  halo.scale.set(90, 90, 1); halo.position.set(0, 32, -6); pag.add(halo);
+  halo.scale.set(90, 90, 1); halo.position.set(0, 32, -6); pag.add(halo); tod.halo = halo;
   GLOWS.push([46, 51.5 + 0, -70, '#ffffff', 1.5]);
   // golden reflection on the lake
   const refl = new THREE.Mesh(new THREE.PlaneGeometry(6, 30), new THREE.MeshBasicMaterial({ color: '#ffb84a', transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -368,23 +399,24 @@ function buildSkyAndCity(): void {
 }
 
 function buildGround(): void {
-  const outside = new THREE.Mesh(new THREE.PlaneGeometry(700, 700), lam('#120e1a'));
+  const outside = new THREE.Mesh(new THREE.PlaneGeometry(700, 700), new THREE.MeshLambertMaterial({ color: '#120e1a' })); groundTint(outside.material, '#120e1a', '#4f6436');
   outside.rotation.x = -Math.PI / 2; outside.position.set(45, -0.02, 60); scene.add(outside);
-  const fair = new THREE.Mesh(new THREE.PlaneGeometry(WW * M, (WH - NORTH) * M), lam('#211a29'));
+  const fair = new THREE.Mesh(new THREE.PlaneGeometry(WW * M, (WH - NORTH) * M), new THREE.MeshLambertMaterial({ color: '#211a29' })); groundTint(fair.material, '#211a29', '#8f7b5c');
   fair.rotation.x = -Math.PI / 2; fair.position.set(WW * M / 2, 0, Z((WH + NORTH) / 2)); scene.add(fair);
   const roadTex = canvasTex(128, 128, c => { c.fillStyle = '#3a3445'; c.fillRect(0, 0, 128, 128); c.fillStyle = 'rgba(255,255,255,.07)';
     for (let y = 0; y < 128; y += 32) { c.fillRect(0, y, 128, 2); for (let x = (y / 32) % 2 ? 16 : 0; x < 128; x += 32) c.fillRect(x, y, 2, 32); } }, true);
   roadTex.repeat.set(ROAD.w / 80, (WH - NORTH) / 80);
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD.w * M, (WH - NORTH) * M), new THREE.MeshLambertMaterial({ map: roadTex }));
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD.w * M, (WH - NORTH) * M), new THREE.MeshLambertMaterial({ map: roadTex })); groundTint(road.material, '#ffffff', '#b8b0a8');
   road.rotation.x = -Math.PI / 2; road.position.set(X(ROAD.x + ROAD.w / 2), 0.01, Z((WH + NORTH) / 2)); scene.add(road);
   for (const zn of ZONES) {
     const tex = canvasTex(256, Math.round(256 * zn.h / zn.w), c => {
-      const w = 256, h = c.canvas.height; c.fillStyle = zn.g; c.fillRect(0, 0, w, h);
+      const w = 256, h = c.canvas.height; c.fillStyle = '#ffffff'; c.fillRect(0, 0, w, h); // tinted by the material: the zone colour at night, packed earth by day
       c.strokeStyle = 'rgba(255,220,160,.18)'; c.lineWidth = 3; c.setLineDash([10, 8]); c.strokeRect(4, 4, w - 8, h - 8);
       c.fillStyle = 'rgba(255,231,163,.07)'; c.font = `400 64px ${DISP}`; c.textBaseline = 'bottom';
       c.textAlign = zn.x < ROAD.x ? 'left' : 'right'; c.fillText(String(zn.n).padStart(2, '0'), zn.x < ROAD.x ? 12 : w - 12, h - 6);
     });
-    const pad = new THREE.Mesh(new THREE.PlaneGeometry(zn.w * M, zn.h * M), new THREE.MeshLambertMaterial({ map: tex }));
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(zn.w * M, zn.h * M), new THREE.MeshLambertMaterial({ map: tex, color: zn.g }));
+    groundTint(pad.material, zn.g, ['#b49c74', '#a89070', '#b8a07a', '#a49478'][zn.n % 4]);
     pad.rotation.x = -Math.PI / 2; pad.position.set(X(zn.x + zn.w / 2), 0.015, Z(zn.y + zn.h / 2)); scene.add(pad);
     // zone sign facing the main street
     const left = zn.x < ROAD.x, sx = X(left ? 712 : zn.x > 1700 ? zn.x + 20 : 1088), sz = Z(zn.y + 80);
@@ -572,33 +604,10 @@ function buildBooths(): void {
 }
 
 function buildKids(): void {
-  const cx = X(TR.cx), cz = Z(TR.cy), rx = TR.rx * M, rz = TR.ry * M;
+  const cx = X(KIDS.cx), cz = Z(KIDS.cy), rx = KIDS.rx * M, rz = KIDS.ry * M;
   const grass = add(new THREE.Mesh(new THREE.CircleGeometry(1, 40), lam('#2a3a2e')), scene, cx, 0.02, cz); grass.rotation.x = -Math.PI / 2; grass.scale.set(rx - 1.5, rz - 1.3, 1);
-  for (const off of [-0.35, 0.35]) {
-    const pts: THREE.Vector3[] = []; for (let i = 0; i <= 80; i++) { const a = i / 80 * TAU; pts.push(new THREE.Vector3(cx + Math.cos(a) * (rx + off), 0.08, cz + Math.sin(a) * (rz + off))); }
-    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: '#8a8aa8' })));
-  }
-  const sl = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.06, 0.18), lam('#3e3428'), 60);
-  for (let i = 0; i < 60; i++) { const a = i / 60 * TAU; const m = new THREE.Matrix4().compose(new THREE.Vector3(cx + Math.cos(a) * rx, 0.04, cz + Math.sin(a) * rz), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.atan2(Math.sin(a) * rz, Math.cos(a) * rx)), new THREE.Vector3(1, 1, 1)); sl.setMatrixAt(i, m); }
-  scene.add(sl);
   for (let i = 0; i < 6; i++) sphere(0.6, lam('#3a5a3e'), scene, cx - 6 + i * 2.4, 0.4, cz + Math.sin(i) * 1.5, 8);
-  const cols = ['#c23b4b', '#2d7bb6', '#e0a526', '#3a9b7a'];
-  for (let i = 0; i < 4; i++) {
-    const car = add(new THREE.Group(), scene, 0, 0, 0);
-    box(0.9, 0.7, 1.5, lam(cols[i]), car, 0, 0.6, 0);
-    for (const [wx, wz] of [[-0.5, 0.45], [0.5, 0.45], [-0.5, -0.45], [0.5, -0.45]]) { const w = add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.1, 10), lam('#1b1420')), car, wx, 0.25, wz); w.rotation.z = Math.PI / 2; }
-    if (i === 0) { cyl(0.18, 0.22, 0.7, lam('#2a2238'), car, 0, 1.3, 0.35, 8); sphere(0.14, glowMat('#ffe7a3'), car, 0, 0.8, 0.78, 8); }
-    else if (i !== 2) { sphere(0.17, lam('#c58c5c'), car, -0.15, 1.15, 0, 8); sphere(0.14, lam('#e4b98f'), car, 0.2, 1.1, -0.2, 8); }
-    const seat = add(new THREE.Group(), car, 0, 0.55, 0); seat.name = 'seat';
-    anim.cars.push(car);
-  }
-  // station
-  const st = add(new THREE.Group(), scene, cx, 0, Z(TR.cy + TR.ry + 60));
-  box(6, 0.3, 1.6, lam('#5a3a24'), st, 0, 0.15, 0);
-  for (const sx of [-2.6, 2.6]) cyl(0.08, 0.08, 2.6, lam('#e9dcc4'), st, sx, 1.4, 0, 6);
-  box(6.6, 0.25, 2.2, lam('#c23b4b'), st, 0, 2.8, 0);
-  board(signTex('ရထားလေး', 'Mini train · 500 Ks', '#2a1606', 512, 140), 3.6, 1, st, 0, 3.5, 0);
-  const pl = new THREE.PointLight('#ffe1a6', 24, 10, 2); pl.position.set(0, 2.6, 1); st.add(pl);
+  buildTrain();
   // toy stall
   const ts = add(new THREE.Group(), scene, X(TOYS_AT.x), 0, Z(TOYS_AT.y));
   box(5.4, 1.5, 1.8, lam('#e9dcc4'), ts, 0, 0.75, -0.9);
@@ -607,6 +616,134 @@ function buildKids(): void {
   for (let k = 0; k < 4; k++) { sphere(0.25, lam('#f7efe0'), ts, -1.5 + k, 1.75, -0.6, 10); sphere(0.17, lam('#c23b4b'), ts, -1.5 + k, 2.1, -0.6, 8); } // tumbling dolls
   board(signTex('ကစားစရာ', 'Toys', '#2a1606', 384, 130), 3, 1, ts, 0, 4.9, -1.3);
   const tl = new THREE.PointLight('#ffd27a', 18, 9, 2); tl.position.set(0, 3, 1); ts.add(tl);
+}
+
+// ---------------------------------------------------------------- the mini train (ရထားလေး): a little steam engine and open carriages on a loop through the whole fair
+const trn = {
+  loco: null as THREE.Group | null, cars: [] as THREE.Group[], wheels: [] as THREE.Mesh[], rods: [] as THREE.Object3D[], seat: null as THREE.Object3D | null,
+  chimney: null as THREE.Object3D | null, smokePos: new Float32Array(70 * 3), smokeCol: new Float32Array(70 * 3), smokeVel: new Float32Array(70 * 3), smokeLife: new Float32Array(70), smokeNext: 0, smoke: null as THREE.Points | null, puffT: 0, spin: 0,
+};
+const LOCO_HALF = 1.45, CAR_HALF = 1.1;
+function buildTrain(): void {
+  // the track: rails, sleepers and a gravel bed, laid in short straight pieces
+  const STEP = 10, n = Math.ceil(TRACK_LEN / STEP);
+  const rails = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, 0.09, STEP * M + 0.02), lam('#b8bccb'), n * 2);
+  const bed = new THREE.InstancedMesh(new THREE.BoxGeometry(1.7, 0.04, STEP * M + 0.02), lam('#4a4440'), n);
+  const nS = Math.ceil(TRACK_LEN / 14), sleepers = new THREE.InstancedMesh(new THREE.BoxGeometry(1.3, 0.07, 0.2), lam('#5a3a24'), nS);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3();
+  for (let i = 0; i < n; i++) {
+    const [x, y, h] = trackPos((i + 0.5) * STEP), ry = Math.atan2(Math.cos(h), Math.sin(h)), nx = -Math.sin(h), ny = Math.cos(h);
+    q.setFromAxisAngle(UP, ry);
+    bed.setMatrixAt(i, m4.compose(v.set(X(x), 0.02, Z(y)), q, one));
+    for (const sd of [-1, 1]) rails.setMatrixAt(i * 2 + (sd > 0 ? 1 : 0), m4.compose(v.set(X(x) + nx * sd * 0.42, 0.12, Z(y) + ny * sd * 0.42), q, one));
+  }
+  for (let i = 0; i < nS; i++) { const [x, y, h] = trackPos(i * 14); q.setFromAxisAngle(UP, Math.atan2(Math.cos(h), Math.sin(h))); sleepers.setMatrixAt(i, m4.compose(v.set(X(x), 0.06, Z(y)), q, one)); }
+  scene.add(bed, sleepers, rails);
+  // the engine: green boiler with gold bands, a tall chimney, a red cab and a lamp on the front
+  const red = lam('#b8332e'), green = lam('#2f6b4a'), gold = lam('#e0b040'), black = lam('#1b1420'), wood = lam('#8a5a32');
+  const L = trn.loco = add(new THREE.Group(), scene);
+  box(1.1, 0.28, 2.9, black, L, 0, 0.42, 0);
+  const boiler = cyl(0.42, 0.42, 1.7, green, L, 0, 1.02, 0.45, 18); boiler.rotation.x = Math.PI / 2;
+  for (const z of [-0.2, 0.45, 1.1]) { const b = cyl(0.445, 0.445, 0.06, gold, L, 0, 1.02, z, 18); b.rotation.x = Math.PI / 2; }
+  const smokebox = cyl(0.44, 0.44, 0.22, black, L, 0, 1.02, 1.32, 18); smokebox.rotation.x = Math.PI / 2;
+  const chim = cyl(0.13, 0.11, 0.62, black, L, 0, 1.72, 1.12, 10); cone(0.22, 0.2, black, chim, 0, 0.38, 0, 12).rotation.x = Math.PI;
+  trn.chimney = add(new THREE.Object3D(), L, 0, 2.15, 1.12);
+  sphere(0.17, gold, L, 0, 1.46, 0.5, 12);
+  sphere(0.13, glowMat('#fff2c0'), L, 0, 1.08, 1.48, 10);
+  box(1.12, 0.22, 0.12, red, L, 0, 0.42, 1.5); // the buffer beam
+  const cow = cone(0.45, 0.4, red, L, 0, 0.3, 1.62, 4); cow.rotation.set(Math.PI / 2, Math.PI / 4, 0); cow.scale.set(1.2, 1, 0.5);
+  // the cab is open at the back, so from the first carriage you see the driver and the boiler ahead
+  box(1.12, 0.62, 0.08, red, L, 0, 0.86, -0.4);
+  for (const sx of [-0.5, 0.5]) box(0.12, 0.62, 0.08, red, L, sx, 1.48, -0.4); // window frames either side of the boiler
+  for (const sx of [-0.56, 0.56]) { box(0.06, 0.5, 0.95, red, L, sx, 0.82, -0.85); cyl(0.035, 0.035, 0.95, gold, L, sx * 0.93, 1.32, -1.28, 6); }
+  box(1.3, 0.07, 1.15, gold, L, 0, 1.8, -0.82);
+  for (const sx of [-1, 1]) board(signTex('ရွှေရထား', 'Golden Express', '#7a1f2b', 384, 120), 0.8, 0.25, L, sx * 0.595, 0.85, -0.85, sx * Math.PI / 2);
+  const driver = buildPerson({ shirt: '#f3efe6', lon: '#283a6b', skin: '#a8714a', s: 0.72 }); driver.g.position.set(0.4, 0.5, -0.95); driver.g.rotation.y = -0.6; driver.footL.visible = driver.footR.visible = false; animatePerson(driver, 0, false, false, true); L.add(driver.g);
+  const lampLight = new THREE.PointLight('#ffe1a6', 14, 12, 2); lampLight.position.set(0, 1.1, 2.4); L.add(lampLight);
+  const wheel = (g: THREE.Group, r: number, x: number, z: number, col: THREE.Material) => {
+    const w = add(new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.08, 14), col), g, x, r + 0.05, z); w.rotation.z = Math.PI / 2;
+    const spoke = box(0.1, r * 1.7, 0.06, gold, w, 0, 0, 0); spoke.rotation.x = 0; trn.wheels.push(w); return w;
+  };
+  for (const sx of [-0.58, 0.58]) { for (const z of [-0.85, 0, 0.85]) wheel(L, 0.3, sx, z, red); trn.rods.push(box(0.04, 0.05, 1.8, gold, L, sx * 1.07, 0.35, 0)); }
+  // four open carriages with benches and striped canopies, like the ones at a pwe
+  const cols = ['#c23b4b', '#2d7bb6', '#e0a526', '#3a9b7a'], tops = ['#f4b63f', '#ffffff', '#c23b4b', '#f4b63f'];
+  for (let i = 0; i < 4; i++) {
+    const c = add(new THREE.Group(), scene), body = lam(cols[i]);
+    box(1.15, 0.12, 2.15, wood, c, 0, 0.5, 0);
+    for (const sx of [-0.55, 0.55]) box(0.06, 0.36, 2.15, body, c, sx, 0.73, 0);
+    for (const sz of [-1.05, 1.05]) box(1.15, 0.36, 0.06, body, c, 0, 0.73, sz);
+    for (const sx of [-0.55, 0.55]) box(0.07, 0.04, 2.17, gold, c, sx, 0.93, 0);
+    for (const bz of [0.4, -0.55]) { box(0.95, 0.08, 0.42, wood, c, 0, 0.78, bz); box(0.95, 0.36, 0.06, wood, c, 0, 1.0, bz - 0.22); }
+    for (const sx of [-0.52, 0.52]) for (const sz of [-1.0, 1.0]) cyl(0.03, 0.03, 1.15, gold, c, sx, 1.45, sz, 6);
+    box(1.32, 0.06, 2.3, new THREE.MeshLambertMaterial({ map: stripes(tops[i], cols[i], 10) }), c, 0, 2.05, 0);
+    for (let k = 0; k < 4; k++) for (const sx of [-0.62, 0.62]) sphere(0.045, glowMat(LANTERN_COLS[(k + i) % 5]), c, sx, 2.0, -0.9 + k * 0.6, 6);
+    box(0.1, 0.08, 0.3, black, c, 0, 0.42, 1.2);
+    for (const sx of [-0.58, 0.58]) for (const z of [-0.65, 0.65]) wheel(c, 0.22, sx, z, black);
+    if (i === 0) { trn.seat = add(new THREE.Group(), c, -0.18, 0.82, 0.4); trn.seat.name = 'seat'; }
+    // passengers: families, kids and a grandma, a couple to a bench
+    const r = srng(70 + i);
+    for (const [px, pz] of [[0.22, 0.4], [-0.22, -0.55], [0.22, -0.55], [-0.22, 0.4]] as Array<[number, number]>) {
+      if (i === 0 && pz > 0) continue; if (r() < 0.35) continue;
+      const kid = r() < 0.45, p = buildPerson({ shirt: pick(['#f3efe6', '#f7b7c3', '#9fd3f0', '#b5e6c8', '#ffd27a']), lon: pick(['#6b2335', '#283a6b', '#2f5d50']), skin: pick(['#d9a77a', '#c58c5c', '#a8714a']), s: kid ? 0.6 : 0.8, bun: r() < 0.5 });
+      p.g.position.set(px, 0.82 - (kid ? 0.3 : 0.42), pz); p.footL.visible = p.footR.visible = false; animatePerson(p, 0, false, false, true); c.add(p.g);
+    }
+    trn.cars.push(c);
+  }
+  const sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.BufferAttribute(trn.smokePos, 3)); sg.setAttribute('color', new THREE.BufferAttribute(trn.smokeCol, 3));
+  trn.smoke = new THREE.Points(sg, new THREE.PointsMaterial({ size: 1.3, map: glowSprite, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  trn.smoke.frustumCulled = false; scene.add(trn.smoke);
+  // the station: a raised wooden platform with a tin roof, flower pots and a ticket sign
+  const sx0 = X(STATION.x - 45), sz0 = Z(STATION.y), st = add(new THREE.Group(), scene, sx0, 0, sz0);
+  box(13.5, 0.12, 2.2, lam('#7a5232'), st, 0, 0.06, 0);
+  box(13.5, 0.06, 0.12, lam('#e8d38a'), st, 0, 0.13, 1.05);
+  for (let k = 0; k < 5; k++) cyl(0.08, 0.08, 2.9, lam('#e9dcc4'), st, -6 + k * 3, 1.5, -0.6, 6);
+  const tin = box(13.8, 0.12, 2.6, lam('#c23b4b'), st, 0, 3.0, -0.1); tin.rotation.x = 0.1;
+  board(signTex('ရထားဘူတာ', 'Mini train station · 500 Ks', '#2a1606', 512, 140), 4.2, 1.15, st, 0, 3.75, -0.2);
+  for (const k of [-5, 5]) { cyl(0.28, 0.2, 0.45, lam('#a0522d'), st, k, 0.35, -0.7, 10); sphere(0.33, lam('#3a7a3e'), st, k, 0.75, -0.7, 8); sphere(0.1, lam('#f05a7e'), st, k + 0.15, 0.95, -0.55, 6); }
+  box(0.9, 1.2, 0.6, lam('#5a3a24'), st, -6.2, 0.6, -0.7); // the ticket box
+  for (let k = 0; k < 14; k++) GLOWS.push([sx0 - 6.6 + k, 2.85, sz0 + 1.2, k % 2 ? '#ffe7a3' : '#ff5a4e', 0.9]);
+  const pl = new THREE.PointLight('#ffe1a6', 30, 14, 2); pl.position.set(0, 2.6, 0.6); st.add(pl);
+}
+function placeOnTrack(g: THREE.Object3D, d: number, half: number): number {
+  const [x1, y1, h1] = trackPos(d + half / M * 0.75), [x2, y2, h2] = trackPos(d - half / M * 0.75);
+  g.position.set(X((x1 + x2) / 2), 0, Z((y1 + y2) / 2)); g.rotation.set(0, Math.atan2(X(x1) - X(x2), Z(y1) - Z(y2)), 0);
+  let dh = h1 - h2; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); return dh;
+}
+function updateTrain(f: Frame, t: number, dt: number): void {
+  if (!trn.loco) return;
+  const v = f.train.v * M; // metres a second
+  placeOnTrack(trn.loco, f.train.d, LOCO_HALF);
+  trn.loco.position.y = Math.abs(Math.sin(t * 13)) * 0.01 * Math.min(1, v);
+  trn.cars.forEach((c, i) => {
+    const dh = placeOnTrack(c, f.train.d - TRAIN_OFF[i + 1], CAR_HALF), k = Math.min(1, v / 3);
+    // a gentle rock from side to side, a lean on the bends, and a little jolt over each rail joint
+    c.rotation.z = Math.sin(t * 6.5 + i * 1.7) * 0.018 * k + dh * 0.12;
+    c.rotation.x = Math.sin(t * 9.1 + i) * 0.006 * k;
+    c.position.y = Math.max(0, Math.sin(f.train.d * 0.31 - i * 2.2)) * 0.012 * k;
+  });
+  trn.spin += v * dt;
+  trn.wheels.forEach(w => { w.rotation.x = -trn.spin / 0.27; });
+  trn.rods.forEach((r, i) => { r.position.y = 0.35 + Math.sin(trn.spin / 0.3) * 0.12; r.position.z = Math.cos(trn.spin / 0.3) * 0.12 * (i ? 1 : -1); });
+  // smoke: a puff with every chuff, more when pulling away, drifting back over the carriages
+  trn.puffT -= dt * (0.6 + v * 1.2);
+  if (trn.chimney && trn.puffT <= 0) {
+    trn.puffT = 1; trn.chimney.getWorldPosition(tmpV);
+    for (let k = 0; k < (v > 0.2 ? 3 : 1); k++) {
+      const i = trn.smokeNext = (trn.smokeNext + 1) % 70;
+      trn.smokePos.set([tmpV.x + rand(-0.1, 0.1), tmpV.y, tmpV.z + rand(-0.1, 0.1)], i * 3);
+      trn.smokeVel.set([rand(-0.3, 0.3), rand(0.9, 1.5), rand(-0.3, 0.3)], i * 3); trn.smokeLife[i] = rand(1.6, 2.6);
+    }
+  }
+  for (let i = 0; i < 70; i++) {
+    if (trn.smokeLife[i] <= 0) { trn.smokeCol.set([0, 0, 0], i * 3); continue; }
+    trn.smokeLife[i] -= dt;
+    for (let j = 0; j < 3; j++) trn.smokePos[i * 3 + j] += trn.smokeVel[i * 3 + j] * dt;
+    trn.smokeVel[i * 3 + 1] *= 1 - dt * 0.6;
+    const a = clamp(trn.smokeLife[i] / 2.6, 0, 1) * 0.16; trn.smokeCol.set([a, a, a * 1.05], i * 3);
+  }
+  (trn.smoke!.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+  (trn.smoke!.geometry.getAttribute('color') as THREE.BufferAttribute).needsUpdate = true;
 }
 
 function buildStage(): void {
@@ -790,7 +927,7 @@ export function init3d(canvas: HTMLCanvasElement, boom: () => void): void {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
   renderer.setClearColor('#0d0a24');
   scene.fog = new THREE.Fog('#1a1238', 70, 340);
-  scene.add(hemi, moonLight, new THREE.AmbientLight('#4a3a6a', 0.5));
+  scene.add(hemi, moonLight, sunLight, ambient);
   scene.add(camera); camera.add(fpArm); fpArm.position.set(0.34, -0.3, -0.75); fpArm.visible = false;
   const skin = new THREE.MeshLambertMaterial({ color: '#c58c5c', depthTest: false });
   const fa = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.3, 4, 8), skin); fa.position.y = 0.15; fa.renderOrder = 10; fpArm.add(fa);
@@ -1174,40 +1311,37 @@ function buildDish(g: THREE.Group, id: string): void {
     const pl = new THREE.PointLight('#ff6a20', 6, 3, 2); pl.position.set(-0.3, Y + 0.6, 0.2); g.add(pl);
   }
 }
-function buildOCStand(f: { x: number; y: number; id: string; name: string; my: string; p: number }, i: number): void {
-  const g = add(new THREE.Group(), scene, X(f.x), 0, Z(f.y)), col = ['#e0353f', '#2d7bb6', '#e0a526'][i];
-  box(6, 1.6, 1.8, lam('#f3efe6'), g, 0, 0.8, -0.9); box(6.02, 0.35, 1.82, lam(col), g, 0, 0.35, -0.9);
-  for (const sx of [-2.8, 2.8]) cyl(0.06, 0.06, 2.6, lam('#cfd3e8'), g, sx, 2.9, -0.2, 6);
-  const aw = box(6.6, 0.15, 2.4, new THREE.MeshLambertMaterial({ map: stripes('#ffffff', col, 12) }), g, 0, 4.2, -0.6); aw.rotation.x = 0.16;
-  board(signTex(f.name.toUpperCase(), f.my + ' · ' + f.p.toLocaleString('en-US') + ' Ks', col, 512, 160), 4.2, 1.3, g, 0, 5.1, -1.3);
-  const Y = 1.62, Zf = 0.15; box(5.6, 0.06, 0.46, lam('#8a6a4a'), g, 0, 1.6, Zf);
-  if (f.id === 'corndog') {
-    box(0.8, 0.12, 0.3, lam('#c8ccd8'), g, -1.2, Y + 0.06, Zf);
-    for (let k = 0; k < 7; k++) { const cd = add(new THREE.Group(), g, -1.5 + k * 0.1, Y + 0.12, Zf); cd.rotation.z = (k - 3) * 0.08;
-      box(0.012, 0.3, 0.012, lam('#d8c08a'), cd, 0, 0.15, 0); const b = add(new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.2, 4, 8), lam('#d99b3a')), cd, 0, 0.38, 0); b.name = 'cd'; }
-    cyl(0.1, 0.1, 0.2, lam('#ffd23f'), g, 0.6, Y + 0.1, Zf, 10); cyl(0.1, 0.1, 0.2, lam('#e0353f'), g, 0.9, Y + 0.1, Zf, 10); // mustard and ketchup
-  } else if (f.id === 'funnel') {
-    for (let k = 0; k < 3; k++) {
-      const x = -1.2 + k * 1.0; add(new THREE.Mesh(plateGeo, lam('#ffffff')), g, x, Y + 0.02, Zf).scale.set(1.8, 1, 1.8);
-      const cake = add(new THREE.Mesh(new THREE.TorusKnotGeometry(0.17, 0.035, 60, 6, 3, 7), lam('#d99b3a')), g, x, Y + 0.08, Zf); cake.rotation.x = Math.PI / 2; cake.scale.z = 0.35;
-      bits(g, 26, 0.012, ['#ffffff'], x, Y + 0.12, Zf, 0.2, k + 40); // powdered sugar
-    }
+function buildPweStall(f: { x: number; y: number; id: string; name: string; my: string; p: number }, i: number): void {
+  // a bamboo-and-thatch snack stall with a hot oil wok, like the ones at every pwe
+  const g = add(new THREE.Group(), scene, X(f.x), 0, Z(f.y)), col = ['#7a1f2b', '#2f5d50', '#8a5a1a'][i];
+  const bamboo = lam('#c9a86a'), mat = new THREE.MeshLambertMaterial({ map: stripes('#d8b878', '#b8925a', 10) });
+  box(6, 1.1, 1.8, mat, g, 0, 0.55, -0.9); box(6.02, 0.12, 1.82, lam('#6b4a2e'), g, 0, 1.12, -0.9);
+  for (const sx of [-2.8, 2.8]) for (const sz of [-1.7, 0.2]) cyl(0.07, 0.07, 3.6, bamboo, g, sx, 1.8, sz, 6);
+  const thatch = add(new THREE.Mesh(new THREE.ConeGeometry(4.4, 1.3, 4, 1, true), lam('#a8844a', { side: DS, k: 'thatch' })), g, 0, 4.15, -0.75); thatch.rotation.y = Math.PI / 4; thatch.scale.set(1, 1, 0.5);
+  board(signTex(f.my, f.name + ' · ' + f.p.toLocaleString('en-US') + ' Ks', col, 512, 160), 4.2, 1.3, g, 0, 3.0, 0.25);
+  const Y = 1.18, Zf = -0.3;
+  // the wok on its charcoal stove, with a bit of glow
+  cyl(0.45, 0.5, 0.5, lam('#3a3030'), g, -1.8, Y + 0.25, Zf, 12); sphere(0.38, glowMat('#ff5a1a'), g, -1.8, Y + 0.5, Zf, 10).scale.y = 0.15;
+  const wok = add(new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 8, 0, TAU, Math.PI * 0.6, Math.PI * 0.4), lam('#2a2a2a', { side: DS, k: 'wok' })), g, -1.8, Y + 1.05, Zf);
+  disc(0.42, lam('#c98a2a', { emissive: '#3a1a00', k: 'oil' }), g, -1.8, Y + 0.62, Zf);
+  const tray = (x: number) => { add(new THREE.Mesh(plateGeo, lam('#3f7a3a', { k: 'leaf' })), g, x, Y + 0.02, Zf).scale.set(2.6, 1, 2.2); }; // banana-leaf trays
+  if (f.id === 'banana') {
+    for (const x of [0, 1.4]) { tray(x); for (let k = 0; k < 6; k++) { const fr = add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 6), lam('#d9952a')), g, x - 0.25 + (k % 3) * 0.25, Y + 0.06 + Math.floor(k / 3) * 0.04, Zf - 0.12 + Math.floor(k / 3) * 0.22); fr.scale.set(1.4, 0.3, 0.8); fr.rotation.y = k; } }
+  } else if (f.id === 'monlone') {
+    for (const x of [0, 1.4]) { tray(x); for (let k = 0; k < 9; k++) sphere(0.07, lam('#f6f0e2'), g, x - 0.22 + (k % 3) * 0.22, Y + 0.08, Zf - 0.2 + Math.floor(k / 3) * 0.2, 8); bits(g, 30, 0.012, ['#ffffff', '#f2ead8'], x, Y + 0.1, Zf, 0.3, 50 + x * 10); }
   } else {
-    for (let k = 0; k < 5; k++) {
-      const leg = add(new THREE.Group(), g, -1.6 + k * 0.6, Y + 0.12, Zf); leg.rotation.z = Math.PI / 2 + (k % 2 ? 0.2 : -0.2);
-      const m = add(new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 8), lam('#7a3a1a')), leg, 0, 0.1, 0); m.scale.set(1, 1.6, 1);
-      cyl(0.03, 0.03, 0.22, lam('#f3efe6'), leg, 0, -0.18, 0, 6); sphere(0.045, lam('#f3efe6'), leg, 0, -0.3, 0, 6);
-    }
+    for (const x of [0, 1.4]) { tray(x); for (let k = 0; k < 8; k++) { const tf = box(0.2, 0.06, 0.12, lam('#f2c23a'), g, x - 0.3 + (k % 4) * 0.2, Y + 0.06, Zf - 0.1 + Math.floor(k / 4) * 0.2); tf.rotation.y = k * 0.3; } }
+    add(new THREE.Mesh(bowlGeo, lam('#ffffff')), g, 2.3, Y, Zf).scale.setScalar(0.8); disc(0.12, lam('#7a2a1a'), g, 2.3, Y + 0.08, Zf); // tamarind dip
   }
-  GLOWS.push([X(f.x) - 2.8, 4.0, Z(f.y) - 0.3, '#fff1c9', 1], [X(f.x) + 2.8, 4.0, Z(f.y) - 0.3, '#fff1c9', 1]);
-  const pl = new THREE.PointLight('#fff1c9', 20, 9, 2); pl.position.set(0, 3.4, 0.6); g.add(pl);
+  GLOWS.push([X(f.x) - 2.8, 3.4, Z(f.y) + 0.2, '#ffd27a', 1], [X(f.x) + 2.8, 3.4, Z(f.y) + 0.2, '#ffd27a', 1]);
+  const pl = new THREE.PointLight('#ffd9a0', 20, 9, 2); pl.position.set(0, 3.2, 0.6); g.add(pl);
 }
 
-// ---------------------------------------------------------------- the OC Midway: bumper cars, drop tower, wave swinger
+// ---------------------------------------------------------------- pwe rides: bumper cars, the hand-turned wheel, the flying swing
 export const BUMPER_N = 8;
 const mid = {
   cars: [] as Array<{ g: THREE.Group; pole: THREE.Object3D }>, sparkPos: new Float32Array(260 * 3), sparkCol: new Float32Array(260 * 3), sparkVel: new Float32Array(260 * 3), sparkLife: new Float32Array(260), sparkNext: 0,
-  sparks: null as THREE.Points, dropCar: null as THREE.Group, dropSeat: null as THREE.Object3D, dropLights: null as THREE.Points,
+  sparks: null as THREE.Points, hw: null as THREE.Group, hwSeats: [] as THREE.Group[], hwSeat: null as THREE.Object3D, hwAngle: 0, drvSeat: null as THREE.Object3D,
   swTop: null as THREE.Group, swChairs: [] as THREE.Group[], swSeat: null as THREE.Object3D, swAngle: 0, swW: 0,
 };
 const BCOLS = ['#e0353f', '#2d7bb6', '#e0a526', '#3fae7a', '#ff6f91', '#8a5ad8', '#ff8a3d', '#3fc7a5'];
@@ -1245,6 +1379,7 @@ function buildMidway(): void {
     cyl(0.03, 0.03, H - 0.6, lam('#c8ccd8'), pole, 0, (H - 0.6) / 2 + 0.6, 0, 5); cyl(0.12, 0.12, 0.06, glowMat('#cfe0ff'), pole, 0, H - 0.03, 0, 8);
     GLOWS; sphere(0.09, glowMat('#ffe7a3'), g, 0.3, 0.55, 0.85, 6); sphere(0.09, glowMat('#ffe7a3'), g, -0.3, 0.55, 0.85, 6);
     if (i % 4 !== 3) { const d = buildPerson({ shirt: pick(['#f3efe6', '#f7b7c3', '#9fd3f0', '#b5e6c8']), lon: pick(['#6b2335', '#2f5d50', '#283a6b']), skin: pick(['#d9a77a', '#c58c5c', '#a8714a']), s: 0.78, bun: i % 2 === 1 }); d.g.position.set(0, 0.15, -0.1); d.footL.visible = d.footR.visible = false; g.add(d.g); }
+    if (i === 3) { mid.drvSeat = add(new THREE.Group(), g, 0, 0.32, -0.1); mid.drvSeat.name = 'seat'; }
     mid.cars.push({ g, pole });
   }
   const sg = new THREE.BufferGeometry();
@@ -1252,32 +1387,49 @@ function buildMidway(): void {
   mid.sparks = new THREE.Points(sg, new THREE.PointsMaterial({ size: 0.35, map: glowSprite, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   mid.sparks.frustumCulled = false; scene.add(mid.sparks);
 
-  // drop tower
-  const dx = X(DROP.x), dz = Z(DROP.y);
-  cyl(2.2, 2.6, 0.6, lam('#3a3350'), scene, dx, 0.3, dz, 20);
-  cyl(0.65, 0.75, 30, lam('#d5d9ee'), scene, dx, 15, dz, 16);
-  const crown = add(new THREE.Group(), scene, dx, 30.2, dz);
-  cyl(1.4, 0.8, 1.2, lam('#7a1f2b'), crown, 0, 0, 0, 16); add(new THREE.Mesh(new THREE.ConeGeometry(1.4, 1.6, 16), lam('#f4b63f')), crown, 0, 1.4, 0);
-  const dl: Array<[number, number, number, string, number?]> = [];
-  for (let k = 0; k < 40; k++) for (let s = 0; s < 4; s++) { const a = s / 4 * TAU + 0.4; dl.push([dx + Math.cos(a) * 0.7, 1 + k * 0.72, dz + Math.sin(a) * 0.7, LANTERN_COLS[(k + s) % 5], 0.9]); }
-  mid.dropLights = makeGlows(dl, 0.7); scene.add(mid.dropLights);
-  mid.dropCar = add(new THREE.Group(), scene, dx, 1.2, dz);
-  add(new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.28, 8, 24), lam('#2d7bb6')), mid.dropCar, 0, 0.2, 0).rotation.x = Math.PI / 2;
-  for (let k = 0; k < 10; k++) {
-    const a = k / 10 * TAU, s = add(new THREE.Group(), mid.dropCar, Math.cos(a) * 1.55, 0, Math.sin(a) * 1.55); s.rotation.y = Math.PI / 2 - a; // facing outward
-    box(0.5, 0.7, 0.12, lam('#1b1420'), s, 0, 0.45, -0.12); add(new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.04, 4, 10, Math.PI), lam('#f4b63f')), s, 0, 0.7, 0.05);
-    if (k === 0) { const seat = add(new THREE.Group(), s, 0, 0.1, 0.05); mid.dropSeat = seat; continue; }
-    if (k % 3) { const r = buildPerson({ shirt: pick(['#f3efe6', '#f7b7c3', '#9fd3f0']), lon: pick(['#6b2335', '#283a6b']), skin: pick(['#d9a77a', '#c58c5c']), s: 0.8, bun: k % 2 === 0 }); r.g.position.set(0, -0.35, 0.05); r.footL.visible = r.footR.visible = false; s.add(r.g); }
+  // the hand-turned wooden Ferris wheel (လူအားချားရဟတ်): no motor, young men climb the spokes and their weight turns it
+  const hx = X(HAND_WHEEL.x), hz = Z(HAND_WHEEL.y), HUB = 6.4, R = 5.2;
+  const wood = lam('#8a5a32'), dark = lam('#5a3a22');
+  for (const sz of [-1.15, 1.15]) for (const sx of [-1, 1]) beam(new THREE.Vector3(hx + sx * 3.6, 0, hz + sz * 1.4), new THREE.Vector3(hx, HUB, hz + sz * 1.15), 0.13, dark, scene);
+  for (const sz of [-1.15, 1.15]) box(7.4, 0.16, 0.16, dark, scene, hx, 1.2, hz + sz * 1.3);
+  cyl(0.18, 0.18, 2.6, lam('#3a3030'), scene, hx, HUB, hz, 10).rotation.x = Math.PI / 2;
+  mid.hw = add(new THREE.Group(), scene, hx, HUB, hz);
+  const hwl: Array<[number, number, number, string, number?]> = [];
+  for (const sz of [-0.85, 0.85]) {
+    add(new THREE.Mesh(new THREE.TorusGeometry(R, 0.09, 6, 48), wood), mid.hw, 0, 0, sz);
+    add(new THREE.Mesh(new THREE.TorusGeometry(R * 0.55, 0.06, 6, 32), wood), mid.hw, 0, 0, sz);
+    for (let k = 0; k < 8; k++) { const a = k / 8 * TAU + Math.PI / 8; beam(new THREE.Vector3(0, 0, sz), new THREE.Vector3(Math.cos(a) * R, Math.sin(a) * R, sz), 0.06, wood, mid.hw); }
+    for (let k = 0; k < 32; k++) { const a = k / 32 * TAU; hwl.push([Math.cos(a) * R, Math.sin(a) * R, sz * 1.08, LANTERN_COLS[k % 5], 0.9]); }
   }
-  board(signTex('ကျမယ့်မျှော်စင်', 'Drop tower · 1,500 Ks', '#2a1606', 512, 160), 3.6, 1.15, scene, dx, 2.4, dz + 3.2);
+  for (let k = 0; k < 8; k++) { const a = k / 8 * TAU + Math.PI / 8; box(0.07, 0.07, 1.7, wood, mid.hw, Math.cos(a) * R * 0.78, Math.sin(a) * R * 0.78, 0); } // rungs the boys climb
+  mid.hw.add(makeGlows(hwl, 0.75));
+  const seatCols = ['#c23b4b', '#2f8f5e', '#e0a526', '#2d6bb6'];
+  for (let k = 0; k < 8; k++) {
+    const a = k / 8 * TAU, hang = add(new THREE.Group(), mid.hw, Math.cos(a) * R, Math.sin(a) * R, 0);
+    const seat = add(new THREE.Group(), hang, 0, 0, 0); // kept upright, swinging a little
+    for (const sx of [-0.62, 0.62]) cyl(0.025, 0.025, 1.1, dark, seat, sx, -0.55, 0, 4);
+    box(1.3, 0.1, 0.62, lam(seatCols[k % 4]), seat, 0, -1.1, 0); box(1.3, 0.55, 0.08, lam(seatCols[k % 4]), seat, 0, -0.85, -0.3);
+    box(1.3, 0.05, 0.05, lam('#e9dcc4'), seat, 0, -0.62, 0.3); // the safety bar
+    if (k === 0) mid.hwSeat = add(new THREE.Group(), seat, 0, -1.05, 0.05);
+    else if (k % 2) { const r = buildPerson({ shirt: pick(['#f3efe6', '#f7b7c3', '#9fd3f0']), lon: pick(['#6b2335', '#283a6b', '#2f5d50']), skin: pick(['#d9a77a', '#c58c5c']), s: 0.78, bun: k % 3 === 0 }); r.g.position.set(0, -1.45, 0.05); r.footL.visible = r.footR.visible = false; seat.add(r.g); }
+    mid.hwSeats.push(seat);
+  }
+  // the boys who turn it: hanging off the spokes in white singlets and tucked-up longyi
+  for (let k = 0; k < 3; k++) {
+    const a = k / 3 * TAU + 0.5, r = buildPerson({ shirt: '#ffffff', lon: pick(['#3c5a2a', '#6b2335', '#283a6b']), skin: pick(['#a8714a', '#b07a50', '#8a5a3a']), s: 0.95, pat: 'check' });
+    r.g.position.set(Math.cos(a) * R * 0.72, Math.sin(a) * R * 0.72 - 0.9, 0.35); r.armL.rotation.z = -2.8; r.armR.rotation.z = 2.8; mid.hw.add(r.g);
+  }
+  board(signTex('လူအားချားရဟတ်', 'Hand-turned wheel · 1,500 Ks', '#2a1606', 512, 160), 3.8, 1.2, scene, hx, 2.0, hz + 2.6);
 
-  // wave swinger
+  // the flying swing (ဒန်းလွှဲ), under a tiered golden roof like a pagoda's
   const wx = X(SWINGER.x), wz = Z(SWINGER.y);
   cyl(2.8, 3.1, 0.5, lam('#3a3350'), scene, wx, 0.25, wz, 24);
   cyl(0.45, 0.6, 8, lam('#e9dcc4'), scene, wx, 4, wz, 14);
   mid.swTop = add(new THREE.Group(), scene, wx, 8, wz);
-  const canopy = add(new THREE.Mesh(new THREE.ConeGeometry(4.8, 1.8, 24, 1, true), new THREE.MeshLambertMaterial({ map: stripes('#fff3d6', '#c23b4b', 24), side: DS })), mid.swTop, 0, 0.6, 0);
-  canopy.rotation.y = 0.1; cyl(4.8, 4.8, 0.35, lam('#f4b63f'), mid.swTop, 0, -0.35, 0, 24);
+  const roofRed = lam('#9a2230', { side: DS, k: 'roofred' }), roofGold = lam('#e0b45a', { emissive: '#4a3008', k: 'roofgold' });
+  [[4.8, 1.4, 0.5], [3.4, 1.2, 1.5], [2.1, 1.0, 2.4]].forEach(([r, h, y], k) => { add(new THREE.Mesh(new THREE.ConeGeometry(r, h, 24, 1, true), k % 2 ? roofGold : roofRed), mid.swTop, 0, y, 0); cyl(r * 0.62, r * 0.62, 0.35, k % 2 ? roofRed : roofGold, mid.swTop, 0, y - h / 2 + 0.1, 0, 20); });
+  add(new THREE.Mesh(new THREE.ConeGeometry(0.4, 2.2, 12), roofGold), mid.swTop, 0, 4.0, 0); sphere(0.12, glowMat('#ffffff'), mid.swTop, 0, 5.2, 0, 8);
+  cyl(4.8, 4.8, 0.35, roofGold, mid.swTop, 0, -0.35, 0, 24);
   const sl: Array<[number, number, number, string, number?]> = [];
   for (let k = 0; k < 32; k++) { const a = k / 32 * TAU; sl.push([Math.cos(a) * 4.85, -0.35, Math.sin(a) * 4.85, LANTERN_COLS[k % 5], 1]); }
   mid.swTop.add(makeGlows(sl, 0.9));
@@ -1290,16 +1442,16 @@ function buildMidway(): void {
     else if (k % 2) { const r = buildPerson({ shirt: pick(['#f3efe6', '#f7b7c3', '#9fd3f0', '#b5e6c8']), lon: pick(['#6b2335', '#2f5d50']), skin: pick(['#d9a77a', '#c58c5c', '#a8714a']), s: 0.75, bun: k % 3 === 0 }); r.g.position.set(0, -3.95, 0.05); r.footL.visible = r.footR.visible = false; chair.add(r.g); }
     mid.swChairs.push(chair);
   }
-  board(signTex('လှိုင်းလွှဲ', 'Wave swinger · 1,200 Ks', '#2a1606', 512, 160), 3.6, 1.15, scene, wx, 2.2, wz + SWINGER.R * M + 0.6);
-  OC_FOOD.forEach((f, i) => buildOCStand(f, i));
+  board(signTex('ဒန်းလွှဲ', 'Flying swing · 1,200 Ks', '#2a1606', 512, 160), 3.6, 1.15, scene, wx, 2.2, wz + SWINGER.R * M + 0.6);
+  PWE_FOOD.forEach((f, i) => buildPweStall(f, i));
 }
-function dropHeight(u: number): number {
-  if (u < 2) return 1.2;
-  if (u < 12) { const k = (u - 2) / 10; return 1.2 + 24.6 * k * k * (3 - 2 * k); }
-  if (u < 15) return 25.8;
-  if (u < 16.4) { const k = (u - 15) / 1.4; return 25.8 - 21 * k * k; }
-  if (u < 17.6) { const k = (u - 16.4) / 1.2; return 4.8 - 3.6 * (1 - (1 - k) * (1 - k)); }
-  return 1.2;
+/** How fast the hand-turned wheel spins (radians a second) through a 22-second ride. */
+function handSpeed(u: number): number {
+  if (u < 3) return 0.12 + Math.sin(u * 3) * 0.08;      // the boys climb on, rocking it
+  if (u < 6) return 0.2 + (u - 3) / 3 * 0.95;           // they swing their weight and it picks up speed
+  if (u < 17) return 1.15 + Math.sin(u * 1.7) * 0.15;   // each jump gives it another push
+  if (u < 21) return 1.15 * (21 - u) / 4;               // dragging their feet to slow it
+  return 0;
 }
 function swingSpeed(u: number): number { return u < 4 ? u / 4 : u < 20 ? 1 : u < 24 ? (24 - u) / 4 : 0; }
 function midSpark(x: number, y: number, z: number, n: number, hot = 1): void {
@@ -1325,9 +1477,10 @@ function updateMidway(f: Frame, t: number, dt: number): void {
     mid.sparkCol.set([0.7 * a, 0.85 * a, 1.0 * a], i * 3);
   }
   mid.sparks.geometry.attributes.position.needsUpdate = true; mid.sparks.geometry.attributes.color.needsUpdate = true;
-  // drop tower: riders get their own run from the bottom; otherwise it cycles on its own
-  const du = f.ride === 'drop' ? f.rideT : t % 22;
-  mid.dropCar.position.y = dropHeight(du); mid.dropCar.rotation.y = du < 12 ? (du - 2) * 0.05 : mid.dropCar.rotation.y;
+  // the hand-turned wheel: riders get their own spin from a standstill; otherwise it goes round on its own every so often
+  const hu = f.ride === 'handwheel' ? f.rideT : t % 26, hs = handSpeed(hu);
+  mid.hwAngle += dt * hs; mid.hw.rotation.z = mid.hwAngle;
+  mid.hwSeats.forEach((st, k) => { st.rotation.z = -mid.hwAngle - Math.sin(mid.hwAngle * 2 + k) * 0.06 * hs - hs * 0.12; });
   // wave swinger
   const su = f.ride === 'swinger' ? f.rideT : t % 26, w = swingSpeed(su);
   mid.swW = w; mid.swAngle += dt * 1.5 * w;
@@ -1522,21 +1675,67 @@ export function resize3d(w: number, h: number, dpr: number): void {
 
 export interface Look { o: PersonOpts; key: string }
 export interface Body3D { x: number; y: number; hd: number; moving: boolean; spd?: number; wave: boolean; dance?: boolean; look: Look; balloon: string | null }
-export type RideKind = 'ferris' | 'carousel' | 'pirate' | 'train' | 'drop' | 'swinger' | 'finale' | 'wishes' | null;
+export type RideKind = 'ferris' | 'carousel' | 'pirate' | 'train' | 'bumper' | 'handwheel' | 'swinger' | 'finale' | 'wishes' | null;
 export interface Frame {
-  t: number; dt: number; night: number; quality: 'low' | 'high';
+  t: number; dt: number; night: number; clock: number; quality: 'low' | 'high';
   me: Body3D & { hidden: boolean; sit?: boolean };
   candles?: { lamps: number; mine: number; flowers: number };
   crowd: CrowdItem[];
   bikes: Array<{ x: number; y: number; dir: number; cur: number; ph: number; ringT: number; rider: PersonOpts; col: string; saika: boolean; moto: boolean }>;
   others: Array<Body3D & { id: string; visible: boolean }>;
-  ride: RideKind; rideT: number; trainU: number;
+  ride: RideKind; rideT: number; train: { d: number; v: number };
   cam: { yaw: number; pitch: number; dist: number };
   sparkle: number[]; // 0..1 per secret
   look?: { yaw: number; pitch: number };   // where you've turned your head on a ride
   bumpers: Array<{ x: number; y: number; hd: number; hit: number }>;
   shake: number;
   steamFrom: Array<[number, number]>;
+}
+
+// the sky through the day: [hour, sky overhead, sky at the horizon]
+const SKY_KEYS: Array<[number, string, string]> = [
+  [5, '#141a48', '#7a3a5a'], [6, '#2f4f96', '#f2a07a'], [7.2, '#4a86cf', '#f4d2b0'], [9, '#4f8fd8', '#cfe3f2'], [13, '#3a7fd6', '#bcd8f0'],
+  [16, '#4a86cc', '#e2dcc4'], [17.4, '#4f68a8', '#ffbc7a'], [18.3, '#2c2a66', '#ff7a48'], [19.2, '#120c34', '#5a2450'],
+];
+const cA = new THREE.Color(), cC = new THREE.Color(), sunV = new THREE.Vector3();
+function skyAt(h: number, top: THREE.Color, hor: THREE.Color): void {
+  let i = 0; while (i < SKY_KEYS.length - 1 && SKY_KEYS[i + 1][0] <= h) i++;
+  const a = SKY_KEYS[i], b = SKY_KEYS[Math.min(i + 1, SKY_KEYS.length - 1)], k = b[0] > a[0] ? clamp((h - a[0]) / (b[0] - a[0]), 0, 1) : 0;
+  top.set(a[1]).lerp(cA.set(b[1]), k); hor.set(a[2]).lerp(cA.set(b[2]), k);
+}
+/** Sets the sky, sun, moon and lights for the clock (minutes past midnight). Returns how much daylight there is, 0 to 1. */
+function timeOfDay(clock: number, night: number): number {
+  const h = ((clock / 60) % 24 + 24) % 24, flash = fw.flash;
+  const day = clamp(Math.min((h - 5.2) / 1.4, (19.3 - h) / 1.3), 0, 1);           // sky brightness
+  const sunUp = clamp(Math.min((h - 5.8) / 1.2, (18.4 - h) / 1.0), 0, 1);         // direct sunlight
+  const gold = clamp(1 - Math.abs(h - 17.9) / 1.3, 0, 1) + clamp(1 - Math.abs(h - 6.3) / 1.0, 0, 1) * 0.7; // sunrise and sunset glow
+  const top = tod.daySky!.material.uniforms.top.value as THREE.Color, hor = tod.daySky!.material.uniforms.hor.value as THREE.Color;
+  skyAt(h, top, hor);
+  // the sun rises in the east (+x), crosses high and a little to the south, and sets in the west
+  const th = clamp((h - 6) / 12.3, -0.05, 1.05) * Math.PI, sd = sunV.set(Math.cos(th), Math.sin(th) * 0.9 + 0.04, 0.35).normalize();
+  tod.daySky!.material.uniforms.sunDir.value.copy(sd);
+  (tod.daySky!.material.uniforms.sunCol.value as THREE.Color).set('#fff0c8').lerp(cA.set('#ff8a3a'), clamp(gold, 0, 1)).multiplyScalar(sunUp);
+  tod.daySky!.material.uniforms.a.value = day; tod.daySky!.visible = day > 0.001;
+  tod.sun!.position.copy(sd).multiplyScalar(520); tod.sun!.position.x += 45; tod.sun!.position.z += 60; tod.sun!.visible = sunUp > 0.01;
+  tod.sun!.material.opacity = sunUp; tod.sun!.material.color.set('#fff2c8').lerp(cA.set('#ff9a50'), clamp(gold, 0, 1));
+  sunLight.position.copy(sd).multiplyScalar(200); sunLight.intensity = sunUp * 2.1; sunLight.color.set('#fff2dc').lerp(cA.set('#ff9a58'), clamp(gold, 0, 1) * 0.8);
+  (tod.stars!.material as THREE.PointsMaterial).opacity = 1 - day; (tod.stars!.material as THREE.PointsMaterial).transparent = true; tod.stars!.visible = day < 0.99;
+  tod.moon!.material.opacity = 1 - day; tod.moon!.visible = day < 0.99;
+  tod.clouds!.visible = day > 0.01; (tod.clouds!.children[0] as THREE.Sprite).material.opacity = day * 0.55;
+  (tod.clouds!.children[0] as THREE.Sprite).material.color.set('#ffffff').lerp(cA.set('#ffb08a'), clamp(gold, 0, 1));
+  tod.halo!.material.opacity = 0.55 * (1 - day * 0.8);
+  const nn = clamp(night, 0, 1);
+  hemi.color.set(flash > 0.05 ? '#b49ad8' : '#6f5aa8').lerp(cA.set('#dceaff'), day);
+  hemi.groundColor.set('#22182c').lerp(cA.set('#8a7a5a'), day);
+  hemi.intensity = lerp(1.5 - 0.65 * nn, 1.7, day) + flash * 1.4;
+  ambient.color.set('#4a3a6a').lerp(cA.set('#ffffff'), day); ambient.intensity = lerp(0.5, 0.45, day);
+  moonLight.intensity = 0.55 * (1 - day);
+  const fog = scene.fog as THREE.Fog;
+  cC.setRGB(0.1 - 0.03 * nn, 0.07 - 0.02 * nn, 0.22 - 0.06 * nn); fog.color.copy(cC).lerp(hor, day); fog.far = lerp(340, 460, day);
+  renderer.setClearColor(fog.color);
+  if (Math.abs(day - tod.last) > 0.002) { tod.last = day; for (const g of tod.ground) g.m.color.copy(g.night).lerp(g.day, day); for (const m of tod.city) m.color.set('#bbbbbb').lerp(cA.set('#9aa6b8'), day); }
+  glowPts.material.opacity = 1 - day * 0.6;
+  return day;
 }
 
 function syncRig(cur: Rig | null, look: Look, parent: THREE.Object3D): Rig {
@@ -1548,8 +1747,9 @@ function rideSeat(kind: RideKind): THREE.Object3D | null {
   if (kind === 'ferris') return anim.cabins[0].getObjectByName('inner');
   if (kind === 'carousel') return anim.horses[0].getObjectByName('seat');
   if (kind === 'pirate') return anim.shipSeat;
-  if (kind === 'train') return anim.cars[2].getObjectByName('seat');
-  if (kind === 'drop') return mid.dropSeat;
+  if (kind === 'train') return trn.seat;
+  if (kind === 'handwheel') return mid.hwSeat;
+  if (kind === 'bumper') return mid.drvSeat;
   if (kind === 'swinger') return mid.swSeat;
   return null;
 }
@@ -1561,8 +1761,9 @@ const POV: Record<string, { eye: [number, number, number]; fwd: [number, number,
   ferris: { eye: [0, -1.05, 0.38], fwd: [0, -0.18, -1] },
   carousel: { eye: [0, 1.05, 0.05], fwd: [0, -0.12, 1] },
   pirate: { eye: [0, 1.15, 0], fwd: [-1, -0.08, 0], tilt: true },
-  train: { eye: [0, 0.9, 0.2], fwd: [0, -0.06, 1] },
-  drop: { eye: [0, 0.85, 0.12], fwd: [0, -0.2, 1] },
+  train: { eye: [0, 0.86, 0.05], fwd: [0, -0.1, 1], tilt: true },
+  handwheel: { eye: [0, 0.95, 0.1], fwd: [0, -0.15, 1] },
+  bumper: { eye: [0, 1.05, 0], fwd: [0, -0.18, 1] },
   swinger: { eye: [0, 0.75, 0.05], fwd: [0, -0.25, 1], tilt: true },
 };
 // a hand that waves in front of you when you wave from a ride
@@ -1573,11 +1774,8 @@ const easeInOut = (x: number) => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x +
 /** Renders a frame and returns where the camera looked (used by the minimap) and whether the Ferris cabin is at the top. */
 export function render3d(f: Frame): { atTop: boolean } {
   const { t, dt } = f;
-  // night light level
-  const n = clamp(f.night, 0, 1), flash = fw.flash;
-  hemi.intensity = (1.5 - 0.65 * n) + flash * 1.4;
-  hemi.color.set(flash > 0.05 ? '#b49ad8' : '#6f5aa8');
-  (scene.fog as THREE.Fog).color.setRGB(0.1 - 0.03 * n, 0.07 - 0.02 * n, 0.22 - 0.06 * n);
+  // light for the time of day
+  const day = timeOfDay(f.clock, f.night);
 
   // rides
   anim.wheel.rotation.z = (f.ride === 'ferris' ? 0 : 0) + t * 0.22 + (f.ride === 'ferris' ? 0 : 0);
@@ -1587,10 +1785,7 @@ export function render3d(f: Frame): { atTop: boolean } {
   anim.swing.rotation.z = Math.sin(t * 1.15) * 0.95;
   const arms = Math.abs(anim.swing.rotation.z) > 0.55;
   anim.swing.children.forEach(ch => { const r = (ch as THREE.Object3D & { rig?: Rig }).rig; if (r) animatePerson(r, t + ch.position.x, false, arms, true); });
-  anim.cars.forEach((car, i) => {
-    const u = f.trainU - i * 0.16, [x, y] = trackPos(u), [x2, y2] = trackPos(u + 0.01);
-    car.position.set(X(x), 0, Z(y)); car.rotation.y = Math.atan2(X(x2) - X(x), Z(y2) - Z(y));
-  });
+  updateTrain(f, t, dt);
   animateBand(t);
   anim.dancers.forEach((r, i) => animateDancer(r, t, i));
   anim.stageLight.color.setHSL((t * 0.05) % 1, 0.7, 0.6);
@@ -1600,7 +1795,7 @@ export function render3d(f: Frame): { atTop: boolean } {
   const sp = anim.secretSparkles.geometry.getAttribute('color') as THREE.BufferAttribute;
   f.sparkle.forEach((a, i) => { const v = a * (0.6 + 0.4 * Math.sin(t * 5 + i)); sp.setXYZ(i, v, v * 0.95, v * 0.7); });
   sp.needsUpdate = true;
-  (anim.lake.material as THREE.MeshLambertMaterial).emissiveIntensity = 0.9 + Math.sin(t * 0.7) * 0.1;
+  (anim.lake.material as THREE.MeshLambertMaterial).emissiveIntensity = (0.9 + Math.sin(t * 0.7) * 0.1) * (1 - day * 0.8);
 
   // steam rising from the carts
   for (let i = 0; i < STEAM_N; i++) {
@@ -1659,7 +1854,7 @@ export function render3d(f: Frame): { atTop: boolean } {
   // me
   const seat = rideSeat(f.ride);
   player = syncRig(player, f.me.look, seat || scene);
-  if (seat) { player.g.position.set(0, f.ride === 'ferris' ? -2.05 : f.ride === 'carousel' ? -0.55 : f.ride === 'drop' || f.ride === 'swinger' ? -0.35 : 0, 0); player.g.rotation.y = 0; animatePerson(player, t, false, f.me.wave || f.ride === 'pirate' && arms, true); }
+  if (seat) { player.g.position.set(0, f.ride === 'ferris' ? -2.05 : f.ride === 'carousel' ? -0.55 : f.ride === 'handwheel' || f.ride === 'swinger' ? -0.35 : 0, 0); player.g.rotation.y = 0; animatePerson(player, t, false, f.me.wave || f.ride === 'pirate' && arms, true); }
   else if (f.me.sit) { player.g.position.set(X(f.me.x), -0.5, Z(f.me.y)); player.g.rotation.y = f.me.hd; animatePerson(player, t, false, f.me.wave, true); player.body.rotation.x = Math.sin(t * 0.7) * 0.04; }
   else { player.g.position.set(X(f.me.x), 0, Z(f.me.y)); player.g.rotation.y = f.me.hd; if (f.me.dance && !f.me.moving) animateDancer(player, t, 1); else if (animatePerson(player, t, f.me.moving, f.me.wave, false, dt, f.me.spd ?? 1) && !f.me.hidden) kickDust(player, f.me.spd ?? 1); }
   player.g.visible = (!f.me.hidden || !!seat) && !POV[f.ride as string];
@@ -1722,7 +1917,7 @@ export function render3d(f: Frame): { atTop: boolean } {
   if (fpArm.visible) fpArm.rotation.z = 0.5 + Math.sin(t * 12) * 0.35;
   const fov = (mode === 'finale' ? 66 : 55) + (mode === 'walk' ? clamp(((f.me.spd ?? 0) - 1.05) * 12, 0, 6) : 0);
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-dt * 4)); camera.updateProjectionMatrix(); }
-  updateDust(dt); updateSkyLanterns(t, dt, n); updateWishes(t, n); updatePond(t, dt); updateMidway(f, t, dt); updateFountains(dt); updateCandles(f, t); updateTeashop(t);
+  updateDust(dt); updateSkyLanterns(t, dt, f.night); updateWishes(t, f.night); updatePond(t, dt); updateMidway(f, t, dt); updateFountains(dt); updateCandles(f, t); updateTeashop(t);
   for (const e of embers) e.emissiveIntensity = 0.8 + Math.sin(t * 5 + Math.sin(t * 13)) * 0.25;
   glowPts.material.size = 1.1 * (1 + 0.05 * Math.sin(t * 2.3));
   renderer.render(scene, camera);
