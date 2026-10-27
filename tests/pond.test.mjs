@@ -13,7 +13,7 @@ test('nobody can walk into the wishing pond', () => {
   assert.ok(blocked(POND.x + POND.rx * .7, POND.y + POND.ry * .7, 6));
 });
 test('the path around the pond and the wish stall stay open', () => {
-  assert.ok(!blocked(POND.x, POND.y + POND.ry + 30, 6));
-  assert.ok(!blocked(POND.x - POND.rx - 30, POND.y, 6));
+  assert.ok(!blocked(POND.x, POND.y + POND.ry + 40, 6));
+  assert.ok(!blocked(POND.x - POND.rx - 40, POND.y, 6));
   assert.ok(!blocked(WISH_STALL.x, WISH_STALL.y + 50, 6));
 });

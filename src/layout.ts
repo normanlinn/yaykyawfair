@@ -3,7 +3,7 @@
 import { srng } from './util';
 
 export const M = 1 / 20;
-export const WW = 3200, WH = 2600, NORTH = 340;
+export const WW = 3900, WH = 2600, NORTH = 340;
 export const ROAD = { x: 760, w: 280 };
 
 export interface Zone { id: string; n: number; name: string; my: string; x: number; y: number; w: number; h: number; g: string; card: string }
@@ -30,6 +30,8 @@ export const ZONES: Zone[] = [
     card: 'A thousand little oil lamps and a thousand flowers around a small golden stupa. Everyone lights one and makes a quiet wish.' },
   { id: 'teashop', n: 11, name: 'Teashop', my: 'လက်ဖက်ရည်ဆိုင်', x: 2500, y: 1440, w: 640, h: 1000, g: '#2c2420',
     card: 'Tiny stools, low tables, strong sweet tea and a plate of palata. Friends talk for hours while the football plays on the TV.' },
+  { id: 'lake', n: 12, name: 'Wishing Lake', my: 'ဆုတောင်းကန်', x: 3200, y: 350, w: 640, h: 2090, g: '#1d2236',
+    card: 'A long, quiet lake where everyone’s candle lanterns drift slowly through the night, under a sky full of paper fire balloons.' },
 ];
 
 // rides and landmarks
@@ -52,8 +54,8 @@ export const OC_FOOD: Array<{ x: number; y: number; id: string; name: string; my
   { x: 2100, y: 2030, id: 'funnel', name: 'Funnel cake', my: 'ဖန်နယ်ကိတ်', p: 900, d: 'Crispy swirls of fried batter under a snowdrift of powdered sugar.' },
   { x: 2300, y: 2030, id: 'turkey', name: 'Turkey leg', my: 'ကြက်ဆင်ပေါင်', p: 1500, d: 'A smoky, giant roast turkey leg. You will need both hands.' },
 ];
-export const POND = { x: 1440, y: 2350, rx: 160, ry: 68 };   // wishing pond (water lanterns)
-export const WISH_STALL = { x: 1150, y: 2290 };              // where wishes are written
+export const POND = { x: 3520, y: 1340, rx: 250, ry: 840 };  // the wishing lake (water lanterns drift slowly across it)
+export const WISH_STALL = { x: 3520, y: 2330 };              // where wishes are written, at the lake's south end
 // the oil-lamp festival (ဆီမီးထွန်းပွဲ): lamps and flowers in rings around a little stupa
 export const CANDLE = { x: 2820, y: 820, R: 290 };
 export const CANDLE_N = 1000, FLOWER_N = 1000;
@@ -143,7 +145,7 @@ export function blocked(x: number, y: number, r: number): boolean {
   // nobody stands where the wave swinger's chairs fly
   if (Math.hypot(x - SWINGER.x, y - SWINGER.y) < SWINGER.R + r + 10) return true;
   // nobody wades into the wishing pond: an ellipse a little wider than the water and its stone rim
-  const px = (x - POND.x) / (POND.rx * 1.08 + r + 4), py = (y - POND.y) / (POND.ry * 1.08 + r + 4);
+  const px = (x - POND.x) / (POND.rx + 24 + r), py = (y - POND.y) / (POND.ry + 24 + r);
   if (px * px + py * py < 1) return true;
   if (Math.hypot(x - CANDLE.x, y - CANDLE.y) < CANDLE.R + r) return true; // the lamp field is for looking at, not walking on
   for (const b of COL) if (x + r > b.x && x - r < b.x + b.w && y + r > b.y && y - r < b.y + b.h) return true;
