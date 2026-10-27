@@ -3,7 +3,7 @@
 import { srng } from './util';
 
 export const M = 1 / 20;
-export const WW = 1800, WH = 2600, NORTH = 340;
+export const WW = 3200, WH = 2600, NORTH = 340;
 export const ROAD = { x: 760, w: 280 };
 
 export interface Zone { id: string; n: number; name: string; my: string; x: number; y: number; w: number; h: number; g: string; card: string }
@@ -24,6 +24,12 @@ export const ZONES: Zone[] = [
     card: 'A saing waing ensemble shares the stage with a pop singer, and somebody always starts dancing.' },
   { id: 'finale', n: 8, name: 'Finale View', my: 'မီးပန်းကြည့်ရှုရာ', x: 1060, y: 1980, w: 640, h: 460, g: '#1f2236',
     card: 'The best seat in the fair for fireworks blooming over the city skyline.' },
+  { id: 'midway', n: 9, name: 'OC Midway', my: 'OC ပွဲတော်ထောင့်', x: 1780, y: 350, w: 640, h: 2090, g: '#27203a',
+    card: 'A corner inspired by the OC Fair in California: buzzing bumper cars, a drop tower, a wave swinger and deep-fried everything.' },
+  { id: 'candles', n: 10, name: 'Candle Festival', my: 'ဆီမီးထွန်းပွဲ', x: 2500, y: 350, w: 640, h: 1040, g: '#2a1f2a',
+    card: 'A thousand little oil lamps and a thousand flowers around a small golden stupa. Everyone lights one and makes a quiet wish.' },
+  { id: 'teashop', n: 11, name: 'Teashop', my: 'လက်ဖက်ရည်ဆိုင်', x: 2500, y: 1440, w: 640, h: 1000, g: '#2c2420',
+    card: 'Tiny stools, low tables, strong sweet tea and a plate of palata. Friends talk for hours while the football plays on the TV.' },
 ];
 
 // rides and landmarks
@@ -37,8 +43,26 @@ export const PHOTO = { x: 625, y: 2300 };
 export const TOYS_AT = { x: 1590, y: 1920 };
 export const ARCH_Y = 2475;
 export const UNCLE = { x: 1120, y: 2520 };
+// the OC Midway (east of the old fence line)
+export const BUMPER = { x: 1850, y: 470, w: 500, h: 380 };    // bumper car arena (rectangle)
+export const DROP = { x: 2100, y: 1130 };                     // drop tower
+export const SWINGER = { x: 2100, y: 1600, R: 150 };          // wave swinger
+export const OC_FOOD: Array<{ x: number; y: number; id: string; name: string; my: string; p: number; d: string }> = [
+  { x: 1900, y: 2030, id: 'corndog', name: 'Corn dog', my: 'ကော်ဒေါ့', p: 800, d: 'A hot dog dipped in cornmeal batter and fried golden, on a stick.' },
+  { x: 2100, y: 2030, id: 'funnel', name: 'Funnel cake', my: 'ဖန်နယ်ကိတ်', p: 900, d: 'Crispy swirls of fried batter under a snowdrift of powdered sugar.' },
+  { x: 2300, y: 2030, id: 'turkey', name: 'Turkey leg', my: 'ကြက်ဆင်ပေါင်', p: 1500, d: 'A smoky, giant roast turkey leg. You will need both hands.' },
+];
 export const POND = { x: 1440, y: 2350, rx: 160, ry: 68 };   // wishing pond (water lanterns)
 export const WISH_STALL = { x: 1150, y: 2290 };              // where wishes are written
+// the oil-lamp festival (ဆီမီးထွန်းပွဲ): lamps and flowers in rings around a little stupa
+export const CANDLE = { x: 2820, y: 820, R: 290 };
+export const CANDLE_N = 1000, FLOWER_N = 1000;
+// the teashop: the shop along the north side, low tables in a grid in front
+export const TEA = { x: 2820, y: 1600 };
+export const TEA_TABS: Array<[number, number]> = [];
+for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) TEA_TABS.push([2640 + c * 120 + (r % 2) * 20, 1760 + r * 125]);
+/** Stools around each table: four sides, a little out from the table's centre. */
+export const teaStools = (t: number): Array<[number, number, number]> => { const [x, y] = TEA_TABS[t]; return [[x, y - 17, 0], [x + 17, y, -Math.PI / 2], [x, y + 17, Math.PI], [x - 17, y, Math.PI / 2]]; };
 
 export interface Snack { id: string; name: string; my: string; p: number; col: string; d: string }
 export const SNACKS: Snack[] = [
@@ -104,12 +128,24 @@ addCol(590, 2255, 70, 45);
 addCol(770, 2465, 24, 12); addCol(1006, 2465, 24, 12);
 addCol(1184, 2478, 52, 16);
 addCol(WISH_STALL.x - 70, WISH_STALL.y - 34, 140, 40);
+// bumper arena rails (gaps in the middle of the west and south sides to walk in)
+addCol(BUMPER.x - 8, BUMPER.y - 8, BUMPER.w + 16, 14);
+addCol(BUMPER.x + BUMPER.w - 6, BUMPER.y - 8, 14, BUMPER.h + 16);
+addCol(BUMPER.x - 8, BUMPER.y - 8, 14, BUMPER.h * .4); addCol(BUMPER.x - 8, BUMPER.y + BUMPER.h * .6, 14, BUMPER.h * .4 + 8);
+addCol(BUMPER.x - 8, BUMPER.y + BUMPER.h - 6, BUMPER.w * .4, 14); addCol(BUMPER.x + BUMPER.w * .6, BUMPER.y + BUMPER.h - 6, BUMPER.w * .4 + 8, 14);
+addCol(DROP.x - 70, DROP.y - 70, 140, 140);
+OC_FOOD.forEach(f => addCol(f.x - 70, f.y - 34, 140, 40));
+addCol(TEA.x - 230, TEA.y - 70, 460, 100);      // the teashop's counter and kitchen
+TEA_TABS.forEach(([x, y]) => addCol(x - 30, y - 30, 60, 60)); // a table with its stools and the people on them
 
 export function blocked(x: number, y: number, r: number): boolean {
   if (x < 40 + r || x > WW - 40 - r || y < NORTH + 8 + r || y > WH - 14 - r) return true;
+  // nobody stands where the wave swinger's chairs fly
+  if (Math.hypot(x - SWINGER.x, y - SWINGER.y) < SWINGER.R + r + 10) return true;
   // nobody wades into the wishing pond: an ellipse a little wider than the water and its stone rim
   const px = (x - POND.x) / (POND.rx * 1.08 + r + 4), py = (y - POND.y) / (POND.ry * 1.08 + r + 4);
   if (px * px + py * py < 1) return true;
+  if (Math.hypot(x - CANDLE.x, y - CANDLE.y) < CANDLE.R + r) return true; // the lamp field is for looking at, not walking on
   for (const b of COL) if (x + r > b.x && x - r < b.x + b.w && y + r > b.y && y - r < b.y + b.h) return true;
   return false;
 }
