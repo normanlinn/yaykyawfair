@@ -2,7 +2,7 @@
 // this module builds the scene once and mirrors the game state into it every frame.
 import * as THREE from 'three';
 import { TAU, srng, rand, pick, clamp, lerp, MMF, BODY, DISP } from './util';
-import { PersonOpts } from './people';
+import { PersonOpts, bodyProfile } from './people';
 import {
   M, WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, TR, ST, FV, PHOTO, TOYS_AT, ARCH_Y, SNACKS, CARTS, TEA_TABLES, BOOTHS, SECRETS,
   STRINGS, TREES, trackPos,
@@ -134,7 +134,7 @@ function longyiMat(col: string, pat: string | undefined): THREE.Material {
 }
 
 export function rigKey(o: PersonOpts): string {
-  return [o.shirt, o.lon, o.skin, o.pat, o.hair, o.bun, o.outfit, o.head, o.thanaka, o.glasses, o.bag, o.hat, o.flower, o.capc, o.gbc, o.s].join('|');
+  return [o.gender, o.shirt, o.lon, o.skin, o.pat, o.hair, o.bun, o.outfit, o.head, o.thanaka, o.glasses, o.bag, o.hat, o.flower, o.capc, o.gbc, o.s].join('|');
 }
 export function buildPerson(o: PersonOpts): Rig {
   const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
@@ -142,17 +142,17 @@ export function buildPerson(o: PersonOpts): Rig {
   const skin = lam(o.skin), dark = lam('#17101a');
   const footL = add(new THREE.Mesh(GEO.foot, lam('#1b1420')), g, -0.1, 0.04, 0.02);
   const footR = add(new THREE.Mesh(GEO.foot, lam('#1b1420')), g, 0.1, 0.04, 0.02);
-  const ht = o.outfit === 'htamein';
+  const ht = o.outfit === 'htamein', bp = bodyProfile(o.gender), sw = bp.shoulders / 0.86;
   add(new THREE.Mesh(ht ? GEO.htamein : GEO.longyi, longyiMat(o.lon, o.pat)), body, 0, ht ? 0.4 : 0.42, 0);
   if (o.outfit === 'taikpon') {
     add(new THREE.Mesh(GEO.torso, lam('#f7f3ea')), body, 0, 1.0, 0);
     const j = add(new THREE.Mesh(GEO.jacket, lam(o.shirt, { side: THREE.DoubleSide, k: 'ds' })), body, 0, 1.02, 0);
     j.scale.set(1.02, 1, 1.02);
     for (let k = 0; k < 3; k++) sphere(0.022, lam('#ffffff'), body, 0.08, 1.15 - k * 0.1, 0.24, 6);
-  } else add(new THREE.Mesh(ht ? GEO.torsoSlim : GEO.torso, lam(o.shirt)), body, 0, 1.0, 0);
+  } else add(new THREE.Mesh(ht ? GEO.torsoSlim : GEO.torso, lam(o.shirt)), body, 0, 1.0, 0).scale.x = sw;
   // arms hang from the shoulders and can be raised to wave
   const arm = (side: number) => {
-    const a = add(new THREE.Group(), body, side * 0.27, 1.27, 0);
+    const a = add(new THREE.Group(), body, side * 0.27 * sw, 1.27, 0);
     add(new THREE.Mesh(GEO.arm, lam(o.outfit === 'taikpon' ? o.shirt : o.shirt)), a, 0, -0.22, 0);
     sphere(0.07, skin, a, 0, -0.46, 0, 8);
     return a;
