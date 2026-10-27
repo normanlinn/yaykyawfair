@@ -1508,7 +1508,15 @@ function startGameFlow(): void {
   const welcome=()=>{ setTimeout(()=>toast(`<span class="z">Welcome${S.settings.name?', '+esc(S.settings.name):''}!</span>${ZONES.length} zones, six hidden secrets, little fireworks shows all evening and the finale at 9:30 PM. Press T to chat, and walk up to people to talk.`,true),300); };
   if(!S.settings.avDone) openAvatar(true,welcome); else welcome();
 }
-$('start').onclick=startGameFlow;
+$('start').onclick=()=>{ goLandscape(); startGameFlow(); };
+// phones: go full screen and turn sideways where the browser allows it (Android); elsewhere a hint asks you to turn the phone
+function goLandscape(): void {
+  if(!matchMedia('(pointer:coarse)').matches||Math.min(screen.width,screen.height)>600) return;
+  const el=document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
+  try{ const p=el.requestFullscreen?.({navigationUI:'hide'}); if(p) p.then(()=>(screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape')).catch(()=>{}); }catch{ /* not allowed here */ }
+}
+try{ if(localStorage.getItem('ykn-portrait')==='1') document.body.classList.add('portraitOK'); }catch{ /* storage unavailable */ }
+$('rotateOK').onclick=()=>{ document.body.classList.add('portraitOK'); try{ localStorage.setItem('ykn-portrait','1'); }catch{ /* storage unavailable */ } };
 
 function snapshot(): unknown { return {S:JSON.parse(JSON.stringify({...S,paused:false,photo:false})),P:{x:P.x,y:P.y,hd:P.hd}}; }
 async function boot(data: any): Promise<void> {
