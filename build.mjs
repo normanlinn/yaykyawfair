@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const minify = process.argv.includes('--minify');
 const result = await esbuild.build({
-  entryPoints: ['src/main.ts'], bundle: true, format: 'iife', target: 'es2020', minify, write: false, legalComments: 'none',
+  entryPoints: ['src/main.ts'], bundle: true, format: 'iife', target: 'es2020', minify, write: false, legalComments: 'none', loader: { '.mp3': 'dataurl' },
 });
 const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 const page = fs.readFileSync('src/index.html', 'utf8').replace('<script>/*BUNDLE*/</script>', () => `<script>\n${js}</script>`);

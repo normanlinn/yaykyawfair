@@ -84,7 +84,16 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 #tools{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:min(440px,46vw)}
 #tools button{padding:6px 10px;font-size:13px}
 #tools kbd{font-family:var(--body);font-size:10px;opacity:.6;margin-left:4px}
-#mini{position:fixed;right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:120px;height:173px;border-radius:10px;border:1px solid var(--line);background:var(--panel)}
+#mini{position:fixed;right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:170px;height:170px;border-radius:16px;border:2px solid rgba(244,182,63,.55);background:var(--panel);box-shadow:0 6px 24px rgba(0,0,0,.45);cursor:pointer;pointer-events:auto;transition:transform .15s}
+#mini:hover{transform:scale(1.04)}
+#bigmap{position:fixed;inset:0;z-index:30;background:rgba(6,4,18,.72);display:flex;align-items:center;justify-content:center;padding:12px;animation:mfade .22s ease-out}
+#bigmap[hidden]{display:none}
+#bigmap .mapcard{background:var(--panel-solid);border:1px solid var(--line);border-radius:16px;width:min(760px,100%);height:min(100%,980px);display:flex;flex-direction:column;padding:10px 14px;box-sizing:border-box;animation:mpop .3s cubic-bezier(.2,1.3,.4,1)}
+#bigmap header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#bigmap h2{font-family:var(--display);font-weight:400;font-size:18px;color:var(--gold);margin:4px 0}
+#bigmap .mapwrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+#bigmap canvas{border-radius:12px}
+#bigmap p{margin:6px 0 2px;font-size:12px}
 
 #prompt{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(26px + env(safe-area-inset-bottom,0px));background:var(--panel);border:1px solid var(--gold);border-radius:999px;padding:8px 16px;font-size:16px;font-weight:700;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis;pointer-events:auto;cursor:pointer}
 #prompt .key{font-family:var(--display);font-size:12px;background:var(--gold);color:#2a1606;border-radius:6px;padding:1px 6px;margin-right:8px}
@@ -169,7 +178,7 @@ table.keys td{padding:3px 10px 3px 0;vertical-align:top}
 #title .cta{font-size:20px;padding:14px 28px;border-radius:999px;font-family:var(--display);font-weight:400;letter-spacing:.04em}
 #title small{color:var(--muted);font-size:12.5px}
 body.inplay #journey,body.inplay #goal{display:none}
-@media (max-width:560px){#mini{display:none}#hud{max-width:calc(100vw - 120px)}#tools{max-width:150px}#tools kbd,#bCam,#bSound,#bAv,#bWave{display:none}#toasts{top:calc(200px + env(safe-area-inset-top,0px))}.journey li{font-size:10px;padding:2px 6px}#goal{font-size:12px}}
+@media (max-width:560px){#mini{width:110px;height:110px;bottom:auto;top:calc(150px + env(safe-area-inset-top,0px))}#hud{max-width:calc(100vw - 120px)}#tools{max-width:150px}#tools kbd,#bCam,#bSound,#bAv,#bWave{display:none}#toasts{top:calc(200px + env(safe-area-inset-top,0px))}.journey li{font-size:10px;padding:2px 6px}#goal{font-size:12px}}
 #tags .bub.wish{background:rgba(42,22,6,.78);color:#ffe7a3;border:1px solid rgba(255,179,71,.7);box-shadow:0 0 18px rgba(255,160,60,.45);font-size:14px}
 #tags .bub.wish::after{border-top-color:rgba(42,22,6,.78)}
 #tags .bub.wish small{color:#f4b63f}
@@ -181,7 +190,8 @@ body.inplay #journey,body.inplay #goal{display:none}
 .wish .ideas{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .wish .ideas button{font-size:13px;padding:4px 10px;border-radius:999px}
 .wish .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0 14px}
-.wish h3{font-size:14px;margin:6px 0;color:var(--gold)}
+.wish h3{font-size:14px;margin:6px 0;color:var(--gold);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.wish h3 button{font-size:12px;padding:4px 10px;border-radius:999px}
 .wish .wlist{display:flex;flex-direction:column;gap:6px}
 .wish .w{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;background:rgba(255,179,71,.07)}
 .wish .w small{display:block;color:var(--muted);font-size:11px}
@@ -233,7 +243,8 @@ button:active{transform:scale(.94)}
   <button id="bSet">Settings</button>
   <button id="bSound">Sound on</button>
 </div>
-<canvas id="mini" width="240" height="346" hidden></canvas>
+<canvas id="mini" width="340" height="340" hidden title="Open the map (M)"></canvas>
+<div id="bigmap" hidden><div class="mapcard"><header><h2>Map of the fair · <span class="mm">ပွဲတော်မြေပုံ</span></h2><button id="bigmapClose">Close</button></header><div class="mapwrap"><canvas id="bigmapC"></canvas></div><p class="muted">Gold zones are ones you have found. Teal dots are other players. Press M or tap outside to close.</p></div></div>
 <div id="prompt" hidden></div>
 <div id="toasts" aria-live="polite"></div>
 <div id="chat" hidden>

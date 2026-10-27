@@ -103,12 +103,13 @@ addCol(ST.x - 175, ST.y - 80, 350, 90);
 addCol(590, 2255, 70, 45);
 addCol(770, 2465, 24, 12); addCol(1006, 2465, 24, 12);
 addCol(1184, 2478, 52, 16);
-addCol(POND.x - POND.rx * .92, POND.y - POND.ry * .55, POND.rx * 1.84, POND.ry * 1.1);
-addCol(POND.x - POND.rx * .6, POND.y - POND.ry * .9, POND.rx * 1.2, POND.ry * 1.8);
 addCol(WISH_STALL.x - 70, WISH_STALL.y - 34, 140, 40);
 
 export function blocked(x: number, y: number, r: number): boolean {
   if (x < 40 + r || x > WW - 40 - r || y < NORTH + 8 + r || y > WH - 14 - r) return true;
+  // nobody wades into the wishing pond: an ellipse a little wider than the water and its stone rim
+  const px = (x - POND.x) / (POND.rx * 1.08 + r + 4), py = (y - POND.y) / (POND.ry * 1.08 + r + 4);
+  if (px * px + py * py < 1) return true;
   for (const b of COL) if (x + r > b.x && x - r < b.x + b.w && y + r > b.y && y - r < b.y + b.h) return true;
   return false;
 }
