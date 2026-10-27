@@ -66,6 +66,8 @@ To share wishes between everyone on Vercel, add a free Upstash Redis database on
 
 The API keeps the newest 5,000 wishes, sends players the newest 1,000, and lets one address make 20 wishes an hour.
 
+The hosted build also writes search and sharing metadata from `seo.mjs`: an English and Burmese title, description, Open Graph and Twitter cards, hreflang links and VideoGame structured data, plus `/about/` (a readable bilingual landing page), `robots.txt` and `sitemap.xml`. Files in `public/` (the share image, favicon and any Search Console verification file) are copied to the site root. The site address defaults to `https://yaykyawfair.vercel.app`; set `SITE_URL`, `GOOGLE_SITE_VERIFICATION` or `BING_SITE_VERIFICATION` in Vercel to change it or verify ownership. Preview deployments are marked noindex. See [SEO-SETUP.md](SEO-SETUP.md) for the Google Search Console steps.
+
 ## Develop
 
 ```sh
