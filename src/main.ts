@@ -2,13 +2,15 @@
 // Game logic works in map units (see layout.ts); world3d.ts draws it with Three.js.
 import { Ctx, TAU, rand, pick, clamp, lerp, srng, rr, el, circ, ln, ks, MMF, DISP, BODY, $ } from './util';
 import { SHIRTS, LONS, SKINS, BALLOONS, AV_SHIRTS, AV_LONS, person, PersonOpts, Avatar, Gender, DEFAULT_AVATAR, avatarOpts, cleanAvatar, randomAvatar, genderStartingLook } from './people';
-import { A, audioInit, sfx, bell, horn, setChatter, setMaster } from './audio';
+import { A, audioInit, sfx, bell, horn, setChatter, setMaster, loadVoices, speak } from './audio';
+import { CROWD_LINES, VENDOR_CALLS, VOICE_CLIPS } from './voices';
 import {
-  WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, TR as TRK, ST, FV, PHOTO, TOYS_AT, UNCLE, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
-  STALLFRONTS, VENDOR_POSTS, blocked, trackPos,
+  WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, TR as TRK, ST, FV, PHOTO, TOYS_AT, UNCLE, ARCH_Y, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
+  STALLFRONTS, VENDOR_POSTS, POND, WISH_STALL, blocked, trackPos,
 } from './layout';
 import { friends } from './friends';
-import { init3d, build3d, resize3d, render3d, launchFirework, renderPreview, capture, project, rigKey, CrowdItem, Frame, Look, RideKind } from './world3d';
+import { openWishes, Wish, WishKind, WISH_PRICE, WISH_IDEAS, WISH_MAX_LEN, cleanWish } from './wishes';
+import { init3d, build3d, resize3d, render3d, launchFirework, renderPreview, capture, project, rigKey, setWishes, wishSpot, CrowdItem, Frame, Look, RideKind } from './world3d';
 
 // ---------- canvases ----------
 const world = $<HTMLCanvasElement>('world');
@@ -43,8 +45,9 @@ const S: GameState = {
 try{ const sv=JSON.parse(localStorage.getItem('ykn-settings')||'null'); if(sv){ Object.assign(S.settings,sv); S.settings.av={...DEFAULT_AVATAR,...(sv.av||{})}; } }catch{ /* storage unavailable */ }
 function saveSettings(): void { try{ localStorage.setItem('ykn-settings',JSON.stringify(S.settings)); }catch{ /* storage unavailable */ } }
 
-const P = {x:900,y:2540,hd:Math.PI,moving:false,hidden:false,waveUntil:0};
-const CAM = {yaw:0,pitch:.42,dist:11};
+const P = {x:900,y:2540,hd:Math.PI,moving:false,hidden:false,waveUntil:0,vx:0,vy:0,spd:0};
+const CAM = {yaw:0,pitch:.42,dist:11,zoom:11};
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TR = {u:0,riding:false,rideU:0};
 const NAME_MAX = 16, CHAT_MAX = 120;
 let T = 0;
@@ -67,6 +70,9 @@ IT.push({x:TOYS_AT.x,y:TOYS_AT.y+30,r:48,label:()=>'Browse the toy stall',act:op
 IT.push({x:PHOTO.x,y:PHOTO.y+30,r:45,label:()=>`Souvenir photo booth · ${ks(500)}`,act:boothPhoto});
 IT.push({x:FV.x,y:FV.y+10,r:110,label:()=>S.showStarted&&!S.showDone?'Watch the fireworks now!':S.showDone?'Watch the finale again':'Watch the skyline',act:()=>startScene('finale')});
 IT.push({x:UNCLE.x,y:UNCLE.y+10,r:45,label:()=>'Ask Uncle for pocket money',act:askUncle});
+IT.push({x:WISH_STALL.x,y:WISH_STALL.y+50,r:60,label:()=>'Make a Thadingyut wish · ဆုတောင်း',act:()=>openWish('sky')});
+IT.push({x:POND.x-POND.rx-34,y:POND.y,r:50,label:()=>'Look up at all the wishes',act:()=>startScene('wishes')});
+IT.push({x:POND.x,y:POND.y+POND.ry+28,r:80,label:()=>`Float a wish on the pond · ${ks(WISH_PRICE.water)}`,act:()=>openWish('water')});
 
 // ---------- NPCs ----------
 interface Npc { x: number; y: number; tx: number; ty: number; sp: number; wait: number; ph: number; moving: boolean; stuck: number; hd: number; s: number;
@@ -98,7 +104,7 @@ function turnTo(n: { hd: number }, dx: number, dy: number, dt: number): void {
 function updateNPC(n: Npc, dt: number): void {
   if(n.post){ n.moving=false; const d=Math.hypot(P.x-n.x,P.y-n.y); if(d<160&&P.y>n.y) turnTo(n,P.x-n.x,P.y-n.y,dt*.3); return; }
   let tx: number, ty: number, sp: number;
-  if(n.leader){ tx=n.leader.x+n.ox; ty=n.leader.y+n.oy; sp=n.leader.sp*1.4; const d=Math.hypot(tx-n.x,ty-n.y); if(d>140){n.x=tx;n.y=ty;} if(d<6){ n.moving=false; return; } }
+  if(n.leader){ tx=n.leader.x+n.ox; ty=n.leader.y+n.oy; sp=n.leader.sp*1.4; const d=Math.hypot(tx-n.x,ty-n.y); if(d>140&&!blocked(tx,ty,4)){n.x=tx;n.y=ty;} if(d<6){ n.moving=false; return; } }
   else{
     if(n.wait>0){ n.wait-=dt; n.moving=false; return; }
     tx=n.tx; ty=n.ty; sp=n.sp;
@@ -125,7 +131,7 @@ const cleanName = (v: unknown): string => cleanText(v,NAME_MAX);
 /** Waits (briefly) for the Myanmar and Latin fonts so the 3D signs are drawn with them. */
 async function loadFonts(): Promise<void> {
   if(!document.fonts) return;
-  const want=['400 30px "Pyidaungsu"','700 30px "Pyidaungsu"','700 30px "Padauk"','400 14px "Brandon Text"','700 14px "Brandon Text"','400 20px "Bungee"'].map(f=>document.fonts.load(f,'ရေကျော် Aa').catch(()=>[]));
+  const want=['400 30px "KhitHaung"','500 30px "KhitHaung"','600 30px "KhitHaung"','700 30px "KhitHaung"','400 30px "Pyidaungsu"','700 30px "Padauk"','400 14px "Brandon Text"','700 14px "Brandon Text"','400 20px "Bungee"'].map(f=>document.fonts.load(f,'ရေကျော် Aa').catch(()=>[]));
   await Promise.race([Promise.all(want),new Promise(r=>setTimeout(r,2500))]);
 }
 
@@ -320,26 +326,53 @@ $('chatForm').addEventListener('submit',e=>{ e.preventDefault(); const i=$<HTMLI
 $('chatIn').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Escape'){ e.preventDefault(); closeChat(); } });
 
 // people at the fair chat too (shown as bubbles near you)
-const NPC_LINES: Array<[string, string]> = [
-  ['ဒါ ဘယ်လောက်လဲ','How much is this?'], ['စားလို့ကောင်းတယ်','Delicious!'], ['ချားရဟတ် စီးချင်တယ်','I want to ride the wheel'],
-  ['မီးပန်း ဘယ်အချိန်လဲ','When are the fireworks?'], ['ဟိုမှာ ကြည့်','Look over there!'], ['အမေ၊ ပူဖောင်း ဝယ်ပေး','Mum, buy me a balloon'],
-  ['လာ၊ သွားကြရအောင်','Come on, let’s go'], ['ညကြီး လှလိုက်တာ','What a lovely night'], ['ကြံရည် သောက်မယ်','I’ll get sugarcane juice'],
-];
+const NPC_LINES = CROWD_LINES;
 const NPC_SAY: Array<{ n: Npc; t: [string, string]; until: number }> = [];
-let npcSayT=3;
+let npcSayT=3, murmurT=2, callT=4;
+/** Says a line out loud from where that person stands: louder up close, muffled and panned with distance. */
+function voiceFrom(n: { x: number; y: number }, clip: string, loud=1): void {
+  if(!S.settings.sound) return;
+  const d=Math.hypot(n.x-P.x,n.y-P.y), vol=loud*Math.pow(clamp(1-d/900,0,1),1.4);
+  const q=project(n.x,n.y,1.6,VW,VH), pan=q.ok?clamp((q.sx/VW)*2-1,-1,1)*.7:clamp((n.x-P.x)/400,-1,1)*.5;
+  speak(clip,vol,pan,clamp(d/700,0,1));
+}
+const voiceOf=(n: Npc)=>NPC.indexOf(n)%2?'f':'m';
 function updateNpcSay(dt: number): void {
   npcSayT-=dt; for(let i=NPC_SAY.length-1;i>=0;i--) if(NPC_SAY[i].until<T) NPC_SAY.splice(i,1);
   if(npcSayT>0||S.mode!=='walk') return; npcSayT=rand(3,7);
   const near=NPC.filter(n=>!n.leader&&n.s>=1&&Math.hypot(n.x-P.x,n.y-P.y)<260&&!NPC_SAY.some(s=>s.n===n));
   if(!near.length||NPC_SAY.length>=2) return;
-  NPC_SAY.push({n:pick(near),t:pick(NPC_LINES),until:T+4.5});
+  const n=pick(near), i=Math.floor(Math.random()*NPC_LINES.length);
+  NPC_SAY.push({n,t:NPC_LINES[i],until:T+4.5}); voiceFrom(n,`say${i}${voiceOf(n)}`,1);
+}
+/** Background talk: people further off saying things you half catch, and snack sellers calling out. */
+function updateCrowdTalk(dt: number): void {
+  if(S.mode!=='walk'&&!(S.mode==='scene'&&SC.kind==='wishes')) return;
+  murmurT-=dt;
+  if(murmurT<=0){
+    const pool=NPC.filter(n=>!n.post&&Math.hypot(n.x-P.x,n.y-P.y)<750);
+    murmurT=rand(.7,2.2)*(pool.length>25?1:1.8);
+    if(pool.length){ const n=pick(pool), i=Math.floor(Math.random()*NPC_LINES.length); voiceFrom(n,`say${i}${voiceOf(n)}`,.45); }
+  }
+  callT-=dt;
+  if(callT<=0){
+    callT=rand(5,10);
+    const carts=CARTS.map((c,i)=>({i,n:NPC[i],d:Math.hypot(c[0]-P.x,c[1]-P.y)})).filter(c=>c.n&&c.d<520);
+    if(carts.length){ const c=pick(carts), k=Math.random()<.25?VENDOR_CALLS.length-1:c.i;
+      voiceFrom(c.n,`call${k}`,1.1);
+      if(!NPC_SAY.some(q=>q.n===c.n)&&c.d<360) NPC_SAY.push({n:c.n,t:VENDOR_CALLS[k],until:T+3.5}); }
+  }
 }
 
 // ---------- name tags and bubbles over the 3D view ----------
 const tagPool: HTMLElement[] = []; let tagUsed=0;
 function tagEl(cls: string, html: string): HTMLElement {
   let d=tagPool[tagUsed]; if(!d){ d=document.createElement('div'); $('tags').appendChild(d); tagPool.push(d); }
-  tagUsed++; if(d.className!==cls) d.className=cls; if(d.dataset.h!==html){ d.innerHTML=html; d.dataset.h=html; } d.hidden=false; return d;
+  tagUsed++; if(d.className!==cls) d.className=cls;
+  const fresh=d.hidden||d.dataset.h!==html;
+  if(d.dataset.h!==html){ d.innerHTML=html; d.dataset.h=html; } d.hidden=false;
+  if(fresh&&!RM&&cls.startsWith('bub')) d.animate([{opacity:0,scale:'.4'},{opacity:1,scale:'1'}],{duration:260,easing:'cubic-bezier(.2,1.5,.4,1)'});
+  return d;
 }
 function placeTag(x: number, y: number, h: number, cls: string, html: string, maxD = 55): void {
   const p=project(x,y,h,VW,VH); if(!p.ok||p.d>maxD) return;
@@ -347,9 +380,72 @@ function placeTag(x: number, y: number, h: number, cls: string, html: string, ma
   d.style.transform=`translate(${p.sx-d.offsetWidth/2}px,${p.sy-d.offsetHeight}px) scale(${s.toFixed(3)})`;
   d.style.opacity=String(clamp(1.3-p.d/maxD,0,1));
 }
+// ---------- Thadingyut wishes ----------
+let wishStore: Awaited<ReturnType<typeof openWishes>> | null = null;
+let WISHES: Wish[] = [];
+const wishBorn = new Map<string, number>();
+function refreshWishes(): void { setWishes(WISHES.map(w=>({id:w.id,k:w.k,born:wishBorn.get(w.id) ?? -1}))); }
+async function initWishes(): Promise<void> {
+  wishStore=await openWishes((all,fresh)=>{
+    WISHES=all;
+    for(const w of fresh) if(!wishBorn.has(w.id)){ wishBorn.set(w.id,T); if(!w.mine&&S.mode==='walk') chatLine('',`A new wish ${w.k==='sky'?'rises into the sky':'floats on the pond'}: “${w.t}”`,true); }
+    refreshWishes();
+  });
+}
+function openWish(kind: WishKind): void {
+  if(S.mode!=='walk') return;
+  let k=kind;
+  const wrap=document.createElement('div'); wrap.className='wish';
+  wrap.innerHTML=`<p class="muted">On Thadingyut night people send their wishes up on paper fire balloons and float candles on the water. Write yours in Myanmar or English. It will glow here for everyone, forever.</p>
+  <div class="seg" role="radiogroup"><button data-k="sky" role="radio">🎈 Fire balloon <span class="mm">မီးပုံးပျံ</span><small>${ks(WISH_PRICE.sky)}</small></button><button data-k="water" role="radio">🪷 Water lantern <span class="mm">ရေမီးပုံး</span><small>${ks(WISH_PRICE.water)}</small></button></div>
+  <textarea id="wishIn" class="mm" maxlength="${WISH_MAX_LEN}" rows="2" placeholder="ဆုတောင်းလေး ရေးပါ… / Write your wish…"></textarea>
+  <div class="ideas">${WISH_IDEAS.map(t=>`<button class="mm" type="button">${esc(t)}</button>`).join('')}</div>
+  <div class="row"><small class="muted" id="wishLeft"></small><button class="cta" id="wishGo"></button></div>
+  <h3>Wishes glowing tonight <button type="button" id="wishSee">See them all</button></h3><div class="wlist"></div>`;
+  const ta=wrap.querySelector<HTMLTextAreaElement>('#wishIn'), go=wrap.querySelector<HTMLButtonElement>('#wishGo');
+  const sync=()=>{ wrap.querySelectorAll<HTMLButtonElement>('.seg button').forEach(b=>{ const on=b.dataset.k===k; b.classList.toggle('on',on); b.setAttribute('aria-checked',String(on)); });
+    go.textContent=`${k==='sky'?'Send it up':'Float it'} · ${ks(WISH_PRICE[k])}`; go.disabled=!cleanWish(ta.value);
+    wrap.querySelector('#wishLeft').textContent=`${WISH_MAX_LEN-ta.value.length} letters left · you have ${ks(S.kyat)}`; };
+  wrap.querySelectorAll<HTMLButtonElement>('.seg button').forEach(b=>b.onclick=()=>{ k=b.dataset.k as WishKind; sync(); });
+  wrap.querySelectorAll<HTMLButtonElement>('.ideas button').forEach(b=>b.onclick=()=>{ ta.value=b.textContent; sync(); ta.focus(); });
+  ta.oninput=sync; ta.addEventListener('keydown',e=>e.stopPropagation());
+  wrap.querySelector<HTMLButtonElement>('#wishSee').onclick=()=>{ closeModal(); startScene('wishes'); };
+  const list=wrap.querySelector('.wlist');
+  list.innerHTML=[...WISHES].reverse().slice(0,24).map(w=>`<div class="w ${w.k}"><span>${w.k==='sky'?'🎈':'🪷'}</span><div><span class="mm">${esc(w.t)}</span><small>${esc(w.n||'Someone')}${w.mine?' · you':''}</small></div></div>`).join('');
+  go.onclick=async()=>{
+    const t=cleanWish(ta.value); if(!t||!wishStore) return;
+    if(!pay(WISH_PRICE[k])) return;
+    go.disabled=true;
+    const res=await wishStore.add({k,t,n:S.settings.name||'Visitor'});
+    if(res==='full'||res==='failed'){ S.kyat+=WISH_PRICE[k]; updateHUD(); toast(res==='full'?'You have sent lots of wishes already. They will keep shining, so try again a little later.':'That wish could not be saved just now. Your kyat is back.'); go.disabled=false; return; }
+    if(!wishBorn.has(res.id)) wishBorn.set(res.id,T);
+    refreshWishes(); closeModal(); sfx('ding');
+    toast(k==='sky'?`<span class="z">ဆုတောင်းပြည့်ပါစေ</span>Your fire balloon is rising over the fair.`:`<span class="z">ဆုတောင်းပြည့်ပါစေ</span>Your lantern is drifting out across the pond.`,true);
+    if(!wishStore.shared) chatLine('','Your wish is saved in this browser. Open the game on claude.ai to share wishes with everyone.',true);
+  };
+  sync();
+  openModal('Thadingyut wishes · ဆုတောင်း',wrap);
+}
+function wishTags(all=false): void {
+  const near: Array<[number, Wish, [number, number, number]]>=[];
+  for(const w of WISHES){ const p=wishSpot(w.id); if(!p) continue;
+    const d=Math.hypot((p[0]-P.x)*.05,(p[1]-P.y)*.05,p[2]);
+    const age=T-(wishBorn.get(w.id) ?? -99);
+    if(age<14&&w.mine) near.push([-1,w,p]); else if(all||d<(w.k==='sky'?46:20)) near.push([all?(w.k==='sky'?0:100)+Math.hypot((p[0]-POND.x)*.05,(p[1]-POND.y)*.05):d,w,p]); }
+  near.sort((a,b)=>a[0]-b[0]);
+  const used: Array<[number, number]>=[]; let n=0;
+  for(const [,w,p] of near){
+    if(n>=(all?12:5)) break;
+    const h=p[2]+(w.k==='sky'?2.7:0.9), q=project(p[0],p[1],h,VW,VH); if(!q.ok) continue;
+    if(used.some(([x,y])=>Math.abs(x-q.sx)<170&&Math.abs(y-q.sy)<46)) continue; // keep labels from piling up
+    used.push([q.sx,q.sy]); n++;
+    placeTag(p[0],p[1],h,'bub wish '+w.k,`<span class="mm">${esc(w.t)}</span><small>${esc(w.n||'Someone')}</small>`,all?90:w.k==='sky'?70:30);
+  }
+}
 function updateTags(): void {
   tagUsed=0;
-  if(S.mode==='walk'&&!S.photo||S.mode==='scene'&&S.photo===false&&SC.kind==='finale'||S.mode==='walk'&&S.photo){
+  if(S.mode==='scene'&&SC.kind==='wishes'&&!S.photo) wishTags(true);
+  else if(S.mode==='walk'&&!S.photo||S.mode==='scene'&&S.photo===false&&SC.kind==='finale'||S.mode==='walk'&&S.photo){
     const meVis=S.mode==='walk'&&!P.hidden;
     if(meVis&&mySay.until>T) placeTag(P.x,P.y,2.55,'bub',`<span class="mm">${esc(mySay.t)}</span>`);
     else if(meVis&&S.settings.name) placeTag(P.x,P.y,2.25,'tag me',esc(S.settings.name));
@@ -358,6 +454,7 @@ function updateTags(): void {
       if(r.sayUntil>T) placeTag(r.x,r.y,2.55,'bub',`<span class="mm">${esc(r.say)}</span><small>${esc(r.name||'Player')}</small>`,80);
       else placeTag(r.x,r.y,2.25,'tag',esc(r.name||'Player'),80);
     }
+    wishTags();
     if(S.mode==='walk') for(const s of NPC_SAY) placeTag(s.n.x,s.n.y,2.3*s.n.s,'bub npc',`<span class="mm">${s.t[0]}</span><small>${s.t[1]}</small>`,35);
   }
   for(let i=tagUsed;i<tagPool.length;i++) if(!tagPool[i].hidden) tagPool[i].hidden=true;
@@ -367,16 +464,31 @@ function updateTags(): void {
 function toast(msg: string, big?: boolean): void {
   const d=document.createElement('div'); d.className='toast'+(big?' big':''); d.innerHTML=msg; $('toasts').appendChild(d);
   while($('toasts').children.length>3) $('toasts').firstChild.remove();
-  setTimeout(()=>d.remove(),big?4200:3000);
+  setTimeout(()=>{ d.classList.add('out'); setTimeout(()=>d.remove(),RM?0:320); },big?4200:3000);
+}
+/** Cuts to black and fades back in, for jumps the camera can't glide across (stepping up to a game booth). */
+function fadeFrom(): void {
+  if(RM) return; const f=$('fade'); f.style.transition='none'; f.style.opacity='1';
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{ f.style.transition='opacity .5s ease-out'; f.style.opacity='0'; }));
+}
+function pop(e: HTMLElement, big=1.3): void { if(!RM) e.animate([{scale:String(big)},{scale:'1'}],{duration:380,easing:'cubic-bezier(.2,1.4,.4,1)'}); }
+function floatText(from: HTMLElement, txt: string, cls: string): void {
+  if(RM) return; const r=from.getBoundingClientRect(), d=document.createElement('div'); d.className='floatx '+cls; d.textContent=txt;
+  d.style.left=r.left+r.width/2+'px'; d.style.top=r.top+r.height+'px'; document.body.appendChild(d);
+  d.animate([{opacity:0,translate:'-50% 0'},{opacity:1,translate:'-50% 10px',offset:.2},{opacity:0,translate:'-50% 44px'}],{duration:1100,easing:'ease-out'}).onfinish=()=>d.remove();
 }
 function fmtClock(m: number): string { m=Math.floor(m); let h=Math.floor(m/60)%24; const mm=m%60; const ap=h>=12?'PM':'AM'; h=h%12||12; return h+':'+String(mm).padStart(2,'0')+' '+ap; }
 function journey(): Record<string, boolean> {
   return {arrive:true,discover:S.zones.length>=4,play:S.rides>0&&S.games>0,finale:S.finaleSeen};
 }
 let hudCache='';
+let hudK=-1, hudT=-1;
 function updateHUD(): void {
   $('kyat').textContent=S.kyat.toLocaleString('en-US');
   $('tix').textContent=String(S.tix);
+  if(hudK>=0&&S.kyat!==hudK){ pop($('kyat')); floatText($('kyat'),(S.kyat>hudK?'+':'−')+Math.abs(S.kyat-hudK).toLocaleString('en-US')+' Ks',S.kyat>hudK?'up':'down'); }
+  if(hudT>=0&&S.tix>hudT){ pop($('tix'),1.5); floatText($('tix'),'+'+(S.tix-hudT)+' 🎟','up'); }
+  hudK=S.kyat; hudT=S.tix;
   $('clock').textContent=fmtClock(S.clock);
   const j=journey(); let nowSet=false;
   document.querySelectorAll<HTMLElement>('#journey li').forEach(li=>{ const k=li.dataset.s; li.classList.toggle('done',j[k]); const now=!j[k]&&!nowSet; li.classList.toggle('now',now); if(now) nowSet=true; });
@@ -516,7 +628,7 @@ function openBag(): void {
   render(); wrap.appendChild(tabs); wrap.appendChild(body);
   openModal('Your bag',wrap);
 }
-function setCam(c: 'close' | 'wide'): void { S.settings.cam=c; saveSettings(); CAM.dist=c==='wide'?24:11; }
+function setCam(c: 'close' | 'wide'): void { S.settings.cam=c; saveSettings(); CAM.zoom=c==='wide'?24:11; }
 function openSettings(): void {
   const wrap=document.createElement('div');
   const opt=(label: string, key: keyof Settings, vals: Array<[unknown,string]>, fn?: (v: any)=>void)=>{ const r=document.createElement('div'); r.className='opt'; r.innerHTML=`<span>${label}</span>`; const sg=document.createElement('div'); sg.className='seg';
@@ -548,7 +660,7 @@ function updFireworks(dt: number): void {
 }
 
 // ---------- rides & the finale ----------
-type SceneKind = 'ferris' | 'carousel' | 'pirate' | 'finale';
+type SceneKind = 'ferris' | 'carousel' | 'pirate' | 'finale' | 'wishes';
 const SC: { kind: SceneKind | null; t: number; dur: number; replay?: boolean; topSaid?: boolean; wh?: boolean } = {kind:null,t:0,dur:0};
 const RIDECAP: Record<string, string> = {
   ferris:'Rising over the fair. Look for the Shwedagon Pagoda glowing gold beyond the lake.',
@@ -558,13 +670,14 @@ const RIDECAP: Record<string, string> = {
 function buyRide(kind: SceneKind, price: number): void { if(!pay(price)) return; S.rides++; startScene(kind); updateHUD(); }
 function startScene(kind: SceneKind): void {
   closeChat();
-  SC.kind=kind; SC.t=0; SC.dur={ferris:28,carousel:16,pirate:16,finale:9999}[kind]; SC.replay=false; SC.topSaid=false;
+  SC.kind=kind; SC.t=0; SC.dur={ferris:28,carousel:16,pirate:16,finale:9999,wishes:9999}[kind]; SC.replay=false; SC.topSaid=false;
   S.mode='scene'; $('prompt').hidden=true;
   if(kind==='finale'){
     if(S.showDone){ SC.replay=true; setBar('An encore just for you. Fireworks bloom over the city.'); }
     else if(S.showStarted) setBar('The fireworks finale has begun!');
     else setBar(`The skyline at ${fmtClock(S.clock)}. Fireworks begin at 9:30 PM.`,'Wait for the fireworks',()=>{ S.clock=Math.max(S.clock,21*60+29.5); $('sceneAlt').hidden=true; $('sceneCap').textContent='Settling in. The first rocket is about to go up…'; });
-  } else setBar(RIDECAP[kind]);
+  } else if(kind==='wishes'){ CAM.yaw=0; setBar(`Every light is somebody's wish: ${WISHES.filter(w=>w.k==='sky').length} fire balloons and ${WISHES.filter(w=>w.k==='water').length} water lanterns. Drag to look around.`,'Make a wish',()=>{ endScene(); openWish('sky'); }); }
+  else setBar(RIDECAP[kind]);
   syncChrome();
 }
 function setBar(cap: string, alt?: string, altFn?: () => void, exit?: string): void {
@@ -581,6 +694,7 @@ function updateScene(dt: number, atTop: boolean): void {
   SC.t+=dt;
   if(SC.kind==='ferris'&&atTop&&!SC.topSaid){ SC.topSaid=true; $('sceneCap').textContent='Top of the wheel! The whole of Yangon sparkles below you.'; sfx('ding'); }
   if(SC.kind==='pirate'){ const c=Math.abs(Math.cos(T*1.15)); if(c<.06&&!SC.wh){ sfx('whee'); SC.wh=true; } if(c>.3) SC.wh=false; }
+  if(SC.kind==='wishes'&&drag.id==null) CAM.yaw+=dt*.06;
   if(SC.dur<9999&&SC.t>=SC.dur) endScene();
 }
 
@@ -603,11 +717,11 @@ function startGame(kind: MiniGame['kind']): void {
   Object.assign(MG,{kind,t:0,won:0,done:false,fx:[]});
   if(kind==='ring'){ MG.left=5; MG.phase='aim'; MG.rings=[]; MG.bottles=[]; MG.flight=null; }
   if(kind==='darts'){ MG.left=6; MG.balloons=[]; MG.darts=[]; MG.aim={x:VW/2,y:VH*.42}; for(let r=0;r<4;r++) for(let c=0;c<7;c++) MG.balloons.push({r,c,col:BALLOONS[(r*3+c)%5],gold:(r===1&&c===5)||(r===3&&c===1),pop:false,ph:rand(0,9)}); }
-  S.mode='mg'; $('prompt').hidden=true;
+  S.mode='mg'; $('prompt').hidden=true; fadeFrom();
   setBar(kind==='ring'?'Stop the sweeping marker to aim, then stop the power bar. Gold bottle pays 8 tickets.':'Aim the wobbling crosshair and throw. Gold balloons pay 6 tickets.');
   syncChrome(); updateHUD();
 }
-function endGame(): void { S.mode='walk'; $('sceneBar').hidden=true; if(MG.won) toast(`You won <b>${MG.won} tickets</b>. Spend them at the prize counter.`); syncChrome(); updateHUD(); }
+function endGame(): void { fadeFrom(); S.mode='walk'; $('sceneBar').hidden=true; if(MG.won) toast(`You won <b>${MG.won} tickets</b>. Spend them at the prize counter.`); syncChrome(); updateHUD(); }
 function ringLayout(): Bottle[] {
   const m=Math.min(VW,VH), cx=VW/2, top=VH*.3, B: Bottle[]=[];
   for(let r=0;r<3;r++){ const sc=(.75+r*.18)*m/700; for(let c=0;c<4;c++) B.push({r,c,x:cx+(c-1.5)*95*sc,y:top+r*70*m/700,sc,gold:r===0&&c===2}); }
@@ -709,6 +823,7 @@ window.addEventListener('keydown',e=>{
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
   if(e.repeat) return;
   if(!$('modal').hidden){ if(e.code==='Escape') closeModal(); return; }
+  if(bigMap){ if(e.code==='Escape'||e.code==='KeyM') closeMap(); return; }
   if(e.code==='Escape'){ if(chatOpen) closeChat(); else if(S.photo) exitPhotoMode(); else if(S.mode==='scene') endScene(); else if(S.mode==='mg') endGame(); return; }
   if((e.code==='KeyT'||e.code==='Enter')&&S.mode!=='mg'){ e.preventDefault(); openChat(); return; }
   if(e.code==='KeyE'||e.code==='Space'||e.code==='Enter'){ if(document.activeElement&&document.activeElement.tagName==='BUTTON'&&e.code!=='KeyE') return; press(); }
@@ -716,7 +831,7 @@ window.addEventListener('keydown',e=>{
   if(e.code==='KeyC') setCam(S.settings.cam==='close'?'wide':'close');
   if(e.code==='KeyB'&&S.mode==='walk') openBag();
   if(e.code==='KeyQ'&&S.mode==='walk') wave();
-  if(e.code==='KeyM'){ S.settings.mini=!S.settings.mini; saveSettings(); syncChrome(); }
+  if(e.code==='KeyM'){ if(bigMap) closeMap(); else openMap(); }
 });
 window.addEventListener('keyup',e=>{ keys[e.code]=false; });
 window.addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
@@ -742,14 +857,14 @@ world.addEventListener('pointerdown',e=>{
 });
 world.addEventListener('pointermove',e=>{
   if(pinch.has(e.pointerId)) pinch.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(pinch.size===2){ const [a,b]=[...pinch.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); if(pinchD) CAM.dist=clamp(CAM.dist*pinchD/d,5,40); pinchD=d; return; }
+  if(pinch.size===2){ const [a,b]=[...pinch.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); if(pinchD) CAM.zoom=clamp(CAM.zoom*pinchD/d,5,40); pinchD=d; return; }
   if(e.pointerId!==drag.id) return;
   const dx=e.clientX-drag.x, dy=e.clientY-drag.y; drag.x=e.clientX; drag.y=e.clientY; drag.moved+=Math.abs(dx)+Math.abs(dy);
   CAM.yaw-=dx*.006; CAM.pitch=clamp(CAM.pitch+dy*.004,.08,1.25);
 });
 const endDrag=(e: PointerEvent)=>{ pinch.delete(e.pointerId); pinchD=0; if(e.pointerId===drag.id){ drag.id=null; world.classList.remove('drag'); } };
 world.addEventListener('pointerup',endDrag); world.addEventListener('pointercancel',endDrag);
-world.addEventListener('wheel',e=>{ e.preventDefault(); CAM.dist=clamp(CAM.dist*Math.exp(e.deltaY*.0012),5,40); },{passive:false});
+world.addEventListener('wheel',e=>{ e.preventDefault(); CAM.zoom=clamp(CAM.zoom*Math.exp(e.deltaY*.0012),5,40); },{passive:false});
 $('prompt').addEventListener('click',press);
 $('act').addEventListener('pointerdown',e=>{ e.preventDefault(); press(); });
 const joy: { x: number; y: number; id: number | null } = {x:0,y:0,id:null};
@@ -808,7 +923,8 @@ function maybeSummary(): void {
 
 // ---------- movement ----------
 function movePlayer(dt: number): void {
-  if(S.mode!=='walk'||S.paused) { P.moving=false; return; }
+  if(S.mode!=='walk'||S.paused||TR.riding) { P.moving=false; P.vx=P.vy=P.spd=0; }
+  if(S.mode!=='walk'||S.paused) return;
   if(TR.riding){
     TR.rideU+=dt*.55; const [x,y]=trackPos(TR.u-.32); P.x=x; P.y=y;
     if(TR.rideU>=TAU){ TR.riding=false; P.hidden=false; P.x=TRK.cx; P.y=TRK.cy+TRK.ry+90; toast('Toot toot! Thanks for riding the mini train.'); }
@@ -818,14 +934,23 @@ function movePlayer(dt: number): void {
   if(!chatOpen){ if(keys.ArrowLeft||keys.KeyA) ix--; if(keys.ArrowRight||keys.KeyD) ix++; if(keys.ArrowUp||keys.KeyW) iy--; if(keys.ArrowDown||keys.KeyS) iy++; }
   if(joy.id!=null){ ix=joy.x; iy=joy.y; }
   const mag=Math.hypot(ix,iy);
+  let tvx=0, tvy=0;
   if(mag>.15){
     // camera-relative: up on the stick walks away from the camera
     const fx=-Math.sin(CAM.yaw), fz=-Math.cos(CAM.yaw), rx=Math.cos(CAM.yaw), rz=-Math.sin(CAM.yaw);
     const dx=rx*ix-fx*iy, dy=rz*ix-fz*iy;
     const sp=(keys.ShiftLeft||keys.ShiftRight||mag>.95&&joy.id!=null?210:135)*Math.min(1,mag)/mag;
-    const nx=P.x+dx*sp*dt, ny=P.y+dy*sp*dt; if(!blocked(nx,P.y,6)) P.x=nx; if(!blocked(P.x,ny,6)) P.y=ny;
-    P.moving=true; turnTo(P,dx,dy,dt*1.4);
-  } else P.moving=false;
+    tvx=dx*sp; tvy=dy*sp;
+  }
+  // ease into and out of a walk rather than starting and stopping dead
+  const k=1-Math.exp(-dt*(mag>.15?9:12));
+  P.vx+=(tvx-P.vx)*k; P.vy+=(tvy-P.vy)*k;
+  const v=Math.hypot(P.vx,P.vy); if(v<2){ P.vx=P.vy=0; }
+  const nx=P.x+P.vx*dt, ny=P.y+P.vy*dt;
+  if(!blocked(nx,P.y,6)) P.x=nx; else P.vx=0;
+  if(!blocked(P.x,ny,6)) P.y=ny; else P.vy=0;
+  P.spd=Math.hypot(P.vx,P.vy)/135; P.moving=P.spd>.08;
+  if(P.moving) turnTo(P,P.vx,P.vy,dt*1.4);
 }
 
 // ---------- main loop ----------
@@ -841,7 +966,7 @@ function frameData(dt: number): Frame {
   const cam=title?{yaw:T*.05,pitch:.38,dist:46}:CAM;
   return {
     t:T, dt, night:clamp((S.clock-(18*60+30))/60,0,1), quality:S.settings.gfx,
-    me:{x:title?900:P.x,y:title?2000:P.y,hd:P.hd,moving:P.moving,wave:T<P.waveUntil,look:myLook(),balloon:S.balloon,hidden:P.hidden||title},
+    me:{x:title?900:P.x,y:title?2000:P.y,hd:P.hd,moving:P.moving,spd:P.spd,wave:T<P.waveUntil,look:myLook(),balloon:S.balloon,hidden:P.hidden||title},
     crowd:crowdBuf, bikes:BIKES, others, ride, rideT:SC.t, trainU:TR.u, cam,
     sparkle:SECRETS.map(s=>S.secrets.includes(s.id)?0:clamp(1-Math.hypot(P.x-s.x,P.y-s.y)/320,0,1)),
     steamFrom:CARTS,
@@ -857,11 +982,12 @@ function frame(now: number): void {
   }
   updFireworks(dt);
   movePlayer(dt);
+  CAM.dist+=(CAM.zoom-CAM.dist)*(1-Math.exp(-dt*8));
   TR.u+=dt*.55;
   for(const n of NPC) updateNPC(n,dt);
   updateBikes(dt);
   for(const r of REMOTE.values()){ const k=Math.min(1,dt*8); r.moving=Math.hypot(r.tx-r.x,r.ty-r.y)>1.5; r.x=lerp(r.x,r.tx,k); r.y=lerp(r.y,r.ty,k); }
-  updateNpcSay(dt);
+  updateNpcSay(dt); updateCrowdTalk(dt);
   if(S.mode==='mg') drawMG(dt);
   else if(ready){ const res=renderNow(dt); if(S.mode==='scene') updateScene(dt,res.atTop); }
   updateTags();
@@ -873,23 +999,88 @@ function frame(now: number): void {
   if((T*10|0)%3===0) $('clock').textContent=fmtClock(S.clock);
   requestAnimationFrame(frame);
 }
-function drawMini(): void {
-  const w=mini.width, h=mini.height, s=w/WW;
-  mx.clearRect(0,0,w,h); mx.fillStyle='#1a1430'; mx.fillRect(0,0,w,h);
-  mx.fillStyle='#0f1838'; mx.fillRect(0,0,w,NORTH*s);
-  mx.fillStyle='#3a3350'; mx.fillRect(ROAD.x*s,NORTH*s,ROAD.w*s,h);
-  ZONES.forEach(z=>{ const has=S.zones.includes(z.id); mx.fillStyle=has?'rgba(244,182,63,.35)':'rgba(255,255,255,.08)'; rr(mx,z.x*s,z.y*s,z.w*s,z.h*s,6); mx.fill();
-    mx.fillStyle=has?'#ffe7a3':'rgba(255,255,255,.4)'; mx.font='700 18px '+BODY; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText(String(z.n),(z.x+z.w/2)*s,(z.y+z.h/2)*s); });
-  mx.fillStyle='#3fc7a5'; for(const r of REMOTE.values()){ mx.beginPath(); mx.arc(r.x*s,r.y*s,5,0,TAU); mx.fill(); }
-  // which way the camera looks
-  const px=P.x*s, py=P.y*s, fx=-Math.sin(CAM.yaw), fz=-Math.cos(CAM.yaw);
-  mx.fillStyle='rgba(255,231,163,.25)'; mx.beginPath(); mx.moveTo(px,py); mx.arc(px,py,26,Math.atan2(fz,fx)-.5,Math.atan2(fz,fx)+.5); mx.closePath(); mx.fill();
-  mx.fillStyle='#ff5a4e'; mx.beginPath(); mx.arc(px,py,6,0,TAU); mx.fill(); mx.strokeStyle='#fff'; mx.lineWidth=2; mx.stroke();
+// ---------- maps: a close-up mini map that follows you, and a full map of the fair (tap the mini map or press M) ----------
+const MAP_MARKS: Array<{ x: number; y: number; icon: string; en: string; my: string; small?: boolean; tiny?: boolean }> = [
+  {x:FW.cx,y:FW.cy+150,icon:'🎡',en:'Ferris wheel',my:'ချားရဟတ်'}, {x:CR.cx,y:CR.cy,icon:'🎠',en:'Carousel',my:'မြင်းစီးချားရဟတ်'},
+  {x:PS.px,y:PS.py,icon:'⛵',en:'Pirate ship',my:'သင်္ဘောလွှဲ'}, {x:TRK.cx,y:TRK.cy,icon:'🚂',en:'Mini train',my:'ရထားလေး'},
+  {x:ST.x,y:ST.y,icon:'🎤',en:'Stage',my:'ဇာတ်စင်'}, {x:FV.x,y:FV.y,icon:'🎆',en:'Finale View',my:'မီးပန်းကြည့်ရာ'},
+  {x:PHOTO.x,y:PHOTO.y,icon:'📸',en:'Photo booth',my:'ဓာတ်ပုံ',small:true}, {x:TOYS_AT.x,y:TOYS_AT.y,icon:'🧸',en:'Toys',my:'အရုပ်',small:true},
+  {x:WISH_STALL.x,y:WISH_STALL.y,icon:'🏮',en:'Wish stall',my:'ဆုတောင်း'}, {x:POND.x,y:POND.y,icon:'🪷',en:'Wishing pond',my:'ကန်'},
+  {x:UNCLE.x,y:UNCLE.y,icon:'👴',en:'Uncle',my:'ဦးလေး',small:true,tiny:true},
+  ...BOOTHS.map(b=>({x:b.x,y:b.y,icon:b.kind==='prize'?'🎁':'🎯',en:b.kind==='ring'?'Ring toss':b.kind==='darts'?'Darts':'Prizes',my:b.my,small:true})),
+  ...CARTS.map(([x,y],i)=>({x,y,icon:'🍜',en:SNACKS[i].name,my:SNACKS[i].my,small:true,tiny:true})),
+];
+interface MapView { cx: number; cy: number; s: number; w: number; h: number; big: boolean }
+function drawMap(g: CanvasRenderingContext2D, v: MapView): void {
+  const { w, h, s, big } = v, X=(x: number)=>w/2+(x-v.cx)*s, Y=(y: number)=>h/2+(y-v.cy)*s, k=big?1:1.25;
+  g.clearRect(0,0,w,h); g.fillStyle='#1b1533'; g.fillRect(0,0,w,h);
+  // the lake and city to the north
+  g.fillStyle='#0e1a44'; g.fillRect(0,0,w,Math.max(0,Y(NORTH)));
+  g.fillStyle='rgba(244,182,63,.35)'; for(let x=-200;x<WW+200;x+=90) g.fillRect(X(x),Y(NORTH-140-(x*7%60)),8*s*5,(60+x*13%90)*s);
+  g.fillStyle='#3a3060'; g.fillRect(X(40),Y(NORTH),(WW-80)*s,(WH-NORTH-14)*s);
+  // zones
+  for(const z of ZONES){ const has=S.zones.includes(z.id);
+    g.fillStyle=z.g; rr(g,X(z.x),Y(z.y),z.w*s,z.h*s,10*k); g.fill();
+    g.strokeStyle=has?'rgba(244,182,63,.85)':'rgba(255,255,255,.12)'; g.lineWidth=has?2*k:1; g.stroke(); }
+  // main street
+  g.fillStyle='#4a4166'; g.fillRect(X(ROAD.x),Y(NORTH),ROAD.w*s,(WH-NORTH)*s);
+  g.strokeStyle='rgba(244,214,138,.55)'; g.setLineDash([10*k,10*k]); g.lineWidth=2*k; g.beginPath(); g.moveTo(X(ROAD.x+ROAD.w/2),Y(NORTH)); g.lineTo(X(ROAD.x+ROAD.w/2),Y(WH)); g.stroke(); g.setLineDash([]);
+  // train track, pond, gate
+  g.strokeStyle='#8a7a64'; g.lineWidth=3*k; g.beginPath(); g.ellipse(X(TRK.cx),Y(TRK.cy),TRK.rx*s,TRK.ry*s,0,0,TAU); g.stroke();
+  const pg=g.createRadialGradient(X(POND.x),Y(POND.y),0,X(POND.x),Y(POND.y),POND.rx*s);
+  pg.addColorStop(0,'#3b6fd0'); pg.addColorStop(1,'#152a6a'); g.fillStyle=pg;
+  g.beginPath(); g.ellipse(X(POND.x),Y(POND.y),POND.rx*s,POND.ry*s,0,0,TAU); g.fill(); g.strokeStyle='#b8a888'; g.lineWidth=2*k; g.stroke();
+  g.fillStyle='#ffb347'; for(const w of WISHES) if(w.k==='water'){ const p=wishSpot(w.id); if(p){ g.beginPath(); g.arc(X(p[0]),Y(p[1]),1.6*k,0,TAU); g.fill(); } }
+  g.fillStyle='#7a1f2b'; g.fillRect(X(900-150),Y(ARCH_Y)-4*k,300*s,8*k); g.fillStyle='#f4b63f'; g.fillRect(X(900-150),Y(ARCH_Y)-1*k,300*s,2*k);
+  // landmarks
+  g.textAlign='center'; g.textBaseline='middle';
+  for(const m of MAP_MARKS){ if(!big&&m.small&&s<.2) continue;
+    const x=X(m.x), y=Y(m.y), r=(m.small?9:13)*k; if(x<-30||y<-30||x>w+30||y>h+30) continue;
+    g.fillStyle='rgba(13,10,36,.78)'; g.beginPath(); g.arc(x,y,r,0,TAU); g.fill(); g.strokeStyle='rgba(244,182,63,.7)'; g.lineWidth=1.2*k; g.stroke();
+    g.font=`${(m.small?11:15)*k}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; g.fillText(m.icon,x,y+1);
+    if((big||!m.small)&&!m.tiny){ g.font=`700 ${(big?(m.small?10:12):11)}px ${BODY}`; g.fillStyle='#fff3d6';
+      g.strokeStyle='rgba(13,10,36,.85)'; g.lineWidth=3; g.strokeText(m.en,x,y+r+8); g.fillText(m.en,x,y+r+8);
+      if(big){ g.font=`500 ${m.small?10:12}px ${MMF}`; g.fillStyle='#f4d58a'; g.strokeText(m.my,x,y+r+22); g.fillText(m.my,x,y+r+22); } } }
+  if(big){ g.textAlign='left'; for(const z of ZONES){ g.font=`400 10px ${DISP}`; g.fillStyle=S.zones.includes(z.id)?'#f4b63f':'rgba(255,255,255,.4)'; g.fillText(`${z.n} ${z.name.toUpperCase()}`,X(z.x)+6,Y(z.y)+10); } g.textAlign='center'; }
+  // other players
+  for(const r of REMOTE.values()){ if(r.where!=='walk') continue; const x=X(r.x), y=Y(r.y);
+    g.fillStyle='#3fc7a5'; g.beginPath(); g.arc(x,y,5*k,0,TAU); g.fill(); g.strokeStyle='#fff'; g.lineWidth=1.5; g.stroke();
+    if(big||s>.2){ g.font=`700 11px ${BODY}`; g.fillStyle='#bff5e6'; g.fillText(r.name||'Player',x,y-11*k); } }
+  // you: which way the camera looks, and an arrow for the way you face
+  const px=X(P.x), py=Y(P.y), fx=-Math.sin(CAM.yaw), fz=-Math.cos(CAM.yaw), ca=Math.atan2(fz,fx);
+  g.fillStyle='rgba(255,231,163,.22)'; g.beginPath(); g.moveTo(px,py); g.arc(px,py,34*k,ca-.5,ca+.5); g.closePath(); g.fill();
+  const hx=Math.sin(P.hd), hy=Math.cos(P.hd), a=9*k;
+  g.fillStyle='#ff5a4e'; g.strokeStyle='#fff'; g.lineWidth=2;
+  g.beginPath(); g.moveTo(px+hx*a*1.3,py+hy*a*1.3); g.lineTo(px-hx*a*.8+hy*a*.8,py-hy*a*.8-hx*a*.8); g.lineTo(px-hx*a*.35,py-hy*a*.35); g.lineTo(px-hx*a*.8-hy*a*.8,py-hy*a*.8+hx*a*.8); g.closePath(); g.fill(); g.stroke();
+  if(big){ g.font=`700 12px ${BODY}`; g.fillStyle='#ffe7a3'; g.strokeStyle='rgba(13,10,36,.9)'; g.lineWidth=3; g.strokeText('You are here',px,py-20); g.fillText('You are here',px,py-20); }
 }
+function drawMini(): void {
+  const w=mini.width, h=mini.height;
+  mx.save(); drawMap(mx,{cx:clamp(P.x,350,WW-350),cy:clamp(P.y,NORTH+250,WH-200),s:.27,w,h,big:false});
+  mx.fillStyle='rgba(13,10,36,.75)'; mx.beginPath(); mx.arc(w-18,18,12,0,TAU); mx.fill(); mx.fillStyle='#f4b63f'; mx.font=`700 13px ${BODY}`; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('N',w-18,19);
+  mx.restore();
+}
+let bigMap=false;
+function openMap(): void {
+  if(S.mode!=='walk'||bigMap) return;
+  bigMap=true; S.paused=true; $('bigmap').hidden=false; drawBigMap();
+}
+function closeMap(): void { if(!bigMap) return; bigMap=false; S.paused=false; $('bigmap').hidden=true; }
+function drawBigMap(): void {
+  const c=$<HTMLCanvasElement>('bigmapC'), box=c.parentElement.getBoundingClientRect(), dpr=Math.min(2,devicePixelRatio||1);
+  const top=NORTH-180, H=WH-top, s=Math.min(box.width/WW,(box.height)/H);
+  c.style.width=WW*s+'px'; c.style.height=H*s+'px'; c.width=Math.round(WW*s*dpr); c.height=Math.round(H*s*dpr);
+  const g=c.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0);
+  drawMap(g,{cx:WW/2,cy:top+H/2,s,w:WW*s,h:H*s,big:true});
+}
+$('mini').addEventListener('click',openMap);
+$('bigmap').addEventListener('click',e=>{ if((e.target as HTMLElement).id!=='bigmapC') closeMap(); });
+$('bigmapClose').addEventListener('click',closeMap);
+window.addEventListener('resize',()=>{ if(bigMap) drawBigMap(); });
 
 // ---------- boot ----------
 function startGameFlow(): void {
-  $('title').hidden=true; S.mode='walk'; audioInit(S.settings.sound); setSound(S.settings.sound);
+  $('title').hidden=true; S.mode='walk'; audioInit(S.settings.sound); loadVoices(VOICE_CLIPS); setSound(S.settings.sound);
   P.x=900; P.y=2545; P.hd=Math.PI; CAM.yaw=0;
   syncChrome(); updateHUD();
   const welcome=()=>{ setTimeout(()=>toast(`<span class="z">Welcome${S.settings.name?', '+esc(S.settings.name):''}!</span>Eight zones, six hidden secrets, and fireworks at 9:30 PM. Press T to chat.`,true),300); };
@@ -903,7 +1094,7 @@ async function boot(data: any): Promise<void> {
     if(S.mode!=='title'){ $('title').hidden=true; S.mode='walk'; } }
   init3d(world,onBoom); resize(); window.addEventListener('resize',resize);
   setCam(S.settings.cam);
-  spawnCrowd(); spawnBikes(); setSound(S.settings.sound); syncChrome(); updateHUD(); initRoom();
+  spawnCrowd(); spawnBikes(); setSound(S.settings.sound); syncChrome(); updateHUD(); initRoom(); initWishes();
   requestAnimationFrame(t=>{ last=t; frame(t); });
   await loadFonts();
   build3d(); ready=true;
@@ -912,5 +1103,5 @@ try{ window.claude?.hot?.snapshot?.(snapshot); }catch{ /* no viewer */ }
 const hot=window.claude&&window.claude.hot;
 if(hot&&hot.ready) hot.ready(boot); else boot(hot&&hot.data||{});
 // audio needs a gesture; also unlock on first tap after a reload
-window.addEventListener('pointerdown',()=>{ if(S.mode!=='title'){ audioInit(S.settings.sound); if(A.c&&A.c.state==='suspended') A.c.resume(); } });
+window.addEventListener('pointerdown',()=>{ if(S.mode!=='title'){ audioInit(S.settings.sound); loadVoices(VOICE_CLIPS); if(A.c&&A.c.state==='suspended') A.c.resume(); } });
 window.__ykn={S,P,CAM,startScene,startGame,TR,syncPeers,BIKES,say};

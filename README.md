@@ -9,6 +9,15 @@ You dress up as a small icon person and walk through a crowd of families, vendor
 - buy mohinga, mont lin ma yar, shwe yin aye and other snacks with kyat
 - collect zone postcards, find six hidden secrets and take photos
 - watch the fireworks finale at 9:30 PM game time
+- make a Thadingyut wish (ဆုတောင်း) at the wish stall by the Finale View: send it up on a paper fire balloon (1,000 Ks) or float it on the pond as a candle lantern (500 Ks)
+
+## Thadingyut wishes
+
+Write a wish in Myanmar or English and it glows over the fair with your name. The sky and pond start with a handful of sample Burmese wishes. Walk near a balloon or lantern to read it, or stand at the west end of the pond and choose **Look up at all the wishes** (also in the wish form) to see them all. The pond has koi, lily pads, lotus flowers and ripples, and nobody can walk into it.
+
+The mini map follows you and shows landmarks, the pond and other players. Tap it or press M for the full map of the fair.
+
+On claude.ai every wish is saved in the artifact's shared store, so everyone sees everyone's wishes and they stay forever (up to 50 per person). On Vercel, wishes are saved in an Upstash Redis database through `api/wishes.js` (see Deploy), so every player shares them too; new wishes show up for others within about 20 seconds. Anywhere without a database (a local file, or Vercel before the database is added) wishes are saved in your browser.
 
 ## Character creator
 
@@ -24,7 +33,7 @@ You can pick a name and a Myanmar-style outfit:
 
 All sound is synthesized with the Web Audio API, so there are no audio files:
 
-- a crowd murmur and quiet tonal, Burmese-like chatter that you can't make out
+- a crowd murmur, plus people nearby actually saying things in Burmese ("ဒါ ဘယ်လောက်လဲ", "မီးပန်း ဘယ်အချိန်လဲ") with speech bubbles, and snack sellers calling out ("မုန့်ဟင်းခါး ပူပူလေး ရမယ်နော်"). Voices are louder up close, muffled further away, and panned to where the speaker stands. The clips are a synthetic voice (eSpeak NG); see `sounds/README.md`
 - a saing waing-style band at the stage
 - bicycles ring a bright "cling cling" bell and motorbikes honk "tee tee" when you are in their way
 - fireworks
@@ -47,7 +56,15 @@ Press T (or the Chat button) to talk to the other players in Burmese or English.
 
 ## Deploy
 
-`vercel.json` builds with `npm run build` and serves `dist/`.
+`vercel.json` builds with `npm run build` and serves `dist/`. `api/wishes.js` runs as a Vercel function.
+
+To share wishes between everyone on Vercel, add a free Upstash Redis database once:
+
+1. In the Vercel dashboard open the project, then **Storage** → **Create Database** → **Upstash for Redis** (free plan is plenty).
+2. Connect it to this project for all environments. Vercel adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` (the `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` names work too).
+3. Redeploy. `https://<your-site>/api/wishes` should now answer `{"wishes":[]}`.
+
+The API keeps the newest 5,000 wishes, sends players the newest 1,000, and lets one address make 20 wishes an hour.
 
 The hosted build also writes search and sharing metadata from `seo.mjs`: an English and Burmese title, description, Open Graph and Twitter cards, hreflang links and VideoGame structured data, plus `/about/` (a readable bilingual landing page), `robots.txt` and `sitemap.xml`. Files in `public/` (the share image, favicon and any Search Console verification file) are copied to the site root. The site address defaults to `https://yaykyawfair.vercel.app`; set `SITE_URL`, `GOOGLE_SITE_VERIFICATION` or `BING_SITE_VERIFICATION` in Vercel to change it or verify ownership. Preview deployments are marked noindex. See [SEO-SETUP.md](SEO-SETUP.md) for the Google Search Console steps.
 
@@ -67,11 +84,14 @@ npm run serve       # build, then serve dist/ on http://localhost:8000
 | `src/world3d.ts` | the Three.js scene: rides, stalls, lanterns, Shwedagon skyline, crowd, fireworks |
 | `src/layout.ts` | the fair's floor plan and colliders |
 | `src/friends.ts` | PeerJS friend rooms used outside claude.ai |
+| `src/wishes.ts` | Thadingyut wishes: sample wishes and where wishes are saved |
+| `src/voices.ts`, `sounds/` | Burmese crowd lines and vendor calls, and their voice clips |
+| `api/wishes.js` | Vercel function that stores wishes in Upstash Redis |
 | `src/people.ts` | avatar types (and the 2D icon people used on souvenir photos) |
 | `src/audio.ts` | Web Audio engine |
 | `src/util.ts` | math and canvas helpers |
 | `src/index.html` | page markup and styles; the build injects the bundled script |
-| `fonts/` | Pyidaungsu 2.5.3 (bundled, the primary Myanmar font), Padauk (fallback) and Brandon Text (Latin). Both Myanmar fonts are Unicode and ship with their SIL Open Font License notices; Pyidaungsu provenance is in `fonts/Pyidaungsu-SOURCE.txt` |
+| `fonts/` | KhitHaung (Regular, Medium, SemiBold, Bold; the Myanmar font, applied to Myanmar letters only), Pyidaungsu 2.5.3 and Padauk (fallbacks) and Brandon Text (Latin). All three Myanmar fonts are Unicode; Pyidaungsu and Padauk and ship with their SIL Open Font License notices; Pyidaungsu provenance is in `fonts/Pyidaungsu-SOURCE.txt` |
 
 ## Controls
 

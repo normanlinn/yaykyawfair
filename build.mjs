@@ -8,13 +8,13 @@ import * as seo from './seo.mjs';
 
 const minify = process.argv.includes('--minify');
 const result = await esbuild.build({
-  entryPoints: ['src/main.ts'], bundle: true, format: 'iife', target: 'es2020', minify, write: false, legalComments: 'none',
+  entryPoints: ['src/main.ts'], bundle: true, format: 'iife', target: 'es2020', minify, write: false, legalComments: 'none', loader: { '.mp3': 'dataurl' },
 });
 const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 const page = fs.readFileSync('src/index.html', 'utf8').replace('<script>/*BUNDLE*/</script>', () => `<script>\n${js}</script>`);
 
 fs.mkdirSync('dist/fonts', { recursive: true });
-const fontFiles = fs.existsSync('fonts') ? fs.readdirSync('fonts').filter(f => /^(?:Padauk|Pyidaungsu|BrandonText)-.*\.(ttf|otf|woff2?)$/i.test(f)) : [];
+const fontFiles = fs.existsSync('fonts') ? fs.readdirSync('fonts').filter(f => /^(?:Padauk|Pyidaungsu|BrandonText|KhitHaung)-.*\.(ttf|otf|woff2?)$/i.test(f)) : [];
 for (const f of ['Padauk-OFL.txt','Pyidaungsu-OFL.txt','Pyidaungsu-SOURCE.txt']) if (fs.existsSync('fonts/'+f)) fs.copyFileSync('fonts/'+f, 'dist/fonts/'+f);
 for (const f of fontFiles) fs.copyFileSync(path.join('fonts', f), path.join('dist/fonts', f));
 
