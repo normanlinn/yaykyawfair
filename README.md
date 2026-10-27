@@ -1,12 +1,13 @@
 # Yay Kyaw Nights
 
-A walkable 3D night street-fair game inspired by Yangon's Yay Kyaw, written in TypeScript with Three.js.
+A walkable 3D street-fair game inspired by Yangon's Yay Kyaw, written in TypeScript with Three.js.
 
-You dress up as a small icon person and walk through a crowd of families, vendors, bicycles and motorbikes. The fair has twelve zones: Ferris wheel, carousel, Food Street, pirate ship, game booths, Kids Corner, the music stage and photo booth, the Finale View, the OC Midway, the Candle Festival (ဆီမီးထွန်းပွဲ), the Teashop (လက်ဖက်ရည်ဆိုင်) and the Wishing Lake (ဆုတောင်းကန်). Along the way you can:
+You dress up as a small icon person and walk through a crowd of families, vendors, bicycles and motorbikes. The fair has twelve zones: Ferris wheel, carousel, Food Street, pirate ship, game booths, Kids Corner, the music stage and photo booth, the Finale View, the Pwe Rides (ပွဲစီးစရာကွင်း), the Candle Festival (ဆီမီးထွန်းပွဲ), the Teashop (လက်ဖက်ရည်ဆိုင်) and the Wishing Lake (ဆုတောင်းကန်). Along the way you can:
 
-- ride the Ferris wheel, carousel, pirate ship, mini train, drop tower and wave swinger, seen first person from your seat (drag to look around, Q to wave)
-- run from the bumper cars in the OC Midway, which chase you and spark when they crash, or pay to dodge them for 30 seconds for tickets
-- buy a corn dog, funnel cake or turkey leg at the OC food stands
+- ride the Ferris wheel, carousel, pirate ship, the hand-turned wooden wheel (လူအားချားရဟတ်) that young men spin by climbing its spokes, and the flying swing (ဒန်းလွှဲ), seen first person from your seat (drag to look around, Q to wave)
+- take the mini train (ရထားလေး), a little steam engine with open carriages, on a loop of the whole fair: board at the station by the Kids Corner, sit on the front bench behind the engine and roll past the pwe rides, the candle festival, the teashop and the Wishing Lake, with smoke, chuffs, rail clacks and the whistle. If the train is away when you buy a ticket, it hurries round to pick you up. Walk on the track and it toots and nudges you off
+- drive a bumper car (ကားတိုက်) yourself for a minute: W/S or the stick to go and reverse, A/D to steer, and score tickets for every car you ram. Or run from them on foot, or pay to dodge them for 30 seconds
+- buy banana fritters, mont lone yay paw or Shan tofu fritters at the bamboo pwe stalls
 - dance with the Myanmar classical dancers in front of the Live Music stage while the saing waing plays
 - light one of 1,000 oil lamps and offer flowers at the Candle Festival
 - sit down at a low table in the teashop with a laphet yay while the football plays on the TV
@@ -14,6 +15,7 @@ You dress up as a small icon person and walk through a crowd of families, vendor
 - play ring toss and balloon darts to win tickets, then trade them for prizes
 - buy mohinga, mont lin ma yar, shwe yin aye and other snacks with kyat
 - collect zone postcards, find six hidden secrets and take photos
+- play in the morning, afternoon, evening or night: tap the clock to pick a time of day, or follow live Myanmar time. The sky, sun, moon, clouds and lights change through the day
 - watch little fireworks shows over the lake from 7 PM (you are asked if you want to watch each time) and the big finale at 9:30 PM game time, with ground fountains along the lake
 - make a Thadingyut wish (ဆုတောင်း) at the wish stall at the south end of the Wishing Lake: send it up on a paper fire balloon (1,000 Ks) or float it on the lake as a candle lantern (500 Ks)
 
@@ -56,7 +58,7 @@ The **Players · ကစားသူ** button also opens private rooms:
 2. Friends who open that link join the room straight away.
 3. Up to eight players see one another, wave and chat. **Back to the public fair** leaves the room.
 
-Both use PeerJS public signaling and browser-to-browser WebRTC. Whoever holds a fair's id relays everyone's positions and messages; if that player leaves, the others take over automatically within a few seconds. A private room's host must keep the tab open. Some restrictive networks need a TURN relay, which this version does not configure. Rides, tickets, purchases and each player's clock stay individual.
+Both use PeerJS public signaling and browser-to-browser WebRTC. Whoever holds a fair's id relays everyone's positions and messages; if that player leaves, the others take over automatically within a few seconds. A private room's host must keep the tab open. When two players can't connect directly (some mobile and office networks), the game relays through free public TURN servers. Rides, tickets, purchases and each player's clock stay individual.
 
 ### Chat
 

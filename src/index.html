@@ -71,15 +71,42 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 [hidden]{display:none!important}
 
 #hud{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:calc(10px + env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:6px;pointer-events:none;max-width:calc(100vw - 200px)}
-.stats{display:flex;gap:6px;flex-wrap:wrap}
-.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px 10px 3px;display:flex;flex-direction:column;min-width:64px}
-.stat .lbl{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-.stat b{font-family:var(--display);font-weight:400;font-size:16px;color:var(--gold);font-variant-numeric:tabular-nums;white-space:nowrap}
-.journey{list-style:none;margin:0;padding:0;display:flex;gap:4px;flex-wrap:wrap}
-.journey li{font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--panel);border:1px solid rgba(255,255,255,.1);color:var(--muted)}
-.journey li.done{background:var(--gold);color:#2a1606;border-color:transparent}
-.journey li.now{border-color:var(--gold);color:var(--ink)}
-#goal{font-size:13px;background:var(--panel);border-radius:8px;padding:3px 10px;border:1px solid rgba(255,255,255,.08);width:max-content;max-width:100%}
+/* the HUD: a pwe ticket with a beaded gold edge, and tonight's journey as a string of paper lanterns */
+.stats{display:flex;align-items:stretch;flex-wrap:wrap;position:relative;background:linear-gradient(180deg,rgba(74,28,58,.94),rgba(36,18,58,.94));border:1px solid rgba(244,182,63,.6);border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.35),inset 0 0 0 3px rgba(20,8,30,.55),inset 0 0 0 4px rgba(244,182,63,.22);width:max-content;max-width:100%}
+.stats::before,.stats::after{content:"";position:absolute;left:14px;right:14px;height:3px;background:radial-gradient(circle,var(--gold) 0 1.4px,transparent 1.8px) 0 0/8px 3px repeat-x;opacity:.85;pointer-events:none}
+.stats::before{top:-2px}.stats::after{bottom:-2px}
+.stat{background:none;border:0;display:flex;align-items:center;gap:8px;padding:7px 13px 6px;position:relative;min-width:0}
+.stat+.stat{border-left:2px dashed rgba(244,182,63,.32)}
+.stat i{font-style:normal;font-size:19px;line-height:1;filter:drop-shadow(0 0 6px rgba(244,182,63,.35))}
+.stat>span{display:flex;flex-direction:column}
+.stat .lbl{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.stat .lbl .mm{letter-spacing:0;text-transform:none;color:rgba(244,182,63,.8)}
+.stat b{font-family:var(--display);font-weight:400;font-size:17px;color:var(--gold);font-variant-numeric:tabular-nums;white-space:nowrap;text-shadow:0 0 12px rgba(244,182,63,.35)}
+#timeStat,#pStat{pointer-events:auto}
+.quest{display:flex;flex-direction:column;gap:7px;background:rgba(22,12,42,.74);border:1px solid rgba(244,182,63,.22);border-radius:12px;padding:8px 12px 9px;width:max-content;max-width:100%;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.qh{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.qh .mm{letter-spacing:0;text-transform:none;color:rgba(244,182,63,.8)}
+.journey{list-style:none;margin:0;padding:0;display:flex}
+.journey li{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:66px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:center}
+.journey li::before{content:"";position:absolute;top:10px;right:50%;width:100%;height:2px;background:rgba(244,182,63,.2);z-index:0}
+.journey li:first-child::before{display:none}
+.journey li.done::before{background:linear-gradient(90deg,#f4b63f,#ffd27a)}
+.journey .lamp{position:relative;z-index:1;width:16px;height:20px;border-radius:46% 46% 40% 40%;background:#3a2a4c;border:1.5px solid rgba(244,182,63,.4);display:grid;place-items:center;font-size:10px;font-weight:900;color:#5a2a06;letter-spacing:0}
+.journey .lamp::before,.journey .lamp::after{content:"";position:absolute;left:3px;right:3px;height:2px;border-radius:1px;background:rgba(244,182,63,.55)}
+.journey .lamp::before{top:-3px}.journey .lamp::after{bottom:-3px}
+.journey li.done{color:var(--gold)}
+.journey li.done .lamp{background:radial-gradient(circle at 50% 38%,#fff6d0,#ffc95a 45%,#e0582c);border-color:#ffd27a;box-shadow:0 0 12px 2px rgba(255,170,70,.75)}
+.journey li.done .lamp>span::before{content:"✓"}
+.journey li.now{color:var(--ink)}
+.journey li.now .lamp{border-color:var(--gold);animation:lampwait 1.8s ease-in-out infinite}
+.journey .jl small{display:block;font-family:var(--mm);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none;opacity:.85;margin-top:1px}
+.journey li.lit .lamp{animation:lamplit 1s cubic-bezier(.2,1.6,.4,1)}
+@keyframes lampwait{50%{box-shadow:0 0 0 5px rgba(244,182,63,.18);transform:translateY(-1px) rotate(4deg)}}
+@keyframes lamplit{0%{transform:scale(.5)}45%{transform:scale(1.7) rotate(-8deg);box-shadow:0 0 30px 10px rgba(255,200,90,.95)}100%{transform:scale(1)}}
+#goal{display:flex;gap:8px;align-items:baseline;font-size:12.5px;line-height:1.4;max-width:300px}
+#goal>b{flex:none;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:#2a1606;background:linear-gradient(180deg,#ffd27a,#f4b63f);border-radius:4px;padding:2px 6px 1px;box-shadow:0 0 10px rgba(244,182,63,.35)}
+#goal.new #goalT{animation:goalin .5s ease-out}
+@keyframes goalin{from{opacity:0;transform:translateX(-6px)}}
 
 #tools{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:min(440px,46vw)}
 #tools button{padding:6px 10px;font-size:13px}
@@ -177,8 +204,8 @@ table.keys td{padding:3px 10px 3px 0;vertical-align:top}
 #title p{margin:0;color:var(--muted);font-size:15px;line-height:1.45;max-width:46ch}
 #title .cta{font-size:20px;padding:14px 28px;border-radius:999px;font-family:var(--display);font-weight:400;letter-spacing:.04em}
 #title small{color:var(--muted);font-size:12.5px}
-body.inplay #journey,body.inplay #goal{display:none}
-@media (max-width:560px){#mini{width:110px;height:110px;bottom:auto;top:calc(150px + env(safe-area-inset-top,0px))}#hud{max-width:calc(100vw - 120px)}#tools{max-width:150px}#tools kbd,#bCam,#bSound,#bAv,#bWave{display:none}#toasts{top:calc(200px + env(safe-area-inset-top,0px))}.journey li{font-size:10px;padding:2px 6px}#goal{font-size:12px}}
+body.inplay .quest{display:none}
+@media (max-width:560px){#mini{width:110px;height:110px;bottom:auto;top:calc(150px + env(safe-area-inset-top,0px))}#hud{max-width:calc(100vw - 120px)}#tools{max-width:150px}#tools kbd,#bCam,#bSound,#bAv,#bWave{display:none}#toasts{top:calc(200px + env(safe-area-inset-top,0px))}.journey li{min-width:52px;font-size:9.5px}.journey .jl small{display:none}.stat{padding:6px 9px 5px;gap:6px}.stat i{font-size:15px}.stat .lbl .mm{display:none}.stat b{font-size:15px}#goal{font-size:11.5px}}
 #tags .bub.wish{background:rgba(42,22,6,.78);color:#ffe7a3;border:1px solid rgba(255,179,71,.7);box-shadow:0 0 18px rgba(255,160,60,.45);font-size:14px}
 #tags .bub.wish::after{border-top-color:rgba(42,22,6,.78)}
 #tags .bub.wish small{color:#f4b63f}
@@ -220,6 +247,21 @@ button:active{transform:scale(.94)}
 #fwAsk .fwq .mm{display:block;font-family:var(--mm);font-size:18px;color:var(--gold);line-height:1.7}
 #fwAsk .fwq b{display:block;font-size:15px;margin:2px 0 10px}
 #fwAsk .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+#pStat.off b{opacity:.55}
+#timeStat{font:inherit;text-align:left;cursor:pointer;color:inherit}
+#timeStat i{transition:transform .3s}#timeStat:hover i{transform:rotate(-12deg) scale(1.1)}
+#timeStat:hover,#timeStat[aria-expanded="true"]{background:rgba(244,182,63,.1)}
+#timeMenu{position:fixed;top:calc(64px + env(safe-area-inset-top,0px));left:12px;z-index:31;width:min(92vw,290px);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:4px;box-shadow:0 10px 30px rgba(0,0,0,.5);backdrop-filter:blur(8px)}
+#timeMenu[hidden]{display:none}
+#timeMenu:not([hidden]){animation:mpop .3s cubic-bezier(.2,1.4,.4,1)}
+#timeMenu .tmh{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:2px 6px 4px}
+#timeMenu button{display:flex;align-items:center;gap:10px;text-align:left;padding:8px 10px;border-radius:10px;background:transparent;border:1px solid transparent;color:inherit;font:inherit;cursor:pointer}
+#timeMenu button:hover,#timeMenu button:focus-visible,#timeMenu button.on{background:rgba(244,182,63,.12);border-color:var(--line)}
+#timeMenu button i{font-style:normal;font-size:20px;width:26px;text-align:center}
+#timeMenu button>span{flex:1;font-weight:600}
+#timeMenu button .mm{display:block;font-weight:400;font-size:12px;color:var(--gold)}
+#timeMenu small{color:var(--muted);font-variant-numeric:tabular-nums}
+#timeMenu p{margin:6px 6px 0;font-size:12px;line-height:1.4}
 #fwAsk kbd{font-size:10px;opacity:.7}
 /* talking to people */
 .talk .tlog{display:flex;flex-direction:column;gap:8px;max-height:240px;overflow:auto;padding:4px 2px 10px}
@@ -263,15 +305,21 @@ button:active{transform:scale(.94)}
 
 <div id="hud" hidden>
   <div class="stats">
-    <div class="stat"><span class="lbl">Kyat</span><b id="kyat">15,000</b></div>
-    <div class="stat"><span class="lbl">Tickets</span><b id="tix">0</b></div>
-    <div class="stat"><span class="lbl">Time</span><b id="clock">6:30 PM</b></div>
-    <div class="stat" id="pStat" hidden><span class="lbl">Online</span><b id="players">1</b></div>
+    <div class="stat"><i aria-hidden="true">💰</i><span><span class="lbl">Kyat<span class="mm"> · ငွေ</span></span><b id="kyat">15,000</b></span></div>
+    <div class="stat"><i aria-hidden="true">🎟️</i><span><span class="lbl">Tickets<span class="mm"> · လက်မှတ်</span></span><b id="tix">0</b></span></div>
+    <button type="button" class="stat" id="timeStat" title="Change the time of day" aria-haspopup="true"><i aria-hidden="true" id="todIcon">🌇</i><span><span class="lbl" id="todLbl">Evening</span><b id="clock">5:00 PM</b></span></button>
+    <div class="stat" id="pStat" hidden><i aria-hidden="true">👥</i><span><span class="lbl">Online</span><b id="players">1</b></span></div>
   </div>
-  <ol class="journey" id="journey">
-    <li data-s="arrive">Arrive</li><li data-s="discover">Discover</li><li data-s="play">Play</li><li data-s="finale">Finale</li>
-  </ol>
-  <div id="goal"></div>
+  <div class="quest">
+    <div class="qh">Tonight’s journey · <span class="mm">ပွဲခရီး</span></div>
+    <ol class="journey" id="journey">
+      <li data-s="arrive"><span class="lamp"><span></span></span><span class="jl">Arrive<small>ရောက်ပြီ</small></span></li>
+      <li data-s="discover"><span class="lamp"><span></span></span><span class="jl">Explore<small>လှည့်လည်</small></span></li>
+      <li data-s="play"><span class="lamp"><span></span></span><span class="jl">Play<small>ကစား</small></span></li>
+      <li data-s="finale"><span class="lamp"><span></span></span><span class="jl">Fireworks<small>မီးပန်း</small></span></li>
+    </ol>
+    <div id="goal"><b>Next</b><span id="goalT"></span></div>
+  </div>
 </div>
 <div id="tools" hidden>
   <button id="bChat">Chat<kbd>T</kbd></button>
@@ -298,6 +346,15 @@ button:active{transform:scale(.94)}
 <div id="photoUI" hidden><div class="vf"><span id="vfText">PHOTO MODE</span></div><div class="bar"><button id="photoExit">Done</button><button id="shutter" aria-label="Take photo"></button><button id="photoHide">Hide me</button></div></div>
 <div id="flash"></div>
 <div id="fade"></div>
+<div id="timeMenu" hidden role="menu" aria-label="Time of day">
+  <div class="tmh">Time of day · <span class="mm">အချိန်</span></div>
+  <button type="button" role="menuitem" data-t="480"><i>🌅</i><span>Morning <span class="mm">မနက်ခင်း</span></span><small>8:00 AM</small></button>
+  <button type="button" role="menuitem" data-t="840"><i>☀️</i><span>Afternoon <span class="mm">နေ့လည်</span></span><small>2:00 PM</small></button>
+  <button type="button" role="menuitem" data-t="1050"><i>🌇</i><span>Evening <span class="mm">ညနေခင်း</span></span><small>5:30 PM</small></button>
+  <button type="button" role="menuitem" data-t="1200"><i>🌙</i><span>Night <span class="mm">ညအချိန်</span></span><small>8:00 PM</small></button>
+  <button type="button" role="menuitem" data-t="mmt"><i>🕰️</i><span>Myanmar time, live <span class="mm">မြန်မာစံတော်ချိန်</span></span><small id="mmtNow"></small></button>
+  <p class="muted">Time runs fast at the fair: a minute every two seconds. Fireworks go up after dark, and the finale is at 9:30 PM.</p>
+</div>
 <div id="fwAsk" hidden role="dialog" aria-label="Watch the fireworks?"><div class="fwq" id="fwAskQ"></div><div class="row"><button class="cta" id="fwYes">Yes, take me there · <span class="mm">ကြည့်မယ်</span> <kbd>Y</kbd></button><button id="fwNo">Not now · <span class="mm">နောက်မှ</span> <kbd>N</kbd></button></div></div>
 <div id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mTitle"><div class="card"><header><h2 id="mTitle"></h2><button id="mClose">Close</button></header><div id="mBody"></div></div></div>
 

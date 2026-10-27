@@ -5,8 +5,8 @@ import { SHIRTS, LONS, SKINS, BALLOONS, AV_SHIRTS, AV_LONS, person, PersonOpts, 
 import { A, audioInit, sfx, bell, horn, setChatter, setMaster, loadVoices, speak } from './audio';
 import { CROWD_LINES, VENDOR_CALLS, REPLIES, VOICE_CLIPS } from './voices';
 import {
-  WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, TR as TRK, ST, FV, PHOTO, TOYS_AT, UNCLE, ARCH_Y, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
-  STALLFRONTS, VENDOR_POSTS, POND, WISH_STALL, BUMPER, DROP, SWINGER, OC_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, M, blocked, trackPos,
+  WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, STATION, TRAIN_STOP, TRAIN_OFF, TRACK_LEN, ST, FV, PHOTO, TOYS_AT, UNCLE, ARCH_Y, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
+  STALLFRONTS, VENDOR_POSTS, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, M, blocked, trackPos,
 } from './layout';
 import { friends } from './friends';
 import { openWishes, Wish, WishKind, WISH_PRICE, WISH_IDEAS, WISH_MAX_LEN, cleanWish } from './wishes';
@@ -26,7 +26,7 @@ function resize(): void {
 
 // ---------- state ----------
 type Mode = 'title' | 'walk' | 'scene' | 'mg';
-interface Settings { density: 'low' | 'med' | 'high'; gfx: 'low' | 'high'; cam: 'close' | 'wide'; sound: boolean; mini: boolean; av: Avatar; name: string; avDone: boolean }
+interface Settings { density: 'low' | 'med' | 'high'; gfx: 'low' | 'high'; cam: 'close' | 'wide'; sound: boolean; mini: boolean; av: Avatar; name: string; avDone: boolean; realTime?: boolean }
 interface GameState {
   mode: Mode; kyat: number; tix: number; clock: number;
   zones: string[]; secrets: string[]; snacks: string[]; toys: string[]; prizes: string[]; photos: string[];
@@ -36,7 +36,7 @@ interface GameState {
 }
 const S: GameState = {
   showT:0, paused:false, photo:false,
-  mode:'title', kyat:15000, tix:0, clock:18*60+30,
+  mode:'title', kyat:15000, tix:0, clock:17*60,
   zones:[], secrets:[], snacks:[], toys:[], prizes:[], photos:[],
   rides:0, games:0, ticketsWon:0, finaleSeen:false, showStarted:false, showDone:false, summaryShown:false,
   balloon:null, fan:false, uncleAt:-999,
@@ -49,7 +49,6 @@ const P = {x:900,y:2540,hd:Math.PI,moving:false,hidden:false,waveUntil:0,vx:0,vy
 const LOOK = {yaw:0,pitch:0}; // turning your head on a ride or while watching the fireworks
 const CAM = {yaw:0,pitch:.42,dist:11,zoom:11};
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const TR = {u:0,riding:false,rideU:0};
 const NAME_MAX = 16, CHAT_MAX = 120;
 let T = 0;
 const lookCache = new Map<string, Look>();
@@ -66,7 +65,7 @@ IT.push({x:BOOTHS[2].x,y:BOOTHS[2].y+35,r:50,label:()=>`Trade tickets for prizes
 IT.push({x:590,y:850,r:50,label:()=>`Ride the Ferris wheel · ${ks(1500)}`,act:()=>buyRide('ferris',1500)});
 IT.push({x:CR.cx,y:CR.cy+165,r:60,label:()=>`Ride the carousel · ${ks(1000)}`,act:()=>buyRide('carousel',1000)});
 IT.push({x:PS.px,y:PS.py+75,r:60,label:()=>`Ride the pirate ship · ${ks(1200)}`,act:()=>buyRide('pirate',1200)});
-IT.push({x:TRK.cx,y:TRK.cy+TRK.ry+78,r:55,label:()=>`Ride the mini train · ${ks(500)}`,act:()=>{ if(!pay(500)) return; S.rides++; TR.riding=true; TR.rideU=0; P.hidden=true; LOOK.yaw=LOOK.pitch=0; sfx('toot'); toast('All aboard! One loop around the Kids Corner.'); updateHUD(); }});
+IT.push({x:STATION.x,y:STATION.y,r:80,label:()=>TRN.waiting?(TRN.dwell>0?'Hop on the mini train!':'Waiting for the mini train… it is coming'):`Ride the mini train round the whole fair · ရထားလေး · ${ks(500)}`,act:buyTrain});
 IT.push({x:TOYS_AT.x,y:TOYS_AT.y+30,r:48,label:()=>'Browse the toy stall',act:openToys});
 IT.push({x:PHOTO.x,y:PHOTO.y+30,r:45,label:()=>`Souvenir photo booth · ${ks(500)}`,act:boothPhoto});
 IT.push({x:FV.x,y:FV.y+10,r:110,label:()=>S.showStarted&&!S.showDone?'Watch the fireworks now!':S.showDone?'Watch the finale again':'Watch the skyline',act:()=>startScene('finale')});
@@ -76,10 +75,11 @@ IT.push({x:POND.x-POND.rx-44,y:POND.y+POND.ry*.5,r:60,label:()=>'Look out over a
 IT.push({x:POND.x-POND.rx-44,y:POND.y-POND.ry*.3,r:60,label:()=>'Look out over all the wishes',act:()=>startScene('wishes')});
 IT.push({x:POND.x+POND.rx+44,y:POND.y,r:70,label:()=>`Float a wish on the lake · ${ks(WISH_PRICE.water)}`,act:()=>openWish('water')});
 IT.push({x:WISH_STALL.x-150,y:WISH_STALL.y-40,r:70,label:()=>`Float a wish on the lake · ${ks(WISH_PRICE.water)}`,act:()=>openWish('water')});
-IT.push({x:DROP.x,y:DROP.y+100,r:60,label:()=>`Ride the drop tower · ${ks(1500)}`,act:()=>buyRide('drop',1500)});
-IT.push({x:SWINGER.x,y:SWINGER.y+SWINGER.R+40,r:60,label:()=>`Ride the wave swinger · ${ks(1200)}`,act:()=>buyRide('swinger',1200)});
+IT.push({x:HAND_WHEEL.x,y:HAND_WHEEL.y+80,r:60,label:()=>`Ride the hand-turned wheel · လူအားချားရဟတ် · ${ks(1500)}`,act:()=>buyRide('handwheel',1500)});
+IT.push({x:SWINGER.x,y:SWINGER.y+SWINGER.R+40,r:60,label:()=>`Ride the flying swing · ဒန်းလွှဲ · ${ks(1200)}`,act:()=>buyRide('swinger',1200)});
 IT.push({x:BUMPER.x-40,y:BUMPER.y+BUMPER.h/2,r:55,label:()=>`Dodge the bumper cars for 30 seconds · ${ks(1000)}`,act:startDodge});
-OC_FOOD.forEach(f=>IT.push({x:f.x,y:f.y+40,r:50,label:()=>`Buy a ${f.name.toLowerCase()} · ${ks(f.p)}`,act:()=>buyOC(f)}));
+IT.push({x:BUMPER.x+BUMPER.w/2,y:BUMPER.y+BUMPER.h+40,r:60,label:()=>`Drive a bumper car · ကားတိုက်မောင်းမယ် · ${ks(1000)}`,act:startDrive});
+PWE_FOOD.forEach(f=>IT.push({x:f.x,y:f.y+40,r:50,label:()=>`Buy ${f.name.toLowerCase()} · ${f.my} · ${ks(f.p)}`,act:()=>buyPwe(f)}));
 IT.push({x:ST.x,y:ST.y+130,r:95,label:()=>P.dance?'Stop dancing':'Dance with the dancers · ကခုန်မယ်',act:toggleDance});
 IT.push({x:CANDLE.x,y:CANDLE.y+CANDLE.R+30,r:70,label:()=>CAND.mine>=CANDLE_MINE?'Every lamp here is lit. Thank you!':`Light an oil lamp · ဆီမီးထွန်းမယ် · ${ks(200)}`,act:lightLamp});
 IT.push({x:CANDLE.x-CANDLE.R-30,y:CANDLE.y,r:70,label:()=>`Offer flowers · ပန်းကပ်မယ် · ${ks(300)}`,act:offerFlowers});
@@ -193,7 +193,7 @@ function updateBikes(dt: number): void {
   }
 }
 
-// ---------- OC Midway bumper cars: they wander, chase you when you walk in, and you can run ----------
+// ---------- pwe bumper cars: they wander, chase you when you walk in, and you can run ----------
 interface Bumper { x: number; y: number; hd: number; sp: number; hit: number; cd: number; tx: number; ty: number }
 const BUMPS: Bumper[] = [];
 const DODGE = {on:false,t:0,hits:0,shown:''};
@@ -210,12 +210,15 @@ function bang(b: Bumper, v: number): void {
   if(S.mode==='walk'&&Math.hypot(P.x-b.x,P.y-b.y)<(v>=1?520:220)){ sfx('bump'); if(v>=1&&Math.random()<.5) sfx('zap'); }
 }
 function updateBumpers(dt: number): void {
-  const me=S.mode==='walk'&&!P.hidden&&!TR.riding&&inArena(P.x,P.y);
+  const me=S.mode==='walk'&&!P.hidden&&inArena(P.x,P.y);
   if(DODGE.on){ DODGE.t-=dt; if(!me&&S.mode==='walk') endDodge(false); else if(DODGE.t<=0) endDodge(true); }
   BUMPS.forEach((b,i)=>{
     b.hit=Math.max(0,b.hit-dt*2.5); b.cd-=dt;
+    if(DRIVE.on&&i===MY_CAR){ driveCar(b,dt); return; }
     let tx=b.tx, ty=b.ty, want=70;
-    if(me&&(DODGE.on||i<3)&&Math.hypot(P.x-b.x,P.y-b.y)<(DODGE.on?700:240)){ tx=P.x+P.vx*.45; ty=P.y+P.vy*.45; want=DODGE.on?100+(30-DODGE.t)*1.4:92; }
+    const mine=DRIVE.on?BUMPS[MY_CAR]:null;
+    if(mine&&i%3===0&&Math.hypot(mine.x-b.x,mine.y-b.y)<320){ tx=mine.x+Math.sin(mine.hd)*mine.sp*.4; ty=mine.y+Math.cos(mine.hd)*mine.sp*.4; want=96; }
+    else if(me&&(DODGE.on||i<3)&&Math.hypot(P.x-b.x,P.y-b.y)<(DODGE.on?700:240)){ tx=P.x+P.vx*.45; ty=P.y+P.vy*.45; want=DODGE.on?100+(30-DODGE.t)*1.4:92; }
     else if(Math.hypot(tx-b.x,ty-b.y)<30) bumpTarget(b);
     let d=Math.atan2(tx-b.x,ty-b.y)-b.hd; d=Math.atan2(Math.sin(d),Math.cos(d));
     b.hd+=clamp(d,-2.3*dt,2.3*dt);
@@ -228,7 +231,8 @@ function updateBumpers(dt: number): void {
   for(let i=0;i<BUMPS.length;i++) for(let j=i+1;j<BUMPS.length;j++){
     const a=BUMPS[i], c=BUMPS[j], dx=c.x-a.x, dy=c.y-a.y, d=Math.hypot(dx,dy)||1;
     if(d<BR*2){ const push=(BR*2-d)/2, nx=dx/d, ny=dy/d; a.x-=nx*push; a.y-=ny*push; c.x+=nx*push; c.y+=ny*push;
-      if(a.cd<=0&&c.cd<=0){ bang(a,1); c.cd=.6; c.hit=1; a.sp*=.3; c.sp*=.3; a.hd+=rand(-1.2,1.2); c.hd+=rand(-1.2,1.2); } }
+      if(DRIVE.on&&(i===MY_CAR||j===MY_CAR)){ if(a.cd<=0&&c.cd<=0){ const sg=i===MY_CAR?1:-1; carHit(i===MY_CAR?a:c,i===MY_CAR?c:a,nx*sg,ny*sg); } }
+      else if(a.cd<=0&&c.cd<=0){ bang(a,1); c.cd=.6; c.hit=1; a.sp*=.3; c.sp*=.3; a.hd+=rand(-1.2,1.2); c.hd+=rand(-1.2,1.2); } }
   }
   if(me) for(const b of BUMPS){
     const dx=P.x-b.x, dy=P.y-b.y, d=Math.hypot(dx,dy)||1;
@@ -240,6 +244,112 @@ function updateBumpers(dt: number): void {
   }
   shake=Math.max(0,shake-dt*2.2);
 }
+// driving one yourself: W/S or the stick for go and reverse, A/D to steer; bump as many cars as you can in a minute
+const DRIVE={on:false,given:0,taken:0,kx:0,ky:0,shown:''};
+const MY_CAR=3, DRIVE_SECS=60;
+function startDrive(): void {
+  if(!pay(1000)) return; S.games++; S.rides++;
+  const b=BUMPS[MY_CAR]; b.x=BUMPER.x+BUMPER.w/2; b.y=BUMPER.y+BUMPER.h-50; b.hd=Math.PI; b.sp=0; b.cd=0;
+  DRIVE.on=true; DRIVE.given=DRIVE.taken=0; DRIVE.kx=DRIVE.ky=0; DRIVE.shown='';
+  startScene('bumper'); sfx('zap'); updateHUD();
+}
+function driveCar(b: Bumper, dt: number): void {
+  let thr=0, st=0;
+  if(!chatOpen){ if(keys.ArrowUp||keys.KeyW) thr++; if(keys.ArrowDown||keys.KeyS) thr--; if(keys.ArrowLeft||keys.KeyA) st--; if(keys.ArrowRight||keys.KeyD) st++; }
+  if(joy.id!=null){ thr=clamp(-joy.y*1.4,-1,1); st=clamp(joy.x*1.4,-1,1); }
+  const want=thr>0?thr*125:thr*60;
+  b.sp+=clamp(want-b.sp,-200*dt,(thr?150:80)*dt);
+  b.hd-=st*(1.3+Math.min(1,Math.abs(b.sp)/90)*1.1)*dt; // bumper cars turn on the spot, faster when moving
+  b.x+=(Math.sin(b.hd)*b.sp+DRIVE.kx)*dt; b.y+=(Math.cos(b.hd)*b.sp+DRIVE.ky)*dt;
+  const f=Math.exp(-dt*4); DRIVE.kx*=f; DRIVE.ky*=f;
+  const x0=BUMPER.x+BR+6, x1=BUMPER.x+BUMPER.w-BR-6, y0=BUMPER.y+BR+6, y1=BUMPER.y+BUMPER.h-BR-6;
+  const wall=(fast: number)=>{ if(fast>35&&b.cd<=0){ b.cd=.4; b.hit=.8; sfx('bump'); shake=Math.max(shake,clamp(fast/160,.2,.6)); } };
+  if(b.x<x0||b.x>x1){ b.x=clamp(b.x,x0,x1); wall(Math.abs(Math.sin(b.hd)*b.sp+DRIVE.kx)); DRIVE.kx*=-.5; b.sp*=-.3; }
+  if(b.y<y0||b.y>y1){ b.y=clamp(b.y,y0,y1); wall(Math.abs(Math.cos(b.hd)*b.sp+DRIVE.ky)); DRIVE.ky*=-.5; b.sp*=-.3; }
+}
+/** Your car `p` and another car `o` touch; (nx, ny) points from you to them. Whoever was driving into the other gets the bump. */
+function carHit(p: Bumper, o: Bumper, nx: number, ny: number): void {
+  const mine=(Math.sin(p.hd)*p.sp+DRIVE.kx)*nx+(Math.cos(p.hd)*p.sp+DRIVE.ky)*ny, theirs=-(Math.sin(o.hd)*o.sp*nx+Math.cos(o.hd)*o.sp*ny);
+  p.cd=o.cd=.5; p.hit=o.hit=1; sfx('bump'); if(Math.random()<.5) sfx('zap');
+  if(mine>=30&&mine>=theirs*.7){ DRIVE.given++; o.sp*=-.3; o.hd+=rand(-1.4,1.4); o.x+=nx*14; o.y+=ny*14; toast(pick(['Bang! Got one!','Boom! +1','Direct hit!','Bzzt! Gotcha!'])); }
+  if(theirs>=30) DRIVE.taken++;
+  const k=30+Math.max(0,theirs)*1.3+Math.max(0,mine)*.3; DRIVE.kx-=nx*k; DRIVE.ky-=ny*k; p.sp*=.3;
+  shake=Math.max(shake,clamp(Math.max(mine,theirs)/120,.25,.9));
+}
+function endDrive(): void {
+  if(!DRIVE.on) return; DRIVE.on=false; bumpTarget(BUMPS[MY_CAR]);
+  P.x=BUMPER.x+BUMPER.w/2; P.y=BUMPER.y+BUMPER.h+46; P.hd=0; P.vx=P.vy=P.kx=P.ky=0;
+  const won=clamp(1+Math.floor(DRIVE.given/2),1,10); S.tix+=won; S.ticketsWon+=won; sfx('ding');
+  toast(`<span class="z">Round over! · ကားတိုက်</span>You bumped ${DRIVE.given} car${DRIVE.given===1?'':'s'} and got bumped ${DRIVE.taken} time${DRIVE.taken===1?'':'s'}. <b>+${won} tickets</b>`,true);
+}
+
+// ---------- the mini train: it runs its loop all night, waits at the station, and hurries round when someone is waiting ----------
+const TRN={d:TRAIN_STOP,v:0,dwell:6,left:false,waiting:false,aboard:false,chuff:0,clack:0,tootCd:0};
+const TV=64, TV_FAST=190, TACC=16; // map units a second: 64 is 3.2 m/s, a gentle mini train
+const TRAIN_CAPS: Array<[number, string]> = [
+  [100,'Chuff chuff… out of the station we go. Drag to look around and press Q to wave.'],
+  [700,'The pwe rides! On your left the boys swing on the spokes of the wooden wheel; on your right, the flying swing under its golden roof.'],
+  [1450,'A thousand little oil lamps glow around the stupa on your left. On your right, the teashop TV and the clink of tea cups.'],
+  [2080,'Round the bend and down the long side of the Wishing Lake. Look left: lanterns drifting slowly across the water.'],
+  [3150,'Along the south edge now, behind the teashop tables and the banana fritter stalls. Smell that!'],
+  [4500,'Past the Finale View deck on your right. Wave at the people waiting for the fireworks!'],
+  [5250,'Up the west side, past the Kids Corner garden and the toy stall. Toot toot, nearly home!'],
+];
+const onTrain=()=>S.mode==='scene'&&SC.kind==='train';
+function buyTrain(): void {
+  if(TRN.waiting){ if(TRN.dwell>0) boardTrain(); else toast('The mini train is on its way. Wait here on the platform!'); return; }
+  if(!pay(500)) return; TRN.waiting=true; updateHUD();
+  if(TRN.dwell>0) boardTrain(); else { sfx('coin'); toast('Ticket bought! The Golden Express is hurrying round to pick you up. Wait on the platform.'); }
+}
+function boardTrain(): void {
+  TRN.waiting=false; TRN.dwell=Math.max(TRN.dwell,3); TRN.aboard=false; S.rides++;
+  P.dance=false; standUp(); startScene('train'); sfx('toot'); updateHUD();
+}
+function leaveTrain(): void { endScene(); }
+function placeOffTrain(): void {
+  if(TRN.dwell>0){ P.x=STATION.x; P.y=STATION.y-12; P.hd=0; return; }
+  const [x,y,h]=trackPos(TRN.d-TRAIN_OFF[1]);
+  for(const sd of [1,-1]){ const px=x-Math.sin(h)*40*sd, py=y+Math.cos(h)*40*sd; if(!blocked(px,py,8)){ P.x=px; P.y=py; return; } }
+  P.x=STATION.x; P.y=STATION.y-12;
+}
+function updateTrain(dt: number): void {
+  TRN.tootCd-=dt;
+  const riding=onTrain();
+  if(TRN.dwell>0){
+    TRN.v=0; TRN.dwell-=dt;
+    if(TRN.waiting&&S.mode==='walk'&&Math.hypot(P.x-STATION.x,P.y-STATION.y)<170) boardTrain();
+    if(TRN.dwell<=0){ TRN.left=false; if(riding){ TRN.aboard=true; sfx('whistle'); } else if(Math.hypot(P.x-STATION.x,P.y-STATION.y)<600) sfx('whistle'); }
+  } else {
+    const ds=(TRAIN_STOP-TRN.d+TRACK_LEN)%TRACK_LEN, fast=TRN.waiting&&!riding;
+    if(ds>150&&ds<TRACK_LEN-150) TRN.left=true;
+    const vt=Math.min(fast?TV_FAST:TV,Math.sqrt(2*TACC*Math.max(0,ds-1))+4);
+    TRN.v+=clamp(vt-TRN.v,-TACC*3*dt,TACC*dt*(fast?2.5:1));
+    const step=TRN.v*dt;
+    if(TRN.left&&ds<=step+.5){
+      TRN.d=TRAIN_STOP; TRN.v=0; TRN.dwell=8; TRN.left=false;
+      if(riding&&TRN.aboard){ TRN.aboard=false; SC.dur=SC.t+2.5; $('sceneCap').textContent='Toot toot! Back at the station. Thanks for riding the Golden Express.'; sfx('toot'); }
+      else if(Math.hypot(P.x-STATION.x,P.y-STATION.y)<600) sfx('toot');
+    } else TRN.d=(TRN.d+step)%TRACK_LEN;
+    // the sounds of the ride: a chuff every few metres and the clack of the rail joints
+    const near=riding||Math.hypot(P.x-trackPos(TRN.d)[0],P.y-trackPos(TRN.d)[1])<320;
+    TRN.chuff-=step; if(TRN.chuff<=0){ TRN.chuff=24; if(near) sfx('chuff'); }
+    TRN.clack-=step; if(TRN.clack<=0){ TRN.clack=110; if(riding) sfx('clack'); }
+  }
+  if(riding){ const [x,y]=trackPos(TRN.d-TRAIN_OFF[1]); P.x=x; P.y=y; return; }
+  // the train pushes people off its track (and toots at you first)
+  const shove=(x: number, y: number, me: boolean): [number, number] | null => {
+    for(let k=0;k<TRAIN_OFF.length;k++){
+      const [cx,cy,h]=trackPos(TRN.d-TRAIN_OFF[k]), fx=Math.cos(h), fy=Math.sin(h), dx=x-cx, dy=y-cy;
+      const along=dx*fx+dy*fy, side=-dx*fy+dy*fx, half=k?24:30;
+      if(Math.abs(along)<half+8&&Math.abs(side)<24){ const sg=side>=0?1:-1; return [cx+fx*along-fy*sg*25,cy+fy*along+fx*sg*25]; }
+      if(me&&k===0&&TRN.v>20&&along>0&&along<170&&Math.abs(side)<26&&TRN.tootCd<=0){ TRN.tootCd=4; sfx('toot'); toast('Toot toot! Mind the train!'); }
+    }
+    return null;
+  };
+  if(S.mode==='walk'){ const np=shove(P.x,P.y,true); if(np&&!blocked(np[0],np[1],6)){ P.x=np[0]; P.y=np[1]; } }
+  for(const n of NPC){ if(n.sit) continue; const np=shove(n.x,n.y,false); if(np){ n.x=np[0]; n.y=np[1]; } }
+}
+
 function startDodge(): void {
   if(DODGE.on||!pay(1000)) return;
   S.games++; DODGE.on=true; DODGE.t=30; DODGE.hits=0;
@@ -318,13 +428,14 @@ function openAvatar(first: boolean, after?: () => void): void {
 interface Remote { peer: string; name: string; av: Avatar; look: Look; x: number; y: number; tx: number; ty: number; hd: number; moving: boolean; where: string; dance: boolean; balloon: string | null; wv: number; waveUntil: number; sayI: number; say: string; sayUntil: number }
 const REMOTE = new Map<string, Remote>();
 let room: { presence(value: Record<string, unknown>): Promise<unknown> } | null = null;
-let lastSent='', presT=0, waveCount=0, roomReady=false, publicFair=false;
+let lastSent='', presT=0, waveCount=0, roomReady=false, publicFair=false, netOk=true;
 const mySay={i:0,t:'',until:0};
 async function initRoom(): Promise<void> {
   try{
     const r=await window.claude?.use?.('room');
     if(!r){ // outside claude.ai (for example on Vercel): everyone shares a public PeerJS fair, with private rooms for friends
-      const fr=friends(peers=>syncPeers(peers as unknown as Claude.room.Peer[]),()=>{ publicFair=fr.isPublic; updatePlayers(); });
+      const fr=friends(peers=>syncPeers(peers as unknown as Claude.room.Peer[]),st=>{ publicFair=fr.isPublic; netOk=fr.connected; $('pStat').title=st; updatePlayers(); });
+      $('pStat').onclick=()=>fr.open(); $('pStat').style.cursor='pointer';
       room=fr; publicFair=true; setTimeout(()=>{ roomReady=true; },2500); $('bFriends').hidden=false; $('bFriends').onclick=()=>fr.open();
       updatePlayers(); return;
     }
@@ -362,10 +473,11 @@ function syncPeers(peers: readonly Claude.room.Peer[]): void {
 }
 function updatePlayers(): void {
   $('pStat').hidden=!room||(REMOTE.size===0&&!publicFair);
-  $('players').textContent=String(REMOTE.size+1);
+  $('players').textContent=netOk?String(REMOTE.size+1):'…';
+  $('pStat').classList.toggle('off',!netOk);
   const t=$('titleOnline'); if(t){ t.hidden=!room||REMOTE.size===0; t.textContent=`${REMOTE.size} ${REMOTE.size===1?'person is':'people are'} at the fair right now`; }
 }
-function whereNow(): string { return S.mode==='walk'?(TR.riding?'train':'walk'):S.mode==='scene'?SC.kind:S.mode==='mg'?MG.kind:'title'; }
+function whereNow(): string { return S.mode==='walk'?'walk':S.mode==='scene'?SC.kind:S.mode==='mg'?MG.kind:'title'; }
 function sendPresence(dt: number): void {
   if(!room||S.mode==='title') return;
   presT-=dt; if(presT>0) return; presT=.08;
@@ -561,11 +673,43 @@ function floatText(from: HTMLElement, txt: string, cls: string): void {
   d.style.left=r.left+r.width/2+'px'; d.style.top=r.top+r.height+'px'; document.body.appendChild(d);
   d.animate([{opacity:0,translate:'-50% 0'},{opacity:1,translate:'-50% 10px',offset:.2},{opacity:0,translate:'-50% 44px'}],{duration:1100,easing:'ease-out'}).onfinish=()=>d.remove();
 }
+// ---------- time of day: morning, afternoon, evening and night ----------
+const TOD_NAMES: Array<[number, string, string]> = [[5,'Morning','မနက်ခင်း'],[11,'Afternoon','နေ့လည်'],[16.5,'Evening','ညနေခင်း'],[19,'Night','ညအချိန်']];
+function todOf(m: number): [string, string] { const h=(m/60)%24; let r=TOD_NAMES[3]; for(const t of TOD_NAMES) if(h>=t[0]) r=t; return [r[1],r[2]]; }
+/** How dark it is: 0 in the day, 1 from 7:30 PM until 5 AM. */
+function nightAt(m: number): number { const h=(m/60)%24; return h>=12?clamp(h-18.5,0,1):clamp(6-h,0,1); }
+/** Minutes past midnight in Yangon right now (UTC+6:30). */
+function mmtNow(): number { const d=new Date(); return (d.getUTCHours()*60+d.getUTCMinutes()+d.getUTCSeconds()/60+390)%1440; }
+function setClock(m: number, live=false): void {
+  S.settings.realTime=live; saveSettings();
+  if(S.showStarted&&!S.showDone&&m<21*60+30) onShowCancelled();
+  S.clock=m;
+  if(m<21*60+30){ S.showStarted=false; S.showDone=false; MINI.t=0; MINI.next=rand(6,14); }
+  else if(!S.showStarted){ S.showStarted=true; S.showDone=true; } // tonight's finale is over; the deck still plays an encore
+  const [en,my]=todOf(m);
+  toast(`<span class="z">${en} · ${my}</span>${live?'Following Myanmar time, live. ':''}It is ${fmtClock(m)} at the fair.`,true);
+  $('timeMenu').hidden=true; $('timeStat').setAttribute('aria-expanded','false'); updateHUD();
+}
+function onShowCancelled(): void { if(S.mode==='scene'&&SC.kind==='finale') endScene(); }
+function tickClock(dt: number): void {
+  const before=S.clock;
+  S.clock=S.settings.realTime?mmtNow():S.clock+dt/2;
+  if(S.clock>=1440) S.clock-=1440;
+  if(S.clock<before-600){ S.showStarted=false; S.showDone=false; S.uncleAt-=1440; } // a new day: fireworks again tonight
+}
+$('timeStat').onclick=()=>{ const m=$('timeMenu'); m.hidden=!m.hidden; $('timeStat').setAttribute('aria-expanded',String(!m.hidden));
+  $('mmtNow').textContent=fmtClock(mmtNow());
+  m.querySelectorAll<HTMLButtonElement>('button').forEach(b=>b.classList.toggle('on',b.dataset.t==='mmt'?!!S.settings.realTime:!S.settings.realTime&&todOf(+b.dataset.t!)[0]===todOf(S.clock)[0]));
+  if(!m.hidden) m.querySelector<HTMLButtonElement>('button')!.focus({preventScroll:true}); };
+$('timeMenu').querySelectorAll<HTMLButtonElement>('button').forEach(b=>b.onclick=()=>{ sfx('ding'); if(b.dataset.t==='mmt') setClock(mmtNow(),true); else setClock(+b.dataset.t!); });
+document.addEventListener('pointerdown',e=>{ const m=$('timeMenu'); if(!m.hidden&&!m.contains(e.target as Node)&&!$('timeStat').contains(e.target as Node)){ m.hidden=true; $('timeStat').setAttribute('aria-expanded','false'); } });
+const TOD_ICON: Record<string, string> = {Morning:'🌅',Afternoon:'☀️',Evening:'🌇',Night:'🌙'};
+function showTime(): void { const [en]=todOf(S.clock); $('clock').textContent=fmtClock(S.clock); $('todLbl').textContent=S.settings.realTime?en+' · Yangon':en; const ic=TOD_ICON[en]; if($('todIcon').textContent!==ic) $('todIcon').textContent=ic; }
 function fmtClock(m: number): string { m=Math.floor(m); let h=Math.floor(m/60)%24; const mm=m%60; const ap=h>=12?'PM':'AM'; h=h%12||12; return h+':'+String(mm).padStart(2,'0')+' '+ap; }
 function journey(): Record<string, boolean> {
   return {arrive:true,discover:S.zones.length>=4,play:S.rides>0&&S.games>0,finale:S.finaleSeen};
 }
-let hudCache='';
+let hudCache='', hudDone: Record<string, boolean> | null=null;
 let hudK=-1, hudT=-1;
 function updateHUD(): void {
   $('kyat').textContent=S.kyat.toLocaleString('en-US');
@@ -573,15 +717,17 @@ function updateHUD(): void {
   if(hudK>=0&&S.kyat!==hudK){ pop($('kyat')); floatText($('kyat'),(S.kyat>hudK?'+':'−')+Math.abs(S.kyat-hudK).toLocaleString('en-US')+' Ks',S.kyat>hudK?'up':'down'); }
   if(hudT>=0&&S.tix>hudT){ pop($('tix'),1.5); floatText($('tix'),'+'+(S.tix-hudT)+' 🎟','up'); }
   hudK=S.kyat; hudT=S.tix;
-  $('clock').textContent=fmtClock(S.clock);
+  showTime();
   const j=journey(); let nowSet=false;
-  document.querySelectorAll<HTMLElement>('#journey li').forEach(li=>{ const k=li.dataset.s; li.classList.toggle('done',j[k]); const now=!j[k]&&!nowSet; li.classList.toggle('now',now); if(now) nowSet=true; });
+  document.querySelectorAll<HTMLElement>('#journey li').forEach(li=>{ const k=li.dataset.s!; li.classList.toggle('done',j[k]); const now=!j[k]&&!nowSet; li.classList.toggle('now',now); if(now) nowSet=true;
+    if(hudDone&&j[k]&&!hudDone[k]){ li.classList.remove('lit'); void li.offsetWidth; li.classList.add('lit'); sfx('ding'); } });
+  hudDone=j;
   let g: string;
-  if(!j.discover) g=`Discover the fair: ${S.zones.length} of ${ZONES.length} zones found. Follow the signs off the main street.`;
-  else if(!j.play) g=`Play: ${S.rides?'ride done':'take a ride'}, ${S.games?'game played':'win tickets at a game booth'}.`;
-  else if(!j.finale) g=S.showStarted?'Fireworks now! Go to the Finale View deck.':'Fireworks at 9:30 PM. Find a spot on the Finale View deck.';
-  else g=`Collected: ${S.zones.length}/${ZONES.length} postcards, ${S.secrets.length}/6 secrets, ${S.photos.length} photos.`;
-  if(g!==hudCache){ $('goal').textContent=g; hudCache=g; }
+  if(!j.discover) g=`Explore: find ${4-S.zones.length} more zone${4-S.zones.length===1?'':'s'} (${S.zones.length} of 4). Follow the signs off the main street.`;
+  else if(!j.play) g=!S.rides&&!S.games?'Take a ride, then win tickets at ring toss or balloon darts.':!S.rides?'Game played! Now take a ride: the train, the bumper cars or the big wheel.':'Ride done! Now win some tickets at ring toss or balloon darts.';
+  else if(!j.finale) g=S.showStarted&&!S.showDone?'The fireworks are on! Run to the Finale View deck.':nightAt(S.clock)<.5?'Wait for dark: the fireworks finale is at 9:30 PM at the Finale View deck.':'Fireworks finale at 9:30 PM. Grab a spot on the Finale View deck.';
+  else g=`All done! ${S.zones.length}/${ZONES.length} postcards, ${S.secrets.length}/6 secrets and ${S.photos.length} photos so far.`;
+  if(g!==hudCache){ $('goalT').textContent=g; hudCache=g; const el=$('goal'); el.classList.remove('new'); void el.offsetWidth; el.classList.add('new'); }
 }
 function pay(n: number): boolean { if(S.kyat<n){ toast(`Not enough kyat. You have ${ks(S.kyat)}. Uncle at the entry gate can help.`); sfx('miss'); return false; } S.kyat-=n; sfx('coin'); updateHUD(); return true; }
 
@@ -641,7 +787,7 @@ function askUncle(): void {
   S.kyat+=5000; S.uncleAt=S.clock; sfx('coin'); toast('Uncle hands you <b>5,000 Ks</b>. “Don’t spend it all on shwe yin aye.”'); updateHUD();
 }
 
-function buyOC(f: typeof OC_FOOD[number]): void {
+function buyPwe(f: typeof PWE_FOOD[number]): void {
   if(!pay(f.p)) return;
   if(!S.snacks.includes(f.id)){ S.snacks.push(f.id); toast(`<b>${f.name}</b> <span class="mm">${f.my}</span><br>${f.d}`); }
   else toast(`Another ${f.name.toLowerCase()}. Still delicious.`);
@@ -751,7 +897,7 @@ function boothPhoto(): void {
   toast('Click! Your souvenir photo is in your bag.');
 }
 function enterPhotoMode(): void { if(S.mode!=='walk'&&S.mode!=='scene') return; closeChat(); S.photo=true; $('photoUI').hidden=false; document.body.classList.add('photo'); syncChrome(); }
-function exitPhotoMode(): void { S.photo=false; P.hidden=TR.riding; $('photoUI').hidden=true; document.body.classList.remove('photo'); syncChrome(); }
+function exitPhotoMode(): void { S.photo=false; P.hidden=false; $('photoUI').hidden=true; document.body.classList.remove('photo'); syncChrome(); }
 $('shutter').onclick=()=>{ renderNow(0); capturePhoto(capture()); toast('Photo saved to your bag.'); };
 $('photoExit').onclick=exitPhotoMode;
 $('photoHide').onclick=()=>{ if(S.mode!=='walk') return; P.hidden=!P.hidden; $('photoHide').textContent=P.hidden?'Show me':'Hide me'; };
@@ -772,7 +918,7 @@ function openBag(): void {
         g.appendChild(d); }); body.appendChild(g); }
     if(bagTab==='souvenirs'){
       const list: string[]=[];
-      S.snacks.forEach(id=>{ const s=SNACKS.find(x=>x.id===id)||OC_FOOD.find(x=>x.id===id)||{name:'Laphet yay',my:'လက်ဖက်ရည်'}; list.push(`<div class="item"><div class="t"><b>${s.name} <span class="mm muted">${s.my}</span></b><small>Snack tasted</small></div></div>`); });
+      S.snacks.forEach(id=>{ const s=SNACKS.find(x=>x.id===id)||PWE_FOOD.find(x=>x.id===id)||{name:'Laphet yay',my:'လက်ဖက်ရည်'}; list.push(`<div class="item"><div class="t"><b>${s.name} <span class="mm muted">${s.my}</span></b><small>Snack tasted</small></div></div>`); });
       S.toys.forEach(id=>{ const s=TOYS.find(x=>x.id===id); list.push(`<div class="item"><div class="t"><b>${s.name}</b><small>Toy from the Kids Corner stall</small></div></div>`); });
       S.prizes.forEach(id=>{ const s=PRIZES.find(x=>x.id===id); list.push(`<div class="item"><div class="t"><b>${s.name}</b><small>Prize won with tickets</small></div></div>`); });
       body.innerHTML=list.length?`<div class="items">${list.join('')}</div>`:'<p class="muted">Nothing yet. Try a snack on Food Street, a toy in the Kids Corner, or win a prize at the Game Booths.</p>'; }
@@ -842,8 +988,9 @@ function askFireworks(big: boolean): void {
 function answerFireworks(yes: boolean): void {
   const d=$('fwAsk'); if(d.hidden) return; d.hidden=true; clearTimeout(askT);
   if(!yes){ if(!S.showStarted) MINI.declined++; toast('Okay! You can watch any time from the Finale View deck.'); return; }
+  if(S.mode==='scene'&&SC.kind==='train') leaveTrain(); else if(S.mode==='scene'&&SC.kind==='bumper') endScene();
   if(S.mode!=='walk') return;
-  if(TR.riding){ TR.riding=false; P.hidden=false; } P.dance=false; standUp(); closeModal(); closeMap();
+  P.dance=false; standUp(); closeModal(); closeMap();
   startScene('finale');
 }
 $('fwYes').onclick=()=>answerFireworks(true);
@@ -851,28 +998,31 @@ $('fwNo').onclick=()=>answerFireworks(false);
 function miniOver(): void {
   if(S.mode==='scene'&&SC.kind==='finale'&&!S.showStarted) setBar('That was a little show. The big finale is at 9:30 PM.','Wait for the finale',waitForFinale);
 }
-function waitForFinale(): void { S.clock=Math.max(S.clock,21*60+29.5); $('sceneAlt').hidden=true; $('sceneCap').textContent='Settling in. The first rocket is about to go up…'; }
+function waitForFinale(): void { if(S.settings.realTime){ S.settings.realTime=false; saveSettings(); } if(S.clock>21*60+30){ S.showStarted=false; S.showDone=false; } S.clock=21*60+29.5; $('sceneAlt').hidden=true; $('sceneCap').textContent='Settling in. The first rocket is about to go up…'; }
 
 // ---------- rides & the finale ----------
-type SceneKind = 'ferris' | 'carousel' | 'pirate' | 'drop' | 'swinger' | 'finale' | 'wishes';
-const RIDES: SceneKind[] = ['ferris','carousel','pirate','drop','swinger'];
+type SceneKind = 'ferris' | 'carousel' | 'pirate' | 'handwheel' | 'swinger' | 'train' | 'bumper' | 'finale' | 'wishes';
+const RIDES: SceneKind[] = ['ferris','carousel','pirate','handwheel','swinger'];
 const SC: { kind: SceneKind | null; t: number; dur: number; replay?: boolean; topSaid?: boolean; wh?: boolean; cue?: number } = {kind:null,t:0,dur:0};
 const RIDECAP: Record<string, string> = {
   ferris:'Rising over the fair in your gondola. Look for the Shwedagon Pagoda glowing gold beyond the lake. Drag to look around, Q to wave.',
   carousel:'Round and round on a painted horse. Drag to look around and press Q to wave at the crowd!',
   pirate:'Hold on tight, it swings higher each time. Drag to look around.',
-  drop:'Strapped in at the bottom of the drop tower. Up, up, up… drag to look out over the fair.',
-  swinger:'Lifting off on the wave swinger. Drag to look around and press Q to wave.',
+  handwheel:'You climb into a little wooden seat. The young men swing up onto the spokes to turn the wheel by hand… drag to look around.',
+  train:'All aboard! You squeeze onto the front bench of the first carriage, right behind the engine. Drag to look around.',
+  bumper:'You squeeze into a bumper car. W / S or the stick to go and reverse, A / D to steer. Bump as many cars as you can!',
+  swinger:'Lifting off on the flying swing under its golden roof. Drag to look around and press Q to wave.',
 };
 function buyRide(kind: SceneKind, price: number): void { if(!pay(price)) return; S.rides++; startScene(kind); updateHUD(); }
 function startScene(kind: SceneKind): void {
   closeChat();
-  SC.kind=kind; SC.t=0; SC.dur={ferris:28,carousel:16,pirate:16,drop:20,swinger:24,finale:9999,wishes:9999}[kind]; SC.replay=false; SC.topSaid=false; SC.cue=0; LOOK.yaw=LOOK.pitch=0;
+  SC.kind=kind; SC.t=0; SC.dur={ferris:28,carousel:16,pirate:16,handwheel:22,swinger:24,train:9999,bumper:DRIVE_SECS,finale:9999,wishes:9999}[kind]; SC.replay=false; SC.topSaid=false; SC.cue=0; LOOK.yaw=LOOK.pitch=0;
   S.mode='scene'; $('prompt').hidden=true;
   if(kind==='finale'){
     if(S.showDone){ SC.replay=true; setBar('An encore just for you. Fireworks bloom over the city.'); }
     else if(S.showStarted) setBar('The fireworks finale has begun! Drag to look around the sky.');
     else if(MINI.t>0) setBar('A little fireworks show over the lake. Drag to look around. The big finale is at 9:30 PM.','Wait for the finale',waitForFinale);
+    else if(nightAt(S.clock)<.5) setBar(`It is still light at ${fmtClock(S.clock)}. The fireworks go up after dark: little shows from 7 PM and the finale at 9:30 PM.`,'Skip to the finale',waitForFinale);
     else setBar(`The skyline at ${fmtClock(S.clock)}. Little shows go up every minute or so, and the finale is at 9:30 PM.`,'Wait for the finale',waitForFinale);
   } else if(kind==='wishes'){ CAM.yaw=0; setBar(`Every light is somebody's wish: ${WISHES.filter(w=>w.k==='sky').length} fire balloons and ${WISHES.filter(w=>w.k==='water').length} water lanterns. Drag to look around.`,'Make a wish',()=>{ endScene(); openWish('sky'); }); }
   else setBar(RIDECAP[kind]);
@@ -884,7 +1034,9 @@ function setBar(cap: string, alt?: string, altFn?: () => void, exit?: string): v
 }
 function endScene(): void {
   const k=SC.kind; S.mode='walk'; SC.kind=null; $('sceneBar').hidden=true;
-  if(k&&RIDES.includes(k)) toast(k==='drop'?'Your legs are still shaking. What a drop!':'What a ride! Your ticket stub is a keepsake.');
+  if(k==='train'){ placeOffTrain(); TRN.aboard=false; toast('You hop off the mini train.'); }
+  if(k==='bumper') endDrive();
+  if(k&&RIDES.includes(k)) toast(k==='handwheel'?'The boys hop down grinning and wait for a tip. What a ride!':'What a ride! Your ticket stub is a keepsake.');
   syncChrome(); updateHUD(); maybeSummary();
 }
 $('sceneExit').onclick=()=>{ if(S.mode==='scene') endScene(); else if(S.mode==='mg') endGame(); };
@@ -893,13 +1045,14 @@ function updateScene(dt: number, atTop: boolean): void {
   if(SC.kind==='ferris'&&atTop&&!SC.topSaid){ SC.topSaid=true; $('sceneCap').textContent='Top of the wheel! The whole of Yangon sparkles below you.'; sfx('ding'); }
   if(SC.kind==='pirate'){ const c=Math.abs(Math.cos(T*1.15)); if(c<.06&&!SC.wh){ sfx('whee'); SC.wh=true; } if(c>.3) SC.wh=false; }
   if(SC.kind==='wishes'&&drag.id==null) CAM.yaw+=dt*.06;
-  if(SC.kind==='drop'){
-    if(SC.cue===0&&SC.t>2){ SC.cue=1; sfx('clank'); $('sceneCap').textContent='Click, click, click… climbing 26 metres above the fair.'; }
-    if(SC.cue===1&&SC.t>12.2){ SC.cue=2; $('sceneCap').textContent='At the very top. The whole fair glitters below. Wait for it…'; }
-    if(SC.cue===2&&SC.t>15){ SC.cue=3; sfx('scream'); sfx('whee'); $('sceneCap').textContent='Aaaaah!'; }
-    if(SC.cue===3&&SC.t>17.6){ SC.cue=4; sfx('clank'); $('sceneCap').textContent='Safe at the bottom. Want to go again?'; }
+  if(SC.kind==='handwheel'){
+    if(SC.cue===0&&SC.t>3){ SC.cue=1; sfx('whee'); $('sceneCap').textContent='Hup! The boys swing on the spokes with all their weight and the wheel spins faster and faster.'; }
+    if(SC.cue===1&&SC.t>10){ SC.cue=2; sfx('whee'); $('sceneCap').textContent='Round and round, swooping over the crowd. Hold on to the bar!'; }
+    if(SC.cue===2&&SC.t>17){ SC.cue=3; sfx('clank'); $('sceneCap').textContent='Slowing down… the boys drag their feet and hop off one by one.'; }
   }
   if(SC.kind==='swinger'&&SC.cue===0&&SC.t>5){ SC.cue=1; sfx('whee'); }
+  if(SC.kind==='train'&&TRN.aboard&&TRN.v>0){ const rel=(TRN.d-TRAIN_STOP+TRACK_LEN)%TRACK_LEN, c=TRAIN_CAPS[SC.cue||0]; if(c&&rel>=c[0]){ SC.cue=(SC.cue||0)+1; $('sceneCap').textContent=c[1]; } }
+  if(SC.kind==='bumper'){ const txt=`⏱ ${Math.max(0,Math.ceil(SC.dur-SC.t))} s · You bumped ${DRIVE.given} · Got bumped ${DRIVE.taken} · W/S go, A/D steer`; if(txt!==DRIVE.shown&&SC.t>4){ DRIVE.shown=txt; $('sceneCap').textContent=txt; } }
   if(SC.dur<9999&&SC.t>=SC.dur) endScene();
 }
 
@@ -1044,7 +1197,7 @@ window.addEventListener('keyup',e=>{ keys[e.code]=false; });
 window.addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
 function press(): void {
   if(S.paused) return;
-  if(S.mode==='walk'){ if(TR.riding) return; const it=nearIT(); if(it) it.act(); }
+  if(S.mode==='walk'){ const it=nearIT(); if(it) it.act(); }
   else if(S.mode==='mg') mgPress();
 }
 cv.addEventListener('pointerdown',e=>{
@@ -1073,7 +1226,7 @@ world.addEventListener('pointermove',e=>{
   }
   CAM.yaw-=dx*.006; CAM.pitch=clamp(CAM.pitch+dy*.004,.08,1.25);
 });
-function povLook(): boolean { return S.mode==='scene'&&SC.kind!=='wishes'||S.mode==='walk'&&TR.riding; }
+function povLook(): boolean { return S.mode==='scene'&&SC.kind!=='wishes'; }
 const endDrag=(e: PointerEvent)=>{ pinch.delete(e.pointerId); pinchD=0; if(e.pointerId===drag.id){ drag.id=null; world.classList.remove('drag'); } };
 world.addEventListener('pointerup',endDrag); world.addEventListener('pointercancel',endDrag);
 world.addEventListener('wheel',e=>{ e.preventDefault(); CAM.zoom=clamp(CAM.zoom*Math.exp(e.deltaY*.0012),5,40); },{passive:false});
@@ -1104,7 +1257,7 @@ function syncChrome(): void {
   $('hud').hidden=!playing||ph;
   $('tools').hidden=!playing||ph;
   $('mini').hidden=!playing||ph||S.mode!=='walk'||!S.settings.mini;
-  $('touch').hidden=!playing||ph||!touchMode||S.mode!=='walk';
+  $('touch').hidden=!playing||ph||!touchMode||!(S.mode==='walk'||S.mode==='scene'&&SC.kind==='bumper');
   $('chat').hidden=!playing||ph||S.mode==='mg';
   $('sceneBar').hidden=ph||!(S.mode==='scene'||S.mode==='mg');
   cv.hidden=S.mode!=='mg';
@@ -1129,26 +1282,21 @@ function checkWorld(): void {
   for(const s of SECRETS){ if(!S.secrets.includes(s.id)&&Math.hypot(P.x-s.x,P.y-s.y)<50){ S.secrets.push(s.id); S.kyat+=300; sfx('ding'); toast(`Secret found: <b>${s.name}</b><br>${s.d} <span class="muted">(+300 Ks)</span>`); updateHUD(); } }
   if(DODGE.on){ const t=`<span class="key">⏱</span>${Math.ceil(DODGE.t)} s left · ${DODGE.hits} bump${DODGE.hits===1?'':'s'} · keep running!`;
     if(t!==DODGE.shown){ $('prompt').innerHTML=t; $('prompt').hidden=false; DODGE.shown=t; } lastIT=null; return; }
-  const it=(S.mode==='walk'&&!TR.riding&&!S.photo)?nearIT():null;
+  const it=(S.mode==='walk'&&!S.photo)?nearIT():null;
   if(it!==lastIT||it){ if(it){ $('prompt').innerHTML=`<span class="key">${touchMode?'GO':'E'}</span>${it.label()}`; $('prompt').hidden=false; } else $('prompt').hidden=true; lastIT=it; }
 }
 function maybeSummary(): void {
   if(!S.showDone||S.summaryShown||S.mode!=='walk') return;
   S.summaryShown=true; S.finaleSeen=true; updateHUD();
   openModal('What a night!',`<p>The last sparks drift over the skyline. Here is your Yay Kyaw night:</p>
-  <div class="statgrid"><div><b>${S.zones.length}/${ZONES.length}</b>Postcards</div><div><b>${S.secrets.length}/6</b>Secrets</div><div><b>${S.snacks.length}/${SNACKS.length+OC_FOOD.length+1}</b>Snacks tasted</div><div><b>${S.rides}</b>Rides</div><div><b>${S.ticketsWon}</b>Tickets won</div><div><b>${S.prizes.length+S.toys.length}</b>Souvenirs</div><div><b>${S.photos.length}</b>Photos</div></div>
+  <div class="statgrid"><div><b>${S.zones.length}/${ZONES.length}</b>Postcards</div><div><b>${S.secrets.length}/6</b>Secrets</div><div><b>${S.snacks.length}/${SNACKS.length+PWE_FOOD.length+1}</b>Snacks tasted</div><div><b>${S.rides}</b>Rides</div><div><b>${S.ticketsWon}</b>Tickets won</div><div><b>${S.prizes.length+S.toys.length}</b>Souvenirs</div><div><b>${S.photos.length}</b>Photos</div></div>
   <p class="muted">The fair stays open. Keep exploring, find the rest of the secrets, or watch the finale again from the Finale View deck.</p>`);
 }
 
 // ---------- movement ----------
 function movePlayer(dt: number): void {
-  if(S.mode!=='walk'||S.paused||TR.riding) { P.moving=false; P.vx=P.vy=P.spd=0; }
+  if(S.mode!=='walk'||S.paused) { P.moving=false; P.vx=P.vy=P.spd=0; }
   if(S.mode!=='walk'||S.paused) return;
-  if(TR.riding){
-    TR.rideU+=dt*.55; const [x,y]=trackPos(TR.u-.32); P.x=x; P.y=y;
-    if(TR.rideU>=TAU){ TR.riding=false; P.hidden=false; P.x=TRK.cx; P.y=TRK.cy+TRK.ry+90; toast('Toot toot! Thanks for riding the mini train.'); }
-    return;
-  }
   let ix=0, iy=0;
   if(!chatOpen){ if(keys.ArrowLeft||keys.KeyA) ix--; if(keys.ArrowRight||keys.KeyD) ix++; if(keys.ArrowUp||keys.KeyW) iy--; if(keys.ArrowDown||keys.KeyS) iy++; }
   if(joy.id!=null){ ix=joy.x; iy=joy.y; }
@@ -1189,13 +1337,13 @@ function frameData(dt: number): Frame {
   for(const n of NPC) crowdBuf.push({x:n.x,y:n.y,hd:n.sit?n.hd+Math.sin((n.nod||0)*.5)*.35:n.hd,s:n.s,moving:n.moving,t:T+n.ph,sit:n.sit,shirt:n.shirt,lon:n.lon,skin:n.skin,hat:n.hat,bun:n.bun,balloon:n.balloon});
   const others=[...REMOTE.values()].map(r=>({id:r.peer,x:r.x,y:r.y,hd:r.hd,moving:r.moving,wave:T<r.waveUntil,dance:r.dance,look:r.look,balloon:r.balloon,visible:r.where==='walk'}));
   let ride: RideKind=null;
-  if(S.mode==='scene') ride=SC.kind as RideKind; else if(S.mode==='walk'&&TR.riding) ride='train';
+  if(S.mode==='scene') ride=SC.kind as RideKind;
   const title=S.mode==='title';
   const cam=title?{yaw:T*.05,pitch:.38,dist:46}:CAM;
   return {
-    t:T, dt, night:clamp((S.clock-(18*60+30))/60,0,1), quality:S.settings.gfx,
+    t:T, dt, night:title?1:nightAt(S.clock), clock:title?20*60:S.clock, quality:S.settings.gfx,
     me:{x:title?900:P.x,y:title?2000:P.y,hd:P.hd,moving:P.moving,spd:P.spd,wave:T<P.waveUntil,dance:P.dance,sit:P.sit,look:myLook(),balloon:S.balloon,hidden:P.hidden||title},
-    crowd:crowdBuf, bikes:BIKES, others, ride, rideT:SC.t, trainU:TR.u, cam,
+    crowd:crowdBuf, bikes:BIKES, others, ride, rideT:SC.t, train:TRN, cam,
     sparkle:SECRETS.map(s=>S.secrets.includes(s.id)?0:clamp(1-Math.hypot(P.x-s.x,P.y-s.y)/320,0,1)),
     steamFrom:CARTS, look:LOOK, bumpers:BUMPS, shake:RM?0:shake,
     candles:{lamps:CAND.lamps,mine:CAND.mine,flowers:CAND.flowers},
@@ -1205,14 +1353,14 @@ function renderNow(dt: number): { atTop: boolean } { return render3d(frameData(d
 function frame(now: number): void {
   const dt=Math.min(.05,(now-last)/1000); last=now; T+=dt;
   if(S.mode!=='title'&&!S.paused){
-    S.clock=Math.min(23*60,S.clock+dt/2);
-    if(!S.showStarted&&S.clock>=21*60+30){ S.showStarted=true; S.showT=75; fountT=0; MINI.t=0; onShow(true); updateHUD(); }
+    tickClock(dt);
+    if(!S.showStarted&&S.clock>=21*60+30&&S.clock<22*60){ S.showStarted=true; S.showT=75; fountT=0; MINI.t=0; onShow(true); updateHUD(); }
     if(S.showStarted&&!S.showDone){ S.showT-=dt; if(S.showT<=0){ S.showDone=true; if(S.mode==='scene'&&SC.kind==='finale'){ S.finaleSeen=true; setBar('That was beautiful. Stay for an encore, or head back to the fair.','Encore',()=>{ SC.replay=true; $('sceneAlt').hidden=true; },'Back to the fair'); } else maybeSummary(); updateHUD(); } }
   }
   updFireworks(dt);
   movePlayer(dt);
   CAM.dist+=(CAM.zoom-CAM.dist)*(1-Math.exp(-dt*8));
-  TR.u+=dt*.55;
+  updateTrain(dt);
   for(const n of NPC) updateNPC(n,dt);
   updateBikes(dt); updateBumpers(dt); updateCandles(dt);
   for(const r of REMOTE.values()){ const k=Math.min(1,dt*8); r.moving=Math.hypot(r.tx-r.x,r.ty-r.y)>1.5; r.x=lerp(r.x,r.tx,k); r.y=lerp(r.y,r.ty,k); }
@@ -1225,21 +1373,21 @@ function frame(now: number): void {
   chatT-=dt; if(chatT<=0){ chatT=.5; let n=0; if(S.mode==='walk'){ for(const q of NPC) if(Math.abs(q.x-P.x)<280&&Math.abs(q.y-P.y)<280) n++; n+=REMOTE.size; } setChatter(S.mode==='walk'?.25+.75*Math.min(1,n/12):S.mode==='title'?0:.2); }
   if(A.c&&A.music){ let v: number; if(S.mode==='walk'||S.mode==='title'){ const d=Math.hypot(P.x-ST.x,P.y-ST.y); v=.03+.5*clamp(1-d/650,0,1)+(P.dance?.15:0); } else if(S.mode==='scene'&&SC.kind==='carousel') v=.45; else v=.06;
     A.music.gain.setTargetAtTime(v,A.c.currentTime,.3); if(A.amb) A.amb.gain.setTargetAtTime(S.mode==='walk'?.22:.1,A.c.currentTime,.4); }
-  if((T*10|0)%3===0) $('clock').textContent=fmtClock(S.clock);
+  if((T*10|0)%3===0) showTime();
   requestAnimationFrame(frame);
 }
 // ---------- maps: a close-up mini map that follows you, and a full map of the fair (tap the mini map or press M) ----------
 const MAP_MARKS: Array<{ x: number; y: number; icon: string; en: string; my: string; small?: boolean; tiny?: boolean }> = [
   {x:FW.cx,y:FW.cy+150,icon:'🎡',en:'Ferris wheel',my:'ချားရဟတ်'}, {x:CR.cx,y:CR.cy,icon:'🎠',en:'Carousel',my:'မြင်းစီးချားရဟတ်'},
-  {x:PS.px,y:PS.py,icon:'⛵',en:'Pirate ship',my:'သင်္ဘောလွှဲ'}, {x:TRK.cx,y:TRK.cy,icon:'🚂',en:'Mini train',my:'ရထားလေး'},
+  {x:PS.px,y:PS.py,icon:'⛵',en:'Pirate ship',my:'သင်္ဘောလွှဲ'}, {x:STATION.x,y:STATION.y,icon:'🚂',en:'Train station',my:'ရထားဘူတာ'},
   {x:ST.x,y:ST.y,icon:'🎤',en:'Stage',my:'ဇာတ်စင်'}, {x:FV.x,y:FV.y,icon:'🎆',en:'Finale View',my:'မီးပန်းကြည့်ရာ'},
   {x:PHOTO.x,y:PHOTO.y,icon:'📸',en:'Photo booth',my:'ဓာတ်ပုံ',small:true}, {x:TOYS_AT.x,y:TOYS_AT.y,icon:'🧸',en:'Toys',my:'အရုပ်',small:true},
   {x:WISH_STALL.x,y:WISH_STALL.y,icon:'🏮',en:'Wish stall',my:'ဆုတောင်း'}, {x:POND.x,y:POND.y,icon:'🪷',en:'Wishing Lake',my:'ဆုတောင်းကန်'},
   {x:UNCLE.x,y:UNCLE.y,icon:'👴',en:'Uncle',my:'ဦးလေး',small:true,tiny:true},
-  {x:BUMPER.x+BUMPER.w/2,y:BUMPER.y+BUMPER.h/2,icon:'🚗',en:'Bumper cars',my:'ကားတိုက်'}, {x:DROP.x,y:DROP.y,icon:'🗼',en:'Drop tower',my:'မိုးပျံတာ'},
-  {x:SWINGER.x,y:SWINGER.y,icon:'🎢',en:'Wave swinger',my:'လှိုင်းလွှဲ'},
+  {x:BUMPER.x+BUMPER.w/2,y:BUMPER.y+BUMPER.h/2,icon:'🚗',en:'Bumper cars',my:'ကားတိုက်'}, {x:HAND_WHEEL.x,y:HAND_WHEEL.y,icon:'🎡',en:'Hand-turned wheel',my:'လူအားချားရဟတ်'},
+  {x:SWINGER.x,y:SWINGER.y,icon:'🎢',en:'Flying swing',my:'ဒန်းလွှဲ'},
   {x:CANDLE.x,y:CANDLE.y,icon:'🪔',en:'Oil lamps',my:'ဆီမီးထွန်းပွဲ'}, {x:TEA.x,y:TEA.y+60,icon:'☕',en:'Teashop',my:'လက်ဖက်ရည်ဆိုင်'},
-  ...OC_FOOD.map(f=>({x:f.x,y:f.y,icon:'🌭',en:f.name,my:f.my,small:true,tiny:true})),
+  ...PWE_FOOD.map(f=>({x:f.x,y:f.y,icon:'🍌',en:f.name,my:f.my,small:true,tiny:true})),
   ...BOOTHS.map(b=>({x:b.x,y:b.y,icon:b.kind==='prize'?'🎁':'🎯',en:b.kind==='ring'?'Ring toss':b.kind==='darts'?'Darts':'Prizes',my:b.my,small:true})),
   ...CARTS.map(([x,y],i)=>({x,y,icon:'🍜',en:SNACKS[i].name,my:SNACKS[i].my,small:true,tiny:true})),
 ];
@@ -1259,7 +1407,8 @@ function drawMap(g: CanvasRenderingContext2D, v: MapView): void {
   g.fillStyle='#4a4166'; g.fillRect(X(ROAD.x),Y(NORTH),ROAD.w*s,(WH-NORTH)*s);
   g.strokeStyle='rgba(244,214,138,.55)'; g.setLineDash([10*k,10*k]); g.lineWidth=2*k; g.beginPath(); g.moveTo(X(ROAD.x+ROAD.w/2),Y(NORTH)); g.lineTo(X(ROAD.x+ROAD.w/2),Y(WH)); g.stroke(); g.setLineDash([]);
   // train track, pond, gate
-  g.strokeStyle='#8a7a64'; g.lineWidth=3*k; g.beginPath(); g.ellipse(X(TRK.cx),Y(TRK.cy),TRK.rx*s,TRK.ry*s,0,0,TAU); g.stroke();
+  g.strokeStyle='#8a7a64'; g.lineWidth=3*k; g.beginPath(); for(let d=0;d<=TRACK_LEN;d+=20){ const [x,y]=trackPos(d); if(d) g.lineTo(X(x),Y(y)); else g.moveTo(X(x),Y(y)); } g.closePath(); g.stroke();
+  { const [x,y]=trackPos(TRN.d); g.fillStyle='#e0b040'; g.beginPath(); g.arc(X(x),Y(y),3.5*k,0,TAU); g.fill(); }
   const pg=g.createRadialGradient(X(POND.x),Y(POND.y),0,X(POND.x),Y(POND.y),POND.rx*s);
   pg.addColorStop(0,'#3b6fd0'); pg.addColorStop(1,'#152a6a'); g.fillStyle=pg;
   g.beginPath(); g.ellipse(X(POND.x),Y(POND.y),POND.rx*s,POND.ry*s,0,0,TAU); g.fill(); g.strokeStyle='#b8a888'; g.lineWidth=2*k; g.stroke();
@@ -1356,4 +1505,4 @@ const hot=window.claude&&window.claude.hot;
 if(hot&&hot.ready) hot.ready(boot); else boot(hot&&hot.data||{});
 // audio needs a gesture; also unlock on first tap after a reload
 window.addEventListener('pointerdown',()=>{ if(S.mode!=='title'){ audioInit(S.settings.sound); loadVoices(VOICE_CLIPS); if(A.c&&A.c.state==='suspended') A.c.resume(); } });
-window.__ykn={S,P,CAM,startScene,startGame,TR,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};
+window.__ykn={S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};
