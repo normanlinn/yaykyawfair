@@ -3,14 +3,14 @@
 import { Ctx, TAU, rand, pick, clamp, lerp, srng, rr, el, circ, ln, ks, MMF, DISP, BODY, $ } from './util';
 import { SHIRTS, LONS, SKINS, BALLOONS, AV_SHIRTS, AV_LONS, person, PersonOpts, Avatar, Gender, DEFAULT_AVATAR, avatarOpts, cleanAvatar, randomAvatar, genderStartingLook } from './people';
 import { A, audioInit, sfx, bell, horn, setChatter, setMaster, loadVoices, speak } from './audio';
-import { CROWD_LINES, VENDOR_CALLS, VOICE_CLIPS } from './voices';
+import { CROWD_LINES, VENDOR_CALLS, REPLIES, VOICE_CLIPS } from './voices';
 import {
   WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, TR as TRK, ST, FV, PHOTO, TOYS_AT, UNCLE, ARCH_Y, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
-  STALLFRONTS, VENDOR_POSTS, POND, WISH_STALL, blocked, trackPos,
+  STALLFRONTS, VENDOR_POSTS, POND, WISH_STALL, BUMPER, DROP, SWINGER, OC_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, M, blocked, trackPos,
 } from './layout';
 import { friends } from './friends';
 import { openWishes, Wish, WishKind, WISH_PRICE, WISH_IDEAS, WISH_MAX_LEN, cleanWish } from './wishes';
-import { init3d, build3d, resize3d, render3d, launchFirework, renderPreview, capture, project, rigKey, setWishes, wishSpot, CrowdItem, Frame, Look, RideKind } from './world3d';
+import { init3d, build3d, resize3d, render3d, launchFirework, fountain, renderPreview, capture, project, rigKey, setWishes, wishSpot, BUMPER_N, CANDLE_MINE, CrowdItem, Frame, Look, RideKind } from './world3d';
 
 // ---------- canvases ----------
 const world = $<HTMLCanvasElement>('world');
@@ -45,7 +45,8 @@ const S: GameState = {
 try{ const sv=JSON.parse(localStorage.getItem('ykn-settings')||'null'); if(sv){ Object.assign(S.settings,sv); S.settings.av={...DEFAULT_AVATAR,...(sv.av||{})}; } }catch{ /* storage unavailable */ }
 function saveSettings(): void { try{ localStorage.setItem('ykn-settings',JSON.stringify(S.settings)); }catch{ /* storage unavailable */ } }
 
-const P = {x:900,y:2540,hd:Math.PI,moving:false,hidden:false,waveUntil:0,vx:0,vy:0,spd:0};
+const P = {x:900,y:2540,hd:Math.PI,moving:false,hidden:false,waveUntil:0,vx:0,vy:0,spd:0,kx:0,ky:0,dance:false,sit:false,standX:0,standY:0};
+const LOOK = {yaw:0,pitch:0}; // turning your head on a ride or while watching the fireworks
 const CAM = {yaw:0,pitch:.42,dist:11,zoom:11};
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TR = {u:0,riding:false,rideU:0};
@@ -65,7 +66,7 @@ IT.push({x:BOOTHS[2].x,y:BOOTHS[2].y+35,r:50,label:()=>`Trade tickets for prizes
 IT.push({x:590,y:850,r:50,label:()=>`Ride the Ferris wheel · ${ks(1500)}`,act:()=>buyRide('ferris',1500)});
 IT.push({x:CR.cx,y:CR.cy+165,r:60,label:()=>`Ride the carousel · ${ks(1000)}`,act:()=>buyRide('carousel',1000)});
 IT.push({x:PS.px,y:PS.py+75,r:60,label:()=>`Ride the pirate ship · ${ks(1200)}`,act:()=>buyRide('pirate',1200)});
-IT.push({x:TRK.cx,y:TRK.cy+TRK.ry+78,r:55,label:()=>`Ride the mini train · ${ks(500)}`,act:()=>{ if(!pay(500)) return; S.rides++; TR.riding=true; TR.rideU=0; P.hidden=true; sfx('toot'); toast('All aboard! One loop around the Kids Corner.'); updateHUD(); }});
+IT.push({x:TRK.cx,y:TRK.cy+TRK.ry+78,r:55,label:()=>`Ride the mini train · ${ks(500)}`,act:()=>{ if(!pay(500)) return; S.rides++; TR.riding=true; TR.rideU=0; P.hidden=true; LOOK.yaw=LOOK.pitch=0; sfx('toot'); toast('All aboard! One loop around the Kids Corner.'); updateHUD(); }});
 IT.push({x:TOYS_AT.x,y:TOYS_AT.y+30,r:48,label:()=>'Browse the toy stall',act:openToys});
 IT.push({x:PHOTO.x,y:PHOTO.y+30,r:45,label:()=>`Souvenir photo booth · ${ks(500)}`,act:boothPhoto});
 IT.push({x:FV.x,y:FV.y+10,r:110,label:()=>S.showStarted&&!S.showDone?'Watch the fireworks now!':S.showDone?'Watch the finale again':'Watch the skyline',act:()=>startScene('finale')});
@@ -73,10 +74,21 @@ IT.push({x:UNCLE.x,y:UNCLE.y+10,r:45,label:()=>'Ask Uncle for pocket money',act:
 IT.push({x:WISH_STALL.x,y:WISH_STALL.y+50,r:60,label:()=>'Make a Thadingyut wish · ဆုတောင်း',act:()=>openWish('sky')});
 IT.push({x:POND.x-POND.rx-34,y:POND.y,r:50,label:()=>'Look up at all the wishes',act:()=>startScene('wishes')});
 IT.push({x:POND.x,y:POND.y+POND.ry+28,r:80,label:()=>`Float a wish on the pond · ${ks(WISH_PRICE.water)}`,act:()=>openWish('water')});
+IT.push({x:DROP.x,y:DROP.y+100,r:60,label:()=>`Ride the drop tower · ${ks(1500)}`,act:()=>buyRide('drop',1500)});
+IT.push({x:SWINGER.x,y:SWINGER.y+SWINGER.R+40,r:60,label:()=>`Ride the wave swinger · ${ks(1200)}`,act:()=>buyRide('swinger',1200)});
+IT.push({x:BUMPER.x-40,y:BUMPER.y+BUMPER.h/2,r:55,label:()=>`Dodge the bumper cars for 30 seconds · ${ks(1000)}`,act:startDodge});
+OC_FOOD.forEach(f=>IT.push({x:f.x,y:f.y+40,r:50,label:()=>`Buy a ${f.name.toLowerCase()} · ${ks(f.p)}`,act:()=>buyOC(f)}));
+IT.push({x:ST.x,y:ST.y+130,r:95,label:()=>P.dance?'Stop dancing':'Dance with the dancers · ကခုန်မယ်',act:toggleDance});
+IT.push({x:CANDLE.x,y:CANDLE.y+CANDLE.R+30,r:70,label:()=>CAND.mine>=CANDLE_MINE?'Every lamp here is lit. Thank you!':`Light an oil lamp · ဆီမီးထွန်းမယ် · ${ks(200)}`,act:lightLamp});
+IT.push({x:CANDLE.x-CANDLE.R-30,y:CANDLE.y,r:70,label:()=>`Offer flowers · ပန်းကပ်မယ် · ${ks(300)}`,act:offerFlowers});
+IT.push({x:TEA.x-120,y:TEA.y+60,r:60,label:()=>`Order tea at the counter · ${ks(500)}`,act:orderTea});
+TEA_TABS.forEach((_,i)=>{ const [x,y]=teaStools(i)[teaFree(i)];
+  const ox=TEA_TABS[i][0]+(x-TEA_TABS[i][0])/17*46, oy=TEA_TABS[i][1]+(y-TEA_TABS[i][1])/17*46;
+  IT.push({x:ox,y:oy,r:34,label:()=>P.sit?'Stand up':'Sit down at this table · ထိုင်မယ်',act:()=>sitAt(i)}); });
 
 // ---------- NPCs ----------
 interface Npc { x: number; y: number; tx: number; ty: number; sp: number; wait: number; ph: number; moving: boolean; stuck: number; hd: number; s: number;
-  shirt: string; lon: string; skin: string; bun: boolean; hat?: boolean; balloon?: string | null; leader?: Npc; ox?: number; oy?: number; post?: boolean }
+  shirt: string; lon: string; skin: string; bun: boolean; hat?: boolean; balloon?: string | null; leader?: Npc; ox?: number; oy?: number; post?: boolean; sit?: number; nod?: number }
 let NPC: Npc[] = [];
 function freePoint(): [number, number] { for(let k=0;k<40;k++){ const p=npcTarget(); if(!blocked(p[0],p[1],5)) return p; } return [900,2000]; }
 function npcTarget(): [number, number] {
@@ -92,6 +104,9 @@ function spawnCrowd(): void {
   const n={low:28,med:60,high:110}[S.settings.density]||60;
   NPC=VENDOR_POSTS.map(v=>{ const r=srng(v.seed+5); return mk({x:v.x,y:v.y,hd:0,post:true,hat:v.hat,bun:!v.hat&&r()<.5,shirt:SHIRTS[Math.floor(r()*SHIRTS.length)],lon:LONS[Math.floor(r()*LONS.length)],skin:SKINS[Math.floor(r()*SKINS.length)]}); });
   NPC.push(mk({x:UNCLE.x,y:UNCLE.y,hd:0,post:true,shirt:'#ffffff',lon:'#3c5a2a',skin:'#a8714a',bun:false}));
+  // people sitting at the teashop tables, and kneeling to light lamps at the candle festival
+  TEA_TABS.forEach((_,i)=>teaStools(i).forEach(([x,y,hd],k)=>{ if(k===teaFree(i)) return; NPC.push(mk({x,y,hd,post:true,sit:.5,nod:rand(0,9)})); }));
+  for(let k=0;k<12;k++){ const a=Math.PI*.15+k/12*Math.PI*1.7+rand(-.05,.05), R=CANDLE.R+16; NPC.push(mk({x:CANDLE.x+Math.cos(a)*R,y:CANDLE.y+Math.sin(a)*R,hd:Math.atan2(-Math.cos(a),-Math.sin(a)),post:true,sit:.5,nod:rand(0,9),bun:Math.random()<.6})); }
   for(let i=0;i<n;i++){
     const [x,y]=freePoint(); const L=mk({x,y}); [L.tx,L.ty]=freePoint(); NPC.push(L);
     if(Math.random()<.3) L.balloon=pick(BALLOONS);
@@ -101,7 +116,10 @@ function spawnCrowd(): void {
 function turnTo(n: { hd: number }, dx: number, dy: number, dt: number): void {
   const want=Math.atan2(dx,dy); let d=want-n.hd; d=Math.atan2(Math.sin(d),Math.cos(d)); n.hd+=d*Math.min(1,dt*10);
 }
+/** The empty stool at each teashop table, kept for you. */
+function teaFree(i: number): number { return (i*3+1)%4; }
 function updateNPC(n: Npc, dt: number): void {
+  if(n.sit){ n.moving=false; if(n.nod!=null) n.nod+=dt; return; }
   if(n.post){ n.moving=false; const d=Math.hypot(P.x-n.x,P.y-n.y); if(d<160&&P.y>n.y) turnTo(n,P.x-n.x,P.y-n.y,dt*.3); return; }
   let tx: number, ty: number, sp: number;
   if(n.leader){ tx=n.leader.x+n.ox; ty=n.leader.y+n.oy; sp=n.leader.sp*1.4; const d=Math.hypot(tx-n.x,ty-n.y); if(d>140&&!blocked(tx,ty,4)){n.x=tx;n.y=ty;} if(d<6){ n.moving=false; return; } }
@@ -173,6 +191,68 @@ function updateBikes(dt: number): void {
   }
 }
 
+// ---------- OC Midway bumper cars: they wander, chase you when you walk in, and you can run ----------
+interface Bumper { x: number; y: number; hd: number; sp: number; hit: number; cd: number; tx: number; ty: number }
+const BUMPS: Bumper[] = [];
+const DODGE = {on:false,t:0,hits:0,shown:''};
+let shake=0;
+const BR=22; // a car's radius, in map units
+const inArena=(x: number, y: number)=>x>BUMPER.x&&x<BUMPER.x+BUMPER.w&&y>BUMPER.y&&y<BUMPER.y+BUMPER.h;
+function bumpTarget(b: Bumper): void { b.tx=rand(BUMPER.x+50,BUMPER.x+BUMPER.w-50); b.ty=rand(BUMPER.y+50,BUMPER.y+BUMPER.h-50); }
+function spawnBumpers(): void {
+  BUMPS.length=0;
+  for(let i=0;i<BUMPER_N;i++){ const b={x:BUMPER.x+70+(i%4)*120,y:BUMPER.y+90+Math.floor(i/4)*200,hd:rand(0,TAU),sp:0,hit:0,cd:0,tx:0,ty:0}; bumpTarget(b); BUMPS.push(b); }
+}
+function bang(b: Bumper, v: number): void {
+  if(b.cd>0) return; b.cd=.6; b.hit=v;
+  if(S.mode==='walk'&&Math.hypot(P.x-b.x,P.y-b.y)<(v>=1?520:220)){ sfx('bump'); if(v>=1&&Math.random()<.5) sfx('zap'); }
+}
+function updateBumpers(dt: number): void {
+  const me=S.mode==='walk'&&!P.hidden&&!TR.riding&&inArena(P.x,P.y);
+  if(DODGE.on){ DODGE.t-=dt; if(!me&&S.mode==='walk') endDodge(false); else if(DODGE.t<=0) endDodge(true); }
+  BUMPS.forEach((b,i)=>{
+    b.hit=Math.max(0,b.hit-dt*2.5); b.cd-=dt;
+    let tx=b.tx, ty=b.ty, want=70;
+    if(me&&(DODGE.on||i<3)&&Math.hypot(P.x-b.x,P.y-b.y)<(DODGE.on?700:240)){ tx=P.x+P.vx*.45; ty=P.y+P.vy*.45; want=DODGE.on?100+(30-DODGE.t)*1.4:92; }
+    else if(Math.hypot(tx-b.x,ty-b.y)<30) bumpTarget(b);
+    let d=Math.atan2(tx-b.x,ty-b.y)-b.hd; d=Math.atan2(Math.sin(d),Math.cos(d));
+    b.hd+=clamp(d,-2.3*dt,2.3*dt);
+    b.sp+=(want*(Math.abs(d)>1.6?.45:1)-b.sp)*Math.min(1,dt*2);
+    b.x+=Math.sin(b.hd)*b.sp*dt; b.y+=Math.cos(b.hd)*b.sp*dt;
+    const x0=BUMPER.x+BR+6, x1=BUMPER.x+BUMPER.w-BR-6, y0=BUMPER.y+BR+6, y1=BUMPER.y+BUMPER.h-BR-6;
+    if(b.x<x0||b.x>x1){ b.x=clamp(b.x,x0,x1); b.hd=-b.hd; b.sp*=.5; bang(b,.6); }
+    if(b.y<y0||b.y>y1){ b.y=clamp(b.y,y0,y1); b.hd=Math.PI-b.hd; b.sp*=.5; bang(b,.6); }
+  });
+  for(let i=0;i<BUMPS.length;i++) for(let j=i+1;j<BUMPS.length;j++){
+    const a=BUMPS[i], c=BUMPS[j], dx=c.x-a.x, dy=c.y-a.y, d=Math.hypot(dx,dy)||1;
+    if(d<BR*2){ const push=(BR*2-d)/2, nx=dx/d, ny=dy/d; a.x-=nx*push; a.y-=ny*push; c.x+=nx*push; c.y+=ny*push;
+      if(a.cd<=0&&c.cd<=0){ bang(a,1); c.cd=.6; c.hit=1; a.sp*=.3; c.sp*=.3; a.hd+=rand(-1.2,1.2); c.hd+=rand(-1.2,1.2); } }
+  }
+  if(me) for(const b of BUMPS){
+    const dx=P.x-b.x, dy=P.y-b.y, d=Math.hypot(dx,dy)||1;
+    if(d<BR+12&&b.cd<=0){
+      const k=150+b.sp*2.4; P.kx+=dx/d*k; P.ky+=dy/d*k; shake=Math.max(shake,.75);
+      bang(b,1); sfx('zap'); b.sp*=.2; b.hd+=Math.PI*.7;
+      if(DODGE.on){ DODGE.hits++; } else toast('Bzzt! A bumper car got you. Run!');
+    }
+  }
+  shake=Math.max(0,shake-dt*2.2);
+}
+function startDodge(): void {
+  if(DODGE.on||!pay(1000)) return;
+  S.games++; DODGE.on=true; DODGE.t=30; DODGE.hits=0;
+  P.x=BUMPER.x+60; P.y=BUMPER.y+BUMPER.h/2; P.vx=P.vy=P.kx=P.ky=0; P.hd=Math.PI/2; fadeFrom();
+  toast('<span class="z">Dodge the cars! · ကားရှောင်</span>Stay inside the arena for 30 seconds. Fewer bumps, more tickets. Hold Shift to sprint.',true);
+  sfx('zap'); updateHUD();
+}
+function endDodge(done: boolean): void {
+  DODGE.on=false; $('prompt').hidden=true; DODGE.shown='';
+  if(!done){ toast('You left the arena, so the round is over.'); return; }
+  const won=DODGE.hits===0?8:DODGE.hits<=2?5:DODGE.hits<=5?3:1;
+  S.tix+=won; S.ticketsWon+=won; sfx('ding');
+  toast(`<span class="z">You survived!</span>${DODGE.hits===0?'Not a single bump.':DODGE.hits+' bump'+(DODGE.hits>1?'s':'')+'.'} <b>+${won} tickets</b>`,true); updateHUD();
+}
+
 // ---------- avatar creator ----------
 function openAvatar(first: boolean, after?: () => void): void {
   const a: Avatar = {...S.settings.av};
@@ -220,7 +300,8 @@ function openAvatar(first: boolean, after?: () => void): void {
     const ex=row('Extras'); toggle('Thanaka','thanaka',ex); toggle('Shan bag','bag',ex); toggle('Sunglasses','glasses',ex);
     const done=document.createElement('button'); done.type='button'; done.className='cta avdone'; done.textContent=first?'Enter the fair':'Save my look';
     opts.appendChild(done);
-    done.onclick=()=>{ save(); closeModal(); };
+    done.onclick=()=>{ confetti(done); sfx('ding'); save(); closeModal(); };
+    opts.querySelectorAll<HTMLElement>('.avrow').forEach((r,i)=>r.style.setProperty('--i',String(i)));
   };
   build();
   (wrap.querySelector('.avrand') as HTMLButtonElement).onclick=()=>{ Object.assign(a,randomAvatar()); build(); draw(); };
@@ -232,18 +313,18 @@ function openAvatar(first: boolean, after?: () => void): void {
 }
 
 // ---------- multiplayer: everyone with the page open shares one fair ----------
-interface Remote { peer: string; name: string; av: Avatar; look: Look; x: number; y: number; tx: number; ty: number; hd: number; moving: boolean; where: string; balloon: string | null; wv: number; waveUntil: number; sayI: number; say: string; sayUntil: number }
+interface Remote { peer: string; name: string; av: Avatar; look: Look; x: number; y: number; tx: number; ty: number; hd: number; moving: boolean; where: string; dance: boolean; balloon: string | null; wv: number; waveUntil: number; sayI: number; say: string; sayUntil: number }
 const REMOTE = new Map<string, Remote>();
 let room: { presence(value: Record<string, unknown>): Promise<unknown> } | null = null;
-let lastSent='', presT=0, waveCount=0, roomReady=false;
+let lastSent='', presT=0, waveCount=0, roomReady=false, publicFair=false;
 const mySay={i:0,t:'',until:0};
 async function initRoom(): Promise<void> {
   try{
     const r=await window.claude?.use?.('room');
-    if(!r){ // outside claude.ai (for example on Vercel): invitation-only PeerJS friend rooms
-      const fr=friends(peers=>syncPeers(peers as unknown as Claude.room.Peer[]));
-      room=fr; roomReady=true; $('bFriends').hidden=false; $('bFriends').onclick=()=>fr.open();
-      chatLine('','Open Friends · သူငယ်ချင်း to create or join a room, then press T to chat.',true); return;
+    if(!r){ // outside claude.ai (for example on Vercel): everyone shares a public PeerJS fair, with private rooms for friends
+      const fr=friends(peers=>syncPeers(peers as unknown as Claude.room.Peer[]),()=>{ publicFair=fr.isPublic; updatePlayers(); });
+      room=fr; publicFair=true; setTimeout(()=>{ roomReady=true; },2500); $('bFriends').hidden=false; $('bFriends').onclick=()=>fr.open();
+      updatePlayers(); return;
     }
     room=r;
     r.onPeers(ch=>syncPeers(ch.peers), ()=>{ room=null; REMOTE.clear(); updatePlayers(); });
@@ -259,11 +340,11 @@ function syncPeers(peers: readonly Claude.room.Peer[]): void {
     seen.add(p.peer);
     const x=clamp(pr.x,0,WW), y=clamp(pr.y,0,WH);
     let r=REMOTE.get(p.peer);
-    if(!r){ r={peer:p.peer,name:'',av:DEFAULT_AVATAR,look:lookFor(avatarOpts(DEFAULT_AVATAR)),x,y,tx:x,ty:y,hd:0,moving:false,where:'walk',balloon:null,wv:0,waveUntil:0,sayI:-1,say:'',sayUntil:0}; REMOTE.set(p.peer,r);
+    if(!r){ r={peer:p.peer,name:'',av:DEFAULT_AVATAR,look:lookFor(avatarOpts(DEFAULT_AVATAR)),x,y,tx:x,ty:y,hd:0,moving:false,where:'walk',dance:false,balloon:null,wv:0,waveUntil:0,sayI:-1,say:'',sayUntil:0}; REMOTE.set(p.peer,r);
       if(roomReady){ const nm=cleanName(pr.n)||'A friend'; toast(`<b>${esc(nm)}</b> joined the fair.`); chatLine('',`${nm} joined the fair.`,true); } }
     r.tx=x; r.ty=y; r.name=cleanName(pr.n); r.av=cleanAvatar(pr.av); r.look=lookFor(avatarOpts(r.av));
     if(typeof pr.h==='number'&&isFinite(pr.h)) r.hd=pr.h;
-    r.where=typeof pr.w==='string'?pr.w.slice(0,12):'walk';
+    r.where=typeof pr.w==='string'?pr.w.slice(0,12):'walk'; r.dance=pr.dn===1;
     r.balloon=typeof pr.b==='string'&&(BALLOONS as readonly string[]).includes(pr.b)?pr.b:null;
     const wv=typeof pr.wv==='number'?pr.wv:0; if(wv!==r.wv){ if(r.wv!==0||wv>0) r.waveUntil=T+2.2; r.wv=wv; }
     // chat rides along in presence so everyone, including view-only members, can talk
@@ -278,19 +359,20 @@ function syncPeers(peers: readonly Claude.room.Peer[]): void {
   updatePlayers();
 }
 function updatePlayers(): void {
-  $('pStat').hidden=!room||REMOTE.size===0;
+  $('pStat').hidden=!room||(REMOTE.size===0&&!publicFair);
   $('players').textContent=String(REMOTE.size+1);
+  const t=$('titleOnline'); if(t){ t.hidden=!room||REMOTE.size===0; t.textContent=`${REMOTE.size} ${REMOTE.size===1?'person is':'people are'} at the fair right now`; }
 }
 function whereNow(): string { return S.mode==='walk'?(TR.riding?'train':'walk'):S.mode==='scene'?SC.kind:S.mode==='mg'?MG.kind:'title'; }
 function sendPresence(dt: number): void {
   if(!room||S.mode==='title') return;
   presT-=dt; if(presT>0) return; presT=.08;
-  const msg: Record<string, unknown>={x:Math.round(P.x),y:Math.round(P.y),h:Math.round(P.hd*100)/100,w:whereNow(),n:S.settings.name,av:S.settings.av as unknown as Record<string,unknown>,b:S.balloon,wv:waveCount};
+  const msg: Record<string, unknown>={x:Math.round(P.x),y:Math.round(P.y),h:Math.round(P.hd*100)/100,w:whereNow(),n:S.settings.name,av:S.settings.av as unknown as Record<string,unknown>,b:S.balloon,wv:waveCount,dn:P.dance?1:0};
   if(mySay.i>0) msg.say={i:mySay.i,t:mySay.t};
   const k=JSON.stringify(msg); if(k===lastSent) return; lastSent=k;
   room.presence(msg).catch(()=>{ lastSent=''; });
 }
-function wave(): void { if(S.mode!=='walk') return; P.waveUntil=T+2.2; waveCount++; }
+function wave(): void { if(S.mode!=='walk'&&S.mode!=='scene') return; P.waveUntil=T+2.2; waveCount++; }
 
 // ---------- chat ----------
 const PHRASES: Array<[string, string]> = [
@@ -350,7 +432,7 @@ function updateCrowdTalk(dt: number): void {
   if(S.mode!=='walk'&&!(S.mode==='scene'&&SC.kind==='wishes')) return;
   murmurT-=dt;
   if(murmurT<=0){
-    const pool=NPC.filter(n=>!n.post&&Math.hypot(n.x-P.x,n.y-P.y)<750);
+    const pool=NPC.filter(n=>(!n.post||n.sit)&&Math.hypot(n.x-P.x,n.y-P.y)<750);
     murmurT=rand(.7,2.2)*(pool.length>25?1:1.8);
     if(pool.length){ const n=pick(pool), i=Math.floor(Math.random()*NPC_LINES.length); voiceFrom(n,`say${i}${voiceOf(n)}`,.45); }
   }
@@ -445,7 +527,7 @@ function wishTags(all=false): void {
 function updateTags(): void {
   tagUsed=0;
   if(S.mode==='scene'&&SC.kind==='wishes'&&!S.photo) wishTags(true);
-  else if(S.mode==='walk'&&!S.photo||S.mode==='scene'&&S.photo===false&&SC.kind==='finale'||S.mode==='walk'&&S.photo){
+  else if(S.mode==='walk'||S.mode==='scene'&&!S.photo){
     const meVis=S.mode==='walk'&&!P.hidden;
     if(meVis&&mySay.until>T) placeTag(P.x,P.y,2.55,'bub',`<span class="mm">${esc(mySay.t)}</span>`);
     else if(meVis&&S.settings.name) placeTag(P.x,P.y,2.25,'tag me',esc(S.settings.name));
@@ -493,10 +575,10 @@ function updateHUD(): void {
   const j=journey(); let nowSet=false;
   document.querySelectorAll<HTMLElement>('#journey li').forEach(li=>{ const k=li.dataset.s; li.classList.toggle('done',j[k]); const now=!j[k]&&!nowSet; li.classList.toggle('now',now); if(now) nowSet=true; });
   let g: string;
-  if(!j.discover) g=`Discover the fair: ${S.zones.length} of 8 zones found. Follow the signs off the main street.`;
+  if(!j.discover) g=`Discover the fair: ${S.zones.length} of ${ZONES.length} zones found. Follow the signs off the main street.`;
   else if(!j.play) g=`Play: ${S.rides?'ride done':'take a ride'}, ${S.games?'game played':'win tickets at a game booth'}.`;
   else if(!j.finale) g=S.showStarted?'Fireworks now! Go to the Finale View deck.':'Fireworks at 9:30 PM. Find a spot on the Finale View deck.';
-  else g=`Collected: ${S.zones.length}/8 postcards, ${S.secrets.length}/6 secrets, ${S.photos.length} photos.`;
+  else g=`Collected: ${S.zones.length}/${ZONES.length} postcards, ${S.secrets.length}/6 secrets, ${S.photos.length} photos.`;
   if(g!==hudCache){ $('goal').textContent=g; hudCache=g; }
 }
 function pay(n: number): boolean { if(S.kyat<n){ toast(`Not enough kyat. You have ${ks(S.kyat)}. Uncle at the entry gate can help.`); sfx('miss'); return false; } S.kyat-=n; sfx('coin'); updateHUD(); return true; }
@@ -557,6 +639,78 @@ function askUncle(): void {
   S.kyat+=5000; S.uncleAt=S.clock; sfx('coin'); toast('Uncle hands you <b>5,000 Ks</b>. “Don’t spend it all on shwe yin aye.”'); updateHUD();
 }
 
+function buyOC(f: typeof OC_FOOD[number]): void {
+  if(!pay(f.p)) return;
+  if(!S.snacks.includes(f.id)){ S.snacks.push(f.id); toast(`<b>${f.name}</b> <span class="mm">${f.my}</span><br>${f.d}`); }
+  else toast(`Another ${f.name.toLowerCase()}. Still delicious.`);
+}
+function toggleDance(): void {
+  P.dance=!P.dance;
+  if(P.dance){ P.hd=Math.PI; toast('<span class="z">ကခုန်ကြစို့</span>You join the dancers in front of the stage. Move to stop dancing.'); sfx('ding'); }
+}
+// ---------- the candle festival ----------
+const CAND = {lamps:880, mine:0, flowers:FLOWER_N-40, t:0};
+function lightLamp(): void {
+  if(CAND.mine>=CANDLE_MINE){ toast('Every lamp on this side is already lit. What a sight!'); return; }
+  if(!pay(200)) return;
+  CAND.mine++; sfx('fizz'); setTimeout(()=>sfx('ding'),500);
+  toast(`<span class="z">ဆုတောင်းပြည့်ပါစေ</span>You light a little oil lamp. It joins ${(CAND.lamps+CAND.mine-1).toLocaleString('en-US')} others glowing around the stupa.`,true);
+}
+function offerFlowers(): void {
+  if(CAND.flowers>=FLOWER_N){ toast('The flower cups are all full. A thousand flowers!'); return; }
+  if(!pay(300)) return;
+  CAND.flowers=Math.min(FLOWER_N,CAND.flowers+5); sfx('ding');
+  toast(`<span class="z">ပန်းကပ်လှူ</span>You lay jasmine, marigolds and roses in the cups. ${CAND.flowers.toLocaleString('en-US')} of ${FLOWER_N.toLocaleString('en-US')} flowers offered tonight.`,true);
+}
+function updateCandles(dt: number): void { // the kneeling visitors keep lighting lamps through the night
+  CAND.t-=dt; if(CAND.t>0) return; CAND.t=rand(3,6);
+  if(CAND.lamps<CANDLE_N-CANDLE_MINE) CAND.lamps++;
+}
+// ---------- the teashop ----------
+function orderTea(): void {
+  if(!pay(500)) return;
+  if(!S.snacks.includes('tea')) S.snacks.push('tea');
+  toast('<b>Laphet yay</b> <span class="mm">လက်ဖက်ရည်</span><br>Strong tea with condensed milk, poured from high up so it froths. Take a seat at a table and stay a while.');
+}
+function sitAt(i: number): void {
+  if(P.sit){ standUp(); return; }
+  const [x,y,hd]=teaStools(i)[teaFree(i)];
+  P.standX=P.x; P.standY=P.y; P.x=x; P.y=y; P.hd=hd; P.sit=true; P.dance=false; P.vx=P.vy=0;
+  toast('You pull up a tiny stool. Move to stand up again.');
+  const near=NPC.filter(n=>n.sit&&Math.hypot(n.x-TEA_TABS[i][0],n.y-TEA_TABS[i][1])<25);
+  if(near.length){ const n=pick(near); setTimeout(()=>{ if(!P.sit) return; NPC_SAY.push({n,t:REPLIES[0],until:T+4}); voiceFrom(n,`rep0${voiceOf(n)}`,1.3); },900); }
+}
+function standUp(): void { if(!P.sit) return; P.sit=false; P.x=P.standX; P.y=P.standY; }
+// ---------- talking to people ----------
+const TALK: Array<[string, string, number]> = [
+  ['မင်္ဂလာပါ','Hello',0], ['နေကောင်းလား','How are you?',1], ['ဘာစားရင် ကောင်းမလဲ','What should I eat?',2],
+  ['မီးပန်း ဘယ်မှာ ကြည့်ရမလဲ','Where can I watch the fireworks?',3], ['ဘာစီးရင် ပျော်မလဲ','What’s fun to ride?',4],
+];
+let talkTo: Npc | null = null;
+const talkIT: Interactable = {x:0,y:0,r:40,label:()=>'Talk to this person · စကားပြောမယ်',act:()=>{ if(talkTo) openTalk(talkTo); }};
+function nearNpc(): Npc | null {
+  let best: Npc | null=null, bd=46;
+  for(const n of NPC){ if(n.leader||n.s<1||(n.post&&!n.sit)) continue; const d=Math.hypot(n.x-P.x,n.y-P.y); if(d<bd){ bd=d; best=n; } }
+  return best;
+}
+function openTalk(n: Npc): void {
+  const held=n.wait; n.wait=999; n.moving=false; if(!n.sit) n.hd=Math.atan2(P.x-n.x,P.y-n.y); P.hd=Math.atan2(n.x-P.x,n.y-P.y);
+  const wrap=document.createElement('div'); wrap.className='talk';
+  wrap.innerHTML='<div class="tlog" aria-live="polite"></div><p class="muted">Say something:</p><div class="tq"></div>';
+  const log=wrap.querySelector('.tlog') as HTMLElement, q=wrap.querySelector('.tq') as HTMLElement;
+  const line=(t: [string, string], me: boolean)=>{ const d=document.createElement('div'); d.className='tl'+(me?' me':'');
+    d.innerHTML=`<span class="mm">${esc(t[0])}</span><small>${esc(t[1])}</small>`; log.appendChild(d); log.scrollTop=log.scrollHeight;
+    if(!RM) d.animate([{opacity:0,translate:me?'12px 0':'-12px 0'},{opacity:1,translate:'0 0'}],{duration:260,easing:'ease-out'}); };
+  let busy=false;
+  TALK.forEach(([my,en,ri])=>{ const b=document.createElement('button'); b.type='button'; b.innerHTML=`<span class="mm">${my}</span><small>${en}</small>`;
+    b.onclick=()=>{ if(busy) return; busy=true; line([my,en],true); sfx('chat');
+      setTimeout(()=>{ busy=false; line(REPLIES[ri],false); voiceFrom(n,`rep${ri}${voiceOf(n)}`,1.4); NPC_SAY.push({n,t:REPLIES[ri],until:T+4.5}); },700); };
+    q.appendChild(b); });
+  const wv=document.createElement('button'); wv.type='button'; wv.innerHTML='👋 <small>Wave</small>';
+  wv.onclick=()=>{ wave(); line(['👋','(they wave back and smile)'],false); }; q.appendChild(wv);
+  openModal(n.sit?'Chatting at the table · စကားပြော':'Chatting with a fairgoer · စကားပြော',wrap,()=>{ n.wait=n.post?held:rand(1,3); });
+}
+
 // ---------- photos ----------
 function capturePhoto(src: HTMLCanvasElement, label?: string): void {
   const w=480, h=Math.round(w*src.height/src.width);
@@ -605,7 +759,7 @@ let bagTab='postcards';
 function openBag(): void {
   const wrap=document.createElement('div');
   const tabs=document.createElement('div'); tabs.className='tabs';
-  [['postcards',`Postcards ${S.zones.length}/8`],['souvenirs','Souvenirs'],['photos',`Photos ${S.photos.length}`],['secrets',`Secrets ${S.secrets.length}/6`]].forEach(([k,l])=>{
+  [['postcards',`Postcards ${S.zones.length}/${ZONES.length}`],['souvenirs','Souvenirs'],['photos',`Photos ${S.photos.length}`],['secrets',`Secrets ${S.secrets.length}/6`]].forEach(([k,l])=>{
     const b=document.createElement('button'); b.textContent=l; b.setAttribute('aria-pressed',String(bagTab===k)); b.onclick=()=>{ bagTab=k; render(); tabs.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b))); }; tabs.appendChild(b); });
   const body=document.createElement('div');
   function render(): void {
@@ -616,7 +770,7 @@ function openBag(): void {
         g.appendChild(d); }); body.appendChild(g); }
     if(bagTab==='souvenirs'){
       const list: string[]=[];
-      S.snacks.forEach(id=>{ const s=SNACKS.find(x=>x.id===id); list.push(`<div class="item"><div class="t"><b>${s.name} <span class="mm muted">${s.my}</span></b><small>Snack tasted</small></div></div>`); });
+      S.snacks.forEach(id=>{ const s=SNACKS.find(x=>x.id===id)||OC_FOOD.find(x=>x.id===id)||{name:'Laphet yay',my:'လက်ဖက်ရည်'}; list.push(`<div class="item"><div class="t"><b>${s.name} <span class="mm muted">${s.my}</span></b><small>Snack tasted</small></div></div>`); });
       S.toys.forEach(id=>{ const s=TOYS.find(x=>x.id===id); list.push(`<div class="item"><div class="t"><b>${s.name}</b><small>Toy from the Kids Corner stall</small></div></div>`); });
       S.prizes.forEach(id=>{ const s=PRIZES.find(x=>x.id===id); list.push(`<div class="item"><div class="t"><b>${s.name}</b><small>Prize won with tickets</small></div></div>`); });
       body.innerHTML=list.length?`<div class="items">${list.join('')}</div>`:'<p class="muted">Nothing yet. Try a snack on Food Street, a toy in the Kids Corner, or win a prize at the Game Booths.</p>'; }
@@ -648,34 +802,76 @@ function openSettings(): void {
 }
 
 // ---------- fireworks ----------
-let fwNext=0;
+// Little shows over the lake every minute or so from 7 PM, then the big finale at 9:30. Each time you're asked if you want to watch.
+let fwNext=0, fountT=0;
+const MINI = {next:30, t:0, declined:0};
 function launch(): void { launchFirework(); sfx('launch'); }
 function onBoom(): void { setTimeout(()=>{ sfx('boom'); if(Math.random()<.5) sfx('crackle'); },250+Math.random()*350); }
+const LAKE_Z = 340*M-1.5;
+function showFountains(): void {
+  const fin=S.showT<12;
+  for(let k=0;k<11;k++) fountain(6+k*14, LAKE_Z, fin?4.5:6, pick(['#ffd27a','#ffffff','#ff8ad8','#7ad8ff']), .2, fin?1.6:1.1);
+}
 function updFireworks(dt: number): void {
+  if(S.mode!=='title'&&!S.paused&&!S.showStarted&&S.clock>=19*60&&S.clock<21*60+25){
+    MINI.next-=dt; if(MINI.next<=0&&MINI.t<=0){ MINI.t=15; MINI.next=rand(45,70); fwNext=0; onShow(false); }
+  }
+  if(MINI.t>0){ MINI.t-=dt; fwNext-=dt; if(fwNext<=0){ launch(); if(Math.random()<.25) launch(); fwNext=rand(.45,1.0); } if(MINI.t<=0) miniOver(); }
   if(S.showStarted&&!S.showDone){
-    fwNext-=dt; const fin=S.showT<7;
-    if(fwNext<=0){ launch(); if(fin){ launch(); if(Math.random()<.6) launch(); } fwNext=fin?rand(.15,.35):rand(.4,1.0); }
+    fwNext-=dt; const fin=S.showT<12;
+    if(fwNext<=0){ launch(); if(fin){ launch(); if(Math.random()<.7) launch(); if(Math.random()<.35) launchFirework({type:pick(['double','kamuro','brocade','chrys']),up:rand(42,50)}); } fwNext=fin?rand(.12,.3):rand(.35,.85); }
+    fountT-=dt; if(fountT<=0){ fountT=fin?4:14; showFountains(); }
   }
   if(S.mode==='scene'&&SC.kind==='finale'&&S.showDone&&SC.replay){ fwNext-=dt; if(fwNext<=0){ launch(); fwNext=rand(.35,.85); } }
 }
+function onShow(big: boolean): void {
+  if(S.mode==='scene'&&SC.kind==='finale'){ setBar(big?'The fireworks finale has begun! Drag to look around the sky. Press P for a photo.':'A little fireworks show over the lake. Drag to look around. The big finale is at 9:30 PM.'); return; }
+  if(S.mode!=='walk'||S.paused||(!big&&MINI.declined>=2)){ toast(big?'<span class="z">Fireworks!</span>The finale has begun. The Finale View deck has the best seat.':'🎆 Fireworks over the lake!',big); return; }
+  askFireworks(big);
+}
+let askT: ReturnType<typeof setTimeout> | undefined;
+function askFireworks(big: boolean): void {
+  const d=$('fwAsk'); d.hidden=false; sfx('ding');
+  $('fwAskQ').innerHTML=big?'<span class="mm">မီးပန်းပွဲကြီး စပြီ။ ကြည့်မလား</span><b>The big fireworks finale is starting! Do you want to watch?</b>'
+    :'<span class="mm">မီးပန်း ပစ်နေပြီ။ ကြည့်မလား</span><b>Fireworks are going up over the lake. Do you want to watch?</b>';
+  clearTimeout(askT); askT=setTimeout(()=>{ d.hidden=true; },15000);
+  $('fwYes').focus({preventScroll:true});
+}
+function answerFireworks(yes: boolean): void {
+  const d=$('fwAsk'); if(d.hidden) return; d.hidden=true; clearTimeout(askT);
+  if(!yes){ if(!S.showStarted) MINI.declined++; toast('Okay! You can watch any time from the Finale View deck.'); return; }
+  if(S.mode!=='walk') return;
+  if(TR.riding){ TR.riding=false; P.hidden=false; } P.dance=false; standUp(); closeModal(); closeMap();
+  startScene('finale');
+}
+$('fwYes').onclick=()=>answerFireworks(true);
+$('fwNo').onclick=()=>answerFireworks(false);
+function miniOver(): void {
+  if(S.mode==='scene'&&SC.kind==='finale'&&!S.showStarted) setBar('That was a little show. The big finale is at 9:30 PM.','Wait for the finale',waitForFinale);
+}
+function waitForFinale(): void { S.clock=Math.max(S.clock,21*60+29.5); $('sceneAlt').hidden=true; $('sceneCap').textContent='Settling in. The first rocket is about to go up…'; }
 
 // ---------- rides & the finale ----------
-type SceneKind = 'ferris' | 'carousel' | 'pirate' | 'finale' | 'wishes';
-const SC: { kind: SceneKind | null; t: number; dur: number; replay?: boolean; topSaid?: boolean; wh?: boolean } = {kind:null,t:0,dur:0};
+type SceneKind = 'ferris' | 'carousel' | 'pirate' | 'drop' | 'swinger' | 'finale' | 'wishes';
+const RIDES: SceneKind[] = ['ferris','carousel','pirate','drop','swinger'];
+const SC: { kind: SceneKind | null; t: number; dur: number; replay?: boolean; topSaid?: boolean; wh?: boolean; cue?: number } = {kind:null,t:0,dur:0};
 const RIDECAP: Record<string, string> = {
-  ferris:'Rising over the fair. Look for the Shwedagon Pagoda glowing gold beyond the lake.',
-  carousel:'Round and round on a painted horse. Wave at the crowd!',
-  pirate:'Hold on tight, it swings higher each time.',
+  ferris:'Rising over the fair in your gondola. Look for the Shwedagon Pagoda glowing gold beyond the lake. Drag to look around, Q to wave.',
+  carousel:'Round and round on a painted horse. Drag to look around and press Q to wave at the crowd!',
+  pirate:'Hold on tight, it swings higher each time. Drag to look around.',
+  drop:'Strapped in at the bottom of the drop tower. Up, up, up… drag to look out over the fair.',
+  swinger:'Lifting off on the wave swinger. Drag to look around and press Q to wave.',
 };
 function buyRide(kind: SceneKind, price: number): void { if(!pay(price)) return; S.rides++; startScene(kind); updateHUD(); }
 function startScene(kind: SceneKind): void {
   closeChat();
-  SC.kind=kind; SC.t=0; SC.dur={ferris:28,carousel:16,pirate:16,finale:9999,wishes:9999}[kind]; SC.replay=false; SC.topSaid=false;
+  SC.kind=kind; SC.t=0; SC.dur={ferris:28,carousel:16,pirate:16,drop:20,swinger:24,finale:9999,wishes:9999}[kind]; SC.replay=false; SC.topSaid=false; SC.cue=0; LOOK.yaw=LOOK.pitch=0;
   S.mode='scene'; $('prompt').hidden=true;
   if(kind==='finale'){
     if(S.showDone){ SC.replay=true; setBar('An encore just for you. Fireworks bloom over the city.'); }
-    else if(S.showStarted) setBar('The fireworks finale has begun!');
-    else setBar(`The skyline at ${fmtClock(S.clock)}. Fireworks begin at 9:30 PM.`,'Wait for the fireworks',()=>{ S.clock=Math.max(S.clock,21*60+29.5); $('sceneAlt').hidden=true; $('sceneCap').textContent='Settling in. The first rocket is about to go up…'; });
+    else if(S.showStarted) setBar('The fireworks finale has begun! Drag to look around the sky.');
+    else if(MINI.t>0) setBar('A little fireworks show over the lake. Drag to look around. The big finale is at 9:30 PM.','Wait for the finale',waitForFinale);
+    else setBar(`The skyline at ${fmtClock(S.clock)}. Little shows go up every minute or so, and the finale is at 9:30 PM.`,'Wait for the finale',waitForFinale);
   } else if(kind==='wishes'){ CAM.yaw=0; setBar(`Every light is somebody's wish: ${WISHES.filter(w=>w.k==='sky').length} fire balloons and ${WISHES.filter(w=>w.k==='water').length} water lanterns. Drag to look around.`,'Make a wish',()=>{ endScene(); openWish('sky'); }); }
   else setBar(RIDECAP[kind]);
   syncChrome();
@@ -686,7 +882,7 @@ function setBar(cap: string, alt?: string, altFn?: () => void, exit?: string): v
 }
 function endScene(): void {
   const k=SC.kind; S.mode='walk'; SC.kind=null; $('sceneBar').hidden=true;
-  if(k==='ferris'||k==='carousel'||k==='pirate') toast('What a ride! Your ticket stub is a keepsake.');
+  if(k&&RIDES.includes(k)) toast(k==='drop'?'Your legs are still shaking. What a drop!':'What a ride! Your ticket stub is a keepsake.');
   syncChrome(); updateHUD(); maybeSummary();
 }
 $('sceneExit').onclick=()=>{ if(S.mode==='scene') endScene(); else if(S.mode==='mg') endGame(); };
@@ -695,6 +891,13 @@ function updateScene(dt: number, atTop: boolean): void {
   if(SC.kind==='ferris'&&atTop&&!SC.topSaid){ SC.topSaid=true; $('sceneCap').textContent='Top of the wheel! The whole of Yangon sparkles below you.'; sfx('ding'); }
   if(SC.kind==='pirate'){ const c=Math.abs(Math.cos(T*1.15)); if(c<.06&&!SC.wh){ sfx('whee'); SC.wh=true; } if(c>.3) SC.wh=false; }
   if(SC.kind==='wishes'&&drag.id==null) CAM.yaw+=dt*.06;
+  if(SC.kind==='drop'){
+    if(SC.cue===0&&SC.t>2){ SC.cue=1; sfx('clank'); $('sceneCap').textContent='Click, click, click… climbing 26 metres above the fair.'; }
+    if(SC.cue===1&&SC.t>12.2){ SC.cue=2; $('sceneCap').textContent='At the very top. The whole fair glitters below. Wait for it…'; }
+    if(SC.cue===2&&SC.t>15){ SC.cue=3; sfx('scream'); sfx('whee'); $('sceneCap').textContent='Aaaaah!'; }
+    if(SC.cue===3&&SC.t>17.6){ SC.cue=4; sfx('clank'); $('sceneCap').textContent='Safe at the bottom. Want to go again?'; }
+  }
+  if(SC.kind==='swinger'&&SC.cue===0&&SC.t>5){ SC.cue=1; sfx('whee'); }
   if(SC.dur<9999&&SC.t>=SC.dur) endScene();
 }
 
@@ -824,14 +1027,16 @@ window.addEventListener('keydown',e=>{
   if(e.repeat) return;
   if(!$('modal').hidden){ if(e.code==='Escape') closeModal(); return; }
   if(bigMap){ if(e.code==='Escape'||e.code==='KeyM') closeMap(); return; }
+  if(!$('fwAsk').hidden&&(e.code==='Enter'||e.code==='Space')&&(document.activeElement as HTMLElement)?.closest?.('#fwAsk')) return; // let the focused Yes/No button take it
   if(e.code==='Escape'){ if(chatOpen) closeChat(); else if(S.photo) exitPhotoMode(); else if(S.mode==='scene') endScene(); else if(S.mode==='mg') endGame(); return; }
   if((e.code==='KeyT'||e.code==='Enter')&&S.mode!=='mg'){ e.preventDefault(); openChat(); return; }
   if(e.code==='KeyE'||e.code==='Space'||e.code==='Enter'){ if(document.activeElement&&document.activeElement.tagName==='BUTTON'&&e.code!=='KeyE') return; press(); }
   if(e.code==='KeyP'){ S.photo?exitPhotoMode():enterPhotoMode(); }
   if(e.code==='KeyC') setCam(S.settings.cam==='close'?'wide':'close');
   if(e.code==='KeyB'&&S.mode==='walk') openBag();
-  if(e.code==='KeyQ'&&S.mode==='walk') wave();
+  if(e.code==='KeyQ') wave();
   if(e.code==='KeyM'){ if(bigMap) closeMap(); else openMap(); }
+  if(!$('fwAsk').hidden&&(e.code==='KeyY'||e.code==='KeyN')) answerFireworks(e.code==='KeyY');
 });
 window.addEventListener('keyup',e=>{ keys[e.code]=false; });
 window.addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
@@ -860,8 +1065,13 @@ world.addEventListener('pointermove',e=>{
   if(pinch.size===2){ const [a,b]=[...pinch.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); if(pinchD) CAM.zoom=clamp(CAM.zoom*pinchD/d,5,40); pinchD=d; return; }
   if(e.pointerId!==drag.id) return;
   const dx=e.clientX-drag.x, dy=e.clientY-drag.y; drag.x=e.clientX; drag.y=e.clientY; drag.moved+=Math.abs(dx)+Math.abs(dy);
+  if(povLook()){ // first person on a ride, or on the fireworks deck: turn your head
+    const wide=S.mode==='scene'&&SC.kind==='finale'?1.7:2.4;
+    LOOK.yaw=clamp(LOOK.yaw-dx*.005,-wide,wide); LOOK.pitch=clamp(LOOK.pitch+dy*.004,-1,.8); return;
+  }
   CAM.yaw-=dx*.006; CAM.pitch=clamp(CAM.pitch+dy*.004,.08,1.25);
 });
+function povLook(): boolean { return S.mode==='scene'&&SC.kind!=='wishes'||S.mode==='walk'&&TR.riding; }
 const endDrag=(e: PointerEvent)=>{ pinch.delete(e.pointerId); pinchD=0; if(e.pointerId===drag.id){ drag.id=null; world.classList.remove('drag'); } };
 world.addEventListener('pointerup',endDrag); world.addEventListener('pointercancel',endDrag);
 world.addEventListener('wheel',e=>{ e.preventDefault(); CAM.zoom=clamp(CAM.zoom*Math.exp(e.deltaY*.0012),5,40); },{passive:false});
@@ -904,12 +1114,19 @@ function syncChrome(): void {
 }
 
 // ---------- interaction & discovery ----------
-function nearIT(): Interactable | null { let best: Interactable | null=null, bd=1e9; for(const it of IT){ const d=Math.hypot(P.x-it.x,P.y-it.y); if(d<it.r&&d<bd){bd=d;best=it;} } return best; }
+function nearIT(): Interactable | null {
+  let best: Interactable | null=null, bd=1e9; for(const it of IT){ const d=Math.hypot(P.x-it.x,P.y-it.y); if(d<it.r&&d<bd){bd=d;best=it;} }
+  if(best||P.sit||P.dance) return best;
+  const n=nearNpc(); if(!n) return null;
+  talkTo=n; talkIT.x=n.x; talkIT.y=n.y; return talkIT;
+}
 let lastIT: Interactable | null=null;
 function checkWorld(): void {
   for(const z of ZONES){ if(!S.zones.includes(z.id)&&P.x>z.x&&P.x<z.x+z.w&&P.y>z.y&&P.y<z.y+z.h){ S.zones.push(z.id); sfx('ding');
-    toast(`<span class="z">${String(z.n).padStart(2,'0')} · ${z.name}</span><span class="mm">${z.my}</span>Postcard collected (${S.zones.length}/8)`,true); updateHUD(); } }
+    toast(`<span class="z">${String(z.n).padStart(2,'0')} · ${z.name}</span><span class="mm">${z.my}</span>Postcard collected (${S.zones.length}/${ZONES.length})`,true); updateHUD(); } }
   for(const s of SECRETS){ if(!S.secrets.includes(s.id)&&Math.hypot(P.x-s.x,P.y-s.y)<50){ S.secrets.push(s.id); S.kyat+=300; sfx('ding'); toast(`Secret found: <b>${s.name}</b><br>${s.d} <span class="muted">(+300 Ks)</span>`); updateHUD(); } }
+  if(DODGE.on){ const t=`<span class="key">⏱</span>${Math.ceil(DODGE.t)} s left · ${DODGE.hits} bump${DODGE.hits===1?'':'s'} · keep running!`;
+    if(t!==DODGE.shown){ $('prompt').innerHTML=t; $('prompt').hidden=false; DODGE.shown=t; } lastIT=null; return; }
   const it=(S.mode==='walk'&&!TR.riding&&!S.photo)?nearIT():null;
   if(it!==lastIT||it){ if(it){ $('prompt').innerHTML=`<span class="key">${touchMode?'GO':'E'}</span>${it.label()}`; $('prompt').hidden=false; } else $('prompt').hidden=true; lastIT=it; }
 }
@@ -917,7 +1134,7 @@ function maybeSummary(): void {
   if(!S.showDone||S.summaryShown||S.mode!=='walk') return;
   S.summaryShown=true; S.finaleSeen=true; updateHUD();
   openModal('What a night!',`<p>The last sparks drift over the skyline. Here is your Yay Kyaw night:</p>
-  <div class="statgrid"><div><b>${S.zones.length}/8</b>Postcards</div><div><b>${S.secrets.length}/6</b>Secrets</div><div><b>${S.snacks.length}/6</b>Snacks tasted</div><div><b>${S.rides}</b>Rides</div><div><b>${S.ticketsWon}</b>Tickets won</div><div><b>${S.prizes.length+S.toys.length}</b>Souvenirs</div><div><b>${S.photos.length}</b>Photos</div></div>
+  <div class="statgrid"><div><b>${S.zones.length}/${ZONES.length}</b>Postcards</div><div><b>${S.secrets.length}/6</b>Secrets</div><div><b>${S.snacks.length}/${SNACKS.length+OC_FOOD.length+1}</b>Snacks tasted</div><div><b>${S.rides}</b>Rides</div><div><b>${S.ticketsWon}</b>Tickets won</div><div><b>${S.prizes.length+S.toys.length}</b>Souvenirs</div><div><b>${S.photos.length}</b>Photos</div></div>
   <p class="muted">The fair stays open. Keep exploring, find the rest of the secrets, or watch the finale again from the Finale View deck.</p>`);
 }
 
@@ -934,6 +1151,8 @@ function movePlayer(dt: number): void {
   if(!chatOpen){ if(keys.ArrowLeft||keys.KeyA) ix--; if(keys.ArrowRight||keys.KeyD) ix++; if(keys.ArrowUp||keys.KeyW) iy--; if(keys.ArrowDown||keys.KeyS) iy++; }
   if(joy.id!=null){ ix=joy.x; iy=joy.y; }
   const mag=Math.hypot(ix,iy);
+  if(mag>.15){ if(P.sit) standUp(); if(P.dance){ P.dance=false; } }
+  if(P.sit){ P.vx=P.vy=0; P.moving=false; P.spd=0; return; }
   let tvx=0, tvy=0;
   if(mag>.15){
     // camera-relative: up on the stick walks away from the camera
@@ -949,6 +1168,13 @@ function movePlayer(dt: number): void {
   const nx=P.x+P.vx*dt, ny=P.y+P.vy*dt;
   if(!blocked(nx,P.y,6)) P.x=nx; else P.vx=0;
   if(!blocked(P.x,ny,6)) P.y=ny; else P.vy=0;
+  // a bumper car's shove, fading out
+  if(P.kx||P.ky){
+    const kx=P.x+P.kx*dt, ky=P.y+P.ky*dt;
+    if(!blocked(kx,P.y,6)) P.x=kx; else P.kx*=-.4;
+    if(!blocked(P.x,ky,6)) P.y=ky; else P.ky*=-.4;
+    const f=Math.exp(-dt*5); P.kx*=f; P.ky*=f; if(Math.hypot(P.kx,P.ky)<6) P.kx=P.ky=0;
+  }
   P.spd=Math.hypot(P.vx,P.vy)/135; P.moving=P.spd>.08;
   if(P.moving) turnTo(P,P.vx,P.vy,dt*1.4);
 }
@@ -958,18 +1184,19 @@ let last=performance.now(), chatT=0, ready=false;
 const crowdBuf: CrowdItem[] = [];
 function frameData(dt: number): Frame {
   crowdBuf.length=0;
-  for(const n of NPC) crowdBuf.push({x:n.x,y:n.y,hd:n.hd,s:n.s,moving:n.moving,t:T+n.ph,shirt:n.shirt,lon:n.lon,skin:n.skin,hat:n.hat,bun:n.bun,balloon:n.balloon});
-  const others=[...REMOTE.values()].map(r=>({id:r.peer,x:r.x,y:r.y,hd:r.hd,moving:r.moving,wave:T<r.waveUntil,look:r.look,balloon:r.balloon,visible:r.where==='walk'}));
+  for(const n of NPC) crowdBuf.push({x:n.x,y:n.y,hd:n.sit?n.hd+Math.sin((n.nod||0)*.5)*.35:n.hd,s:n.s,moving:n.moving,t:T+n.ph,sit:n.sit,shirt:n.shirt,lon:n.lon,skin:n.skin,hat:n.hat,bun:n.bun,balloon:n.balloon});
+  const others=[...REMOTE.values()].map(r=>({id:r.peer,x:r.x,y:r.y,hd:r.hd,moving:r.moving,wave:T<r.waveUntil,dance:r.dance,look:r.look,balloon:r.balloon,visible:r.where==='walk'}));
   let ride: RideKind=null;
-  if(S.mode==='scene') ride=SC.kind; else if(S.mode==='walk'&&TR.riding) ride='train';
+  if(S.mode==='scene') ride=SC.kind as RideKind; else if(S.mode==='walk'&&TR.riding) ride='train';
   const title=S.mode==='title';
   const cam=title?{yaw:T*.05,pitch:.38,dist:46}:CAM;
   return {
     t:T, dt, night:clamp((S.clock-(18*60+30))/60,0,1), quality:S.settings.gfx,
-    me:{x:title?900:P.x,y:title?2000:P.y,hd:P.hd,moving:P.moving,spd:P.spd,wave:T<P.waveUntil,look:myLook(),balloon:S.balloon,hidden:P.hidden||title},
+    me:{x:title?900:P.x,y:title?2000:P.y,hd:P.hd,moving:P.moving,spd:P.spd,wave:T<P.waveUntil,dance:P.dance,sit:P.sit,look:myLook(),balloon:S.balloon,hidden:P.hidden||title},
     crowd:crowdBuf, bikes:BIKES, others, ride, rideT:SC.t, trainU:TR.u, cam,
     sparkle:SECRETS.map(s=>S.secrets.includes(s.id)?0:clamp(1-Math.hypot(P.x-s.x,P.y-s.y)/320,0,1)),
-    steamFrom:CARTS,
+    steamFrom:CARTS, look:LOOK, bumpers:BUMPS, shake:RM?0:shake,
+    candles:{lamps:CAND.lamps,mine:CAND.mine,flowers:CAND.flowers},
   };
 }
 function renderNow(dt: number): { atTop: boolean } { return render3d(frameData(dt)); }
@@ -977,7 +1204,7 @@ function frame(now: number): void {
   const dt=Math.min(.05,(now-last)/1000); last=now; T+=dt;
   if(S.mode!=='title'&&!S.paused){
     S.clock=Math.min(23*60,S.clock+dt/2);
-    if(!S.showStarted&&S.clock>=21*60+30){ S.showStarted=true; S.showT=42; toast('<span class="z">Fireworks!</span>The finale has begun. The Finale View deck has the best seat.',true); if(S.mode==='scene'&&SC.kind==='finale') setBar('The fireworks finale has begun! Press P to take a photo.'); updateHUD(); }
+    if(!S.showStarted&&S.clock>=21*60+30){ S.showStarted=true; S.showT=75; fountT=0; MINI.t=0; onShow(true); updateHUD(); }
     if(S.showStarted&&!S.showDone){ S.showT-=dt; if(S.showT<=0){ S.showDone=true; if(S.mode==='scene'&&SC.kind==='finale'){ S.finaleSeen=true; setBar('That was beautiful. Stay for an encore, or head back to the fair.','Encore',()=>{ SC.replay=true; $('sceneAlt').hidden=true; },'Back to the fair'); } else maybeSummary(); updateHUD(); } }
   }
   updFireworks(dt);
@@ -985,7 +1212,7 @@ function frame(now: number): void {
   CAM.dist+=(CAM.zoom-CAM.dist)*(1-Math.exp(-dt*8));
   TR.u+=dt*.55;
   for(const n of NPC) updateNPC(n,dt);
-  updateBikes(dt);
+  updateBikes(dt); updateBumpers(dt); updateCandles(dt);
   for(const r of REMOTE.values()){ const k=Math.min(1,dt*8); r.moving=Math.hypot(r.tx-r.x,r.ty-r.y)>1.5; r.x=lerp(r.x,r.tx,k); r.y=lerp(r.y,r.ty,k); }
   updateNpcSay(dt); updateCrowdTalk(dt);
   if(S.mode==='mg') drawMG(dt);
@@ -994,7 +1221,7 @@ function frame(now: number): void {
   if(S.mode==='walk'){ checkWorld(); if(S.settings.mini&&!S.photo) drawMini(); }
   sendPresence(dt);
   chatT-=dt; if(chatT<=0){ chatT=.5; let n=0; if(S.mode==='walk'){ for(const q of NPC) if(Math.abs(q.x-P.x)<280&&Math.abs(q.y-P.y)<280) n++; n+=REMOTE.size; } setChatter(S.mode==='walk'?.25+.75*Math.min(1,n/12):S.mode==='title'?0:.2); }
-  if(A.c&&A.music){ let v: number; if(S.mode==='walk'||S.mode==='title'){ const d=Math.hypot(P.x-ST.x,P.y-ST.y); v=.03+.5*clamp(1-d/650,0,1); } else if(S.mode==='scene'&&SC.kind==='carousel') v=.45; else v=.06;
+  if(A.c&&A.music){ let v: number; if(S.mode==='walk'||S.mode==='title'){ const d=Math.hypot(P.x-ST.x,P.y-ST.y); v=.03+.5*clamp(1-d/650,0,1)+(P.dance?.15:0); } else if(S.mode==='scene'&&SC.kind==='carousel') v=.45; else v=.06;
     A.music.gain.setTargetAtTime(v,A.c.currentTime,.3); if(A.amb) A.amb.gain.setTargetAtTime(S.mode==='walk'?.22:.1,A.c.currentTime,.4); }
   if((T*10|0)%3===0) $('clock').textContent=fmtClock(S.clock);
   requestAnimationFrame(frame);
@@ -1007,6 +1234,10 @@ const MAP_MARKS: Array<{ x: number; y: number; icon: string; en: string; my: str
   {x:PHOTO.x,y:PHOTO.y,icon:'📸',en:'Photo booth',my:'ဓာတ်ပုံ',small:true}, {x:TOYS_AT.x,y:TOYS_AT.y,icon:'🧸',en:'Toys',my:'အရုပ်',small:true},
   {x:WISH_STALL.x,y:WISH_STALL.y,icon:'🏮',en:'Wish stall',my:'ဆုတောင်း'}, {x:POND.x,y:POND.y,icon:'🪷',en:'Wishing pond',my:'ကန်'},
   {x:UNCLE.x,y:UNCLE.y,icon:'👴',en:'Uncle',my:'ဦးလေး',small:true,tiny:true},
+  {x:BUMPER.x+BUMPER.w/2,y:BUMPER.y+BUMPER.h/2,icon:'🚗',en:'Bumper cars',my:'ကားတိုက်'}, {x:DROP.x,y:DROP.y,icon:'🗼',en:'Drop tower',my:'မိုးပျံတာ'},
+  {x:SWINGER.x,y:SWINGER.y,icon:'🎢',en:'Wave swinger',my:'လှိုင်းလွှဲ'},
+  {x:CANDLE.x,y:CANDLE.y,icon:'🪔',en:'Oil lamps',my:'ဆီမီးထွန်းပွဲ'}, {x:TEA.x,y:TEA.y+60,icon:'☕',en:'Teashop',my:'လက်ဖက်ရည်ဆိုင်'},
+  ...OC_FOOD.map(f=>({x:f.x,y:f.y,icon:'🌭',en:f.name,my:f.my,small:true,tiny:true})),
   ...BOOTHS.map(b=>({x:b.x,y:b.y,icon:b.kind==='prize'?'🎁':'🎯',en:b.kind==='ring'?'Ring toss':b.kind==='darts'?'Darts':'Prizes',my:b.my,small:true})),
   ...CARTS.map(([x,y],i)=>({x,y,icon:'🍜',en:SNACKS[i].name,my:SNACKS[i].my,small:true,tiny:true})),
 ];
@@ -1078,12 +1309,31 @@ $('bigmap').addEventListener('click',e=>{ if((e.target as HTMLElement).id!=='big
 $('bigmapClose').addEventListener('click',closeMap);
 window.addEventListener('resize',()=>{ if(bigMap) drawBigMap(); });
 
+// ---------- title screen sky and a burst of confetti ----------
+function decorateTitle(): void {
+  if(RM) return;
+  const sky=document.querySelector('#title .tsky') as HTMLElement; if(!sky) return;
+  const cols=['#ff5a4e','#f4b63f','#ff8ad8','#ffb347','#ffd27a'];
+  for(let k=0;k<16;k++){ const i=document.createElement('i'), sz=rand(16,34);
+    i.style.cssText=`left:${rand(2,96)}%;--s:${sz}px;--c:${pick(cols)};--d:${rand(14,26)}s;--w:${-rand(0,24)}s;--x:${rand(-60,60)}px`; sky.appendChild(i); }
+  for(let k=0;k<40;k++){ const b=document.createElement('b'); b.style.cssText=`left:${rand(0,100)}%;top:${rand(0,60)}%;--d:${rand(2,5)}s;--w:${-rand(0,5)}s`; sky.appendChild(b); }
+  document.querySelectorAll<HTMLElement>('#title .in>*').forEach((e,i)=>e.style.setProperty('--i',String(i)));
+}
+function confetti(from?: HTMLElement): void {
+  if(RM) return;
+  const r=from?.getBoundingClientRect(), x0=r?r.left+r.width/2:VW/2, y0=r?r.top:VH/2;
+  const cols=['#ff5a4e','#f4b63f','#ff8ad8','#3fc7a5','#fff3d6'];
+  for(let k=0;k<46;k++){ const d=document.createElement('div'); d.className='confetti'; d.style.background=pick(cols); d.style.left=x0+'px'; d.style.top=y0+'px'; document.body.appendChild(d);
+    const a=rand(-Math.PI*.95,-Math.PI*.05), v=rand(160,420), dx=Math.cos(a)*v, dy=Math.sin(a)*v;
+    d.animate([{transform:'translate(0,0) rotate(0)',opacity:1},{transform:`translate(${dx*.6}px,${dy*.6}px) rotate(${rand(180,540)}deg)`,opacity:1,offset:.45},{transform:`translate(${dx}px,${dy+380}px) rotate(${rand(540,900)}deg)`,opacity:0}],{duration:rand(1300,2000),easing:'cubic-bezier(.2,.7,.4,1)'}).onfinish=()=>d.remove(); }
+}
+
 // ---------- boot ----------
 function startGameFlow(): void {
   $('title').hidden=true; S.mode='walk'; audioInit(S.settings.sound); loadVoices(VOICE_CLIPS); setSound(S.settings.sound);
   P.x=900; P.y=2545; P.hd=Math.PI; CAM.yaw=0;
   syncChrome(); updateHUD();
-  const welcome=()=>{ setTimeout(()=>toast(`<span class="z">Welcome${S.settings.name?', '+esc(S.settings.name):''}!</span>Eight zones, six hidden secrets, and fireworks at 9:30 PM. Press T to chat.`,true),300); };
+  const welcome=()=>{ setTimeout(()=>toast(`<span class="z">Welcome${S.settings.name?', '+esc(S.settings.name):''}!</span>${ZONES.length} zones, six hidden secrets, little fireworks shows all evening and the finale at 9:30 PM. Press T to chat, and walk up to people to talk.`,true),300); };
   if(!S.settings.avDone) openAvatar(true,welcome); else welcome();
 }
 $('start').onclick=startGameFlow;
@@ -1092,9 +1342,9 @@ function snapshot(): unknown { return {S:JSON.parse(JSON.stringify({...S,paused:
 async function boot(data: any): Promise<void> {
   if(data&&data.S){ Object.assign(S,data.S); S.paused=false; S.photo=false; if(data.P){P.x=data.P.x;P.y=data.P.y;P.hd=data.P.hd||0;}
     if(S.mode!=='title'){ $('title').hidden=true; S.mode='walk'; } }
-  init3d(world,onBoom); resize(); window.addEventListener('resize',resize);
+  decorateTitle(); init3d(world,onBoom); resize(); window.addEventListener('resize',resize);
   setCam(S.settings.cam);
-  spawnCrowd(); spawnBikes(); setSound(S.settings.sound); syncChrome(); updateHUD(); initRoom(); initWishes();
+  spawnCrowd(); spawnBikes(); spawnBumpers(); setSound(S.settings.sound); syncChrome(); updateHUD(); initRoom(); initWishes();
   requestAnimationFrame(t=>{ last=t; frame(t); });
   await loadFonts();
   build3d(); ready=true;
@@ -1104,4 +1354,4 @@ const hot=window.claude&&window.claude.hot;
 if(hot&&hot.ready) hot.ready(boot); else boot(hot&&hot.data||{});
 // audio needs a gesture; also unlock on first tap after a reload
 window.addEventListener('pointerdown',()=>{ if(S.mode!=='title'){ audioInit(S.settings.sound); loadVoices(VOICE_CLIPS); if(A.c&&A.c.state==='suspended') A.c.resume(); } });
-window.__ykn={S,P,CAM,startScene,startGame,TR,syncPeers,BIKES,say};
+window.__ykn={S,P,CAM,startScene,startGame,TR,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};

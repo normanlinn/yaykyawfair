@@ -2,13 +2,19 @@
 
 A walkable 3D night street-fair game inspired by Yangon's Yay Kyaw, written in TypeScript with Three.js.
 
-You dress up as a small icon person and walk through a crowd of families, vendors, bicycles and motorbikes. The fair has eight zones: Ferris wheel, carousel, Food Street, pirate ship, game booths, Kids Corner, the music stage and photo booth, and the Finale View. Along the way you can:
+You dress up as a small icon person and walk through a crowd of families, vendors, bicycles and motorbikes. The fair has eleven zones: Ferris wheel, carousel, Food Street, pirate ship, game booths, Kids Corner, the music stage and photo booth, the Finale View, the OC Midway, the Candle Festival (ဆီမီးထွန်းပွဲ) and the Teashop (လက်ဖက်ရည်ဆိုင်). Along the way you can:
 
-- ride the Ferris wheel, carousel, pirate ship and the mini train
+- ride the Ferris wheel, carousel, pirate ship, mini train, drop tower and wave swinger, seen first person from your seat (drag to look around, Q to wave)
+- run from the bumper cars in the OC Midway, which chase you and spark when they crash, or pay to dodge them for 30 seconds for tickets
+- buy a corn dog, funnel cake or turkey leg at the OC food stands
+- dance with the Myanmar classical dancers in front of the Live Music stage while the saing waing plays
+- light one of 1,000 oil lamps and offer flowers at the Candle Festival
+- sit down at a low table in the teashop with a laphet yay while the football plays on the TV
+- walk up to people in the crowd and talk to them in Burmese
 - play ring toss and balloon darts to win tickets, then trade them for prizes
 - buy mohinga, mont lin ma yar, shwe yin aye and other snacks with kyat
 - collect zone postcards, find six hidden secrets and take photos
-- watch the fireworks finale at 9:30 PM game time
+- watch little fireworks shows over the lake from 7 PM (you are asked if you want to watch each time) and the big finale at 9:30 PM game time, with ground fountains along the lake
 - make a Thadingyut wish (ဆုတောင်း) at the wish stall by the Finale View: send it up on a paper fire balloon (1,000 Ks) or float it on the pond as a candle lantern (500 Ks)
 
 ## Thadingyut wishes
@@ -34,7 +40,7 @@ You can pick a name and a Myanmar-style outfit:
 All sound is synthesized with the Web Audio API, so there are no audio files:
 
 - a crowd murmur, plus people nearby actually saying things in Burmese ("ဒါ ဘယ်လောက်လဲ", "မီးပန်း ဘယ်အချိန်လဲ") with speech bubbles, and snack sellers calling out ("မုန့်ဟင်းခါး ပူပူလေး ရမယ်နော်"). Voices are louder up close, muffled further away, and panned to where the speaker stands. The clips are a synthetic voice (eSpeak NG); see `sounds/README.md`
-- a saing waing-style band at the stage
+- an original tune in the style of a Myanmar saing waing ensemble at the Live Music stage: a hne (oboe) melody with slides and turns, the kyi waing gong circle answering it, pat waing drums, the pat ma bass drum, and si and wa keeping time. It is composed and synthesized for the game, not a recording
 - bicycles ring a bright "cling cling" bell and motorbikes honk "tee tee" when you are in their way
 - fireworks
 
@@ -42,13 +48,15 @@ All sound is synthesized with the Web Audio API, so there are no audio files:
 
 When the game runs as a claude.ai artifact, it uses the artifact `room` capability. Everyone who has the page open at the same time shares the fair and sees each other's characters and names, and they can wave with Q.
 
-Anywhere else (for example the Vercel deployment) the **Friends · သူငယ်ချင်း** button opens invitation-only friend rooms:
+Anywhere else (for example the Vercel deployment) everyone who opens the game joins one **public fair** automatically, with no setup: players at the same time see each other walking, waving, dancing and chatting, and the **Online** count in the top bar shows how many are there. Up to 12 players share a public fair; when it is full, newcomers go to the next one (up to four).
 
-1. Choose **Create room** and copy the invite link to send to friends.
-2. Friends open that link, enter the fair, open Friends and choose **Join**.
-3. Up to eight players see one another, wave and chat.
+The **Players · ကစားသူ** button also opens private rooms:
 
-Friend rooms use PeerJS public signaling and browser-to-browser WebRTC. The host relays positions and messages and must keep the tab open. Some restrictive networks need a TURN relay, which this version does not configure. Rides, tickets, purchases and each player's clock stay individual.
+1. Choose **Create private room** and copy the invite link to send to friends.
+2. Friends who open that link join the room straight away.
+3. Up to eight players see one another, wave and chat. **Back to the public fair** leaves the room.
+
+Both use PeerJS public signaling and browser-to-browser WebRTC. Whoever holds a fair's id relays everyone's positions and messages; if that player leaves, the others take over automatically within a few seconds. A private room's host must keep the tab open. Some restrictive networks need a TURN relay, which this version does not configure. Rides, tickets, purchases and each player's clock stay individual.
 
 ### Chat
 
@@ -81,7 +89,7 @@ npm run serve       # build, then serve dist/ on http://localhost:8000
 | `src/main.ts` | game loop, input and camera, rides, mini-games, bikes, avatar creator, multiplayer and chat |
 | `src/world3d.ts` | the Three.js scene: rides, stalls, lanterns, Shwedagon skyline, crowd, fireworks |
 | `src/layout.ts` | the fair's floor plan and colliders |
-| `src/friends.ts` | PeerJS friend rooms used outside claude.ai |
+| `src/friends.ts` | PeerJS public fair and private rooms used outside claude.ai |
 | `src/wishes.ts` | Thadingyut wishes: sample wishes and where wishes are saved |
 | `src/voices.ts`, `sounds/` | Burmese crowd lines and vendor calls, and their voice clips |
 | `api/wishes.js` | Vercel function that stores wishes in Upstash Redis |
@@ -102,7 +110,8 @@ npm run serve       # build, then serve dist/ on http://localhost:8000
 | P | photo mode |
 | C | camera |
 | B | bag |
-| Q | wave |
+| Q | wave (also on rides) |
+| Y / N | answer "watch the fireworks?" |
 | Esc | leave a ride or game |
 
 On touch screens there is an on-screen stick and a GO button. Drag anywhere else to look around and pinch to zoom.
