@@ -2,7 +2,7 @@
 
 A walkable 3D night street-fair game inspired by Yangon's Yay Kyaw, written in TypeScript with Three.js.
 
-You dress up as a small icon person and walk through a crowd of families, vendors, bicycles and motorbikes. The fair has eleven zones: Ferris wheel, carousel, Food Street, pirate ship, game booths, Kids Corner, the music stage and photo booth, the Finale View, the OC Midway, the Candle Festival (ဆီမီးထွန်းပွဲ) and the Teashop (လက်ဖက်ရည်ဆိုင်). Along the way you can:
+You dress up as a small icon person and walk through a crowd of families, vendors, bicycles and motorbikes. The fair has twelve zones: Ferris wheel, carousel, Food Street, pirate ship, game booths, Kids Corner, the music stage and photo booth, the Finale View, the OC Midway, the Candle Festival (ဆီမီးထွန်းပွဲ), the Teashop (လက်ဖက်ရည်ဆိုင်) and the Wishing Lake (ဆုတောင်းကန်). Along the way you can:
 
 - ride the Ferris wheel, carousel, pirate ship, mini train, drop tower and wave swinger, seen first person from your seat (drag to look around, Q to wave)
 - run from the bumper cars in the OC Midway, which chase you and spark when they crash, or pay to dodge them for 30 seconds for tickets
@@ -15,11 +15,11 @@ You dress up as a small icon person and walk through a crowd of families, vendor
 - buy mohinga, mont lin ma yar, shwe yin aye and other snacks with kyat
 - collect zone postcards, find six hidden secrets and take photos
 - watch little fireworks shows over the lake from 7 PM (you are asked if you want to watch each time) and the big finale at 9:30 PM game time, with ground fountains along the lake
-- make a Thadingyut wish (ဆုတောင်း) at the wish stall by the Finale View: send it up on a paper fire balloon (1,000 Ks) or float it on the pond as a candle lantern (500 Ks)
+- make a Thadingyut wish (ဆုတောင်း) at the wish stall at the south end of the Wishing Lake: send it up on a paper fire balloon (1,000 Ks) or float it on the lake as a candle lantern (500 Ks)
 
 ## Thadingyut wishes
 
-Write a wish in Myanmar or English and it glows over the fair with your name. The sky and pond start with a handful of sample Burmese wishes. Walk near a balloon or lantern to read it, or stand at the west end of the pond and choose **Look up at all the wishes** (also in the wish form) to see them all. The pond has koi, lily pads, lotus flowers and ripples, and nobody can walk into it.
+Write a wish in Myanmar or English and it glows over the fair with your name. The sky and pond start with a handful of sample Burmese wishes. Walk near a balloon or lantern to read it, or stand on the west shore of the lake and choose **Look out over all the wishes** (also in the wish form) to see them all. The Wishing Lake is about 90 metres long. Every candle lantern, yours included, drifts very slowly around it (about half an hour a lap) among a flotilla of other lanterns, koi, lily pads, lotus flowers and ripples. Nobody can walk into it.
 
 The mini map follows you and shows landmarks, the pond and other players. Tap it or press M for the full map of the fair.
 
