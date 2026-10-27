@@ -5,10 +5,11 @@ import { SHIRTS, LONS, SKINS, BALLOONS, AV_SHIRTS, AV_LONS, person, PersonOpts, 
 import { A, audioInit, sfx, bell, horn, setChatter, setMaster } from './audio';
 import {
   WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, TR as TRK, ST, FV, PHOTO, TOYS_AT, UNCLE, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
-  STALLFRONTS, VENDOR_POSTS, blocked, trackPos,
+  STALLFRONTS, VENDOR_POSTS, POND, WISH_STALL, blocked, trackPos,
 } from './layout';
 import { friends } from './friends';
-import { init3d, build3d, resize3d, render3d, launchFirework, renderPreview, capture, project, rigKey, CrowdItem, Frame, Look, RideKind } from './world3d';
+import { openWishes, Wish, WishKind, WISH_PRICE, WISH_IDEAS, WISH_MAX_LEN, cleanWish } from './wishes';
+import { init3d, build3d, resize3d, render3d, launchFirework, renderPreview, capture, project, rigKey, setWishes, wishSpot, CrowdItem, Frame, Look, RideKind } from './world3d';
 
 // ---------- canvases ----------
 const world = $<HTMLCanvasElement>('world');
@@ -43,8 +44,9 @@ const S: GameState = {
 try{ const sv=JSON.parse(localStorage.getItem('ykn-settings')||'null'); if(sv){ Object.assign(S.settings,sv); S.settings.av={...DEFAULT_AVATAR,...(sv.av||{})}; } }catch{ /* storage unavailable */ }
 function saveSettings(): void { try{ localStorage.setItem('ykn-settings',JSON.stringify(S.settings)); }catch{ /* storage unavailable */ } }
 
-const P = {x:900,y:2540,hd:Math.PI,moving:false,hidden:false,waveUntil:0};
-const CAM = {yaw:0,pitch:.42,dist:11};
+const P = {x:900,y:2540,hd:Math.PI,moving:false,hidden:false,waveUntil:0,vx:0,vy:0,spd:0};
+const CAM = {yaw:0,pitch:.42,dist:11,zoom:11};
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TR = {u:0,riding:false,rideU:0};
 const NAME_MAX = 16, CHAT_MAX = 120;
 let T = 0;
@@ -67,6 +69,8 @@ IT.push({x:TOYS_AT.x,y:TOYS_AT.y+30,r:48,label:()=>'Browse the toy stall',act:op
 IT.push({x:PHOTO.x,y:PHOTO.y+30,r:45,label:()=>`Souvenir photo booth · ${ks(500)}`,act:boothPhoto});
 IT.push({x:FV.x,y:FV.y+10,r:110,label:()=>S.showStarted&&!S.showDone?'Watch the fireworks now!':S.showDone?'Watch the finale again':'Watch the skyline',act:()=>startScene('finale')});
 IT.push({x:UNCLE.x,y:UNCLE.y+10,r:45,label:()=>'Ask Uncle for pocket money',act:askUncle});
+IT.push({x:WISH_STALL.x,y:WISH_STALL.y+50,r:60,label:()=>'Make a Thadingyut wish · ဆုတောင်း',act:()=>openWish('sky')});
+IT.push({x:POND.x,y:POND.y+POND.ry+28,r:80,label:()=>`Float a wish on the pond · ${ks(WISH_PRICE.water)}`,act:()=>openWish('water')});
 
 // ---------- NPCs ----------
 interface Npc { x: number; y: number; tx: number; ty: number; sp: number; wait: number; ph: number; moving: boolean; stuck: number; hd: number; s: number;
@@ -125,7 +129,7 @@ const cleanName = (v: unknown): string => cleanText(v,NAME_MAX);
 /** Waits (briefly) for the Myanmar and Latin fonts so the 3D signs are drawn with them. */
 async function loadFonts(): Promise<void> {
   if(!document.fonts) return;
-  const want=['400 30px "Pyidaungsu"','700 30px "Pyidaungsu"','700 30px "Padauk"','400 14px "Brandon Text"','700 14px "Brandon Text"','400 20px "Bungee"'].map(f=>document.fonts.load(f,'ရေကျော် Aa').catch(()=>[]));
+  const want=['400 30px "KhitHaung"','500 30px "KhitHaung"','600 30px "KhitHaung"','700 30px "KhitHaung"','400 30px "Pyidaungsu"','700 30px "Padauk"','400 14px "Brandon Text"','700 14px "Brandon Text"','400 20px "Bungee"'].map(f=>document.fonts.load(f,'ရေကျော် Aa').catch(()=>[]));
   await Promise.race([Promise.all(want),new Promise(r=>setTimeout(r,2500))]);
 }
 
@@ -339,13 +343,78 @@ function updateNpcSay(dt: number): void {
 const tagPool: HTMLElement[] = []; let tagUsed=0;
 function tagEl(cls: string, html: string): HTMLElement {
   let d=tagPool[tagUsed]; if(!d){ d=document.createElement('div'); $('tags').appendChild(d); tagPool.push(d); }
-  tagUsed++; if(d.className!==cls) d.className=cls; if(d.dataset.h!==html){ d.innerHTML=html; d.dataset.h=html; } d.hidden=false; return d;
+  tagUsed++; if(d.className!==cls) d.className=cls;
+  const fresh=d.hidden||d.dataset.h!==html;
+  if(d.dataset.h!==html){ d.innerHTML=html; d.dataset.h=html; } d.hidden=false;
+  if(fresh&&!RM&&cls.startsWith('bub')) d.animate([{opacity:0,scale:'.4'},{opacity:1,scale:'1'}],{duration:260,easing:'cubic-bezier(.2,1.5,.4,1)'});
+  return d;
 }
 function placeTag(x: number, y: number, h: number, cls: string, html: string, maxD = 55): void {
   const p=project(x,y,h,VW,VH); if(!p.ok||p.d>maxD) return;
   const s=clamp(14/p.d,.55,1.15), d=tagEl(cls,html);
   d.style.transform=`translate(${p.sx-d.offsetWidth/2}px,${p.sy-d.offsetHeight}px) scale(${s.toFixed(3)})`;
   d.style.opacity=String(clamp(1.3-p.d/maxD,0,1));
+}
+// ---------- Thadingyut wishes ----------
+let wishStore: Awaited<ReturnType<typeof openWishes>> | null = null;
+let WISHES: Wish[] = [];
+const wishBorn = new Map<string, number>();
+function refreshWishes(): void { setWishes(WISHES.map(w=>({id:w.id,k:w.k,born:wishBorn.get(w.id) ?? -1}))); }
+async function initWishes(): Promise<void> {
+  wishStore=await openWishes((all,fresh)=>{
+    WISHES=all;
+    for(const w of fresh) if(!wishBorn.has(w.id)){ wishBorn.set(w.id,T); if(!w.mine&&S.mode==='walk') chatLine('',`A new wish ${w.k==='sky'?'rises into the sky':'floats on the pond'}: “${w.t}”`,true); }
+    refreshWishes();
+  });
+}
+function openWish(kind: WishKind): void {
+  if(S.mode!=='walk') return;
+  let k=kind;
+  const wrap=document.createElement('div'); wrap.className='wish';
+  wrap.innerHTML=`<p class="muted">On Thadingyut night people send their wishes up on paper fire balloons and float candles on the water. Write yours in Myanmar or English. It will glow here for everyone, forever.</p>
+  <div class="seg" role="radiogroup"><button data-k="sky" role="radio">🎈 Fire balloon <span class="mm">မီးပုံးပျံ</span><small>${ks(WISH_PRICE.sky)}</small></button><button data-k="water" role="radio">🪷 Water lantern <span class="mm">ရေမီးပုံး</span><small>${ks(WISH_PRICE.water)}</small></button></div>
+  <textarea id="wishIn" class="mm" maxlength="${WISH_MAX_LEN}" rows="2" placeholder="ဆုတောင်းလေး ရေးပါ… / Write your wish…"></textarea>
+  <div class="ideas">${WISH_IDEAS.map(t=>`<button class="mm" type="button">${esc(t)}</button>`).join('')}</div>
+  <div class="row"><small class="muted" id="wishLeft"></small><button class="cta" id="wishGo"></button></div>
+  <h3>Wishes glowing tonight</h3><div class="wlist"></div>`;
+  const ta=wrap.querySelector<HTMLTextAreaElement>('#wishIn'), go=wrap.querySelector<HTMLButtonElement>('#wishGo');
+  const sync=()=>{ wrap.querySelectorAll<HTMLButtonElement>('.seg button').forEach(b=>{ const on=b.dataset.k===k; b.classList.toggle('on',on); b.setAttribute('aria-checked',String(on)); });
+    go.textContent=`${k==='sky'?'Send it up':'Float it'} · ${ks(WISH_PRICE[k])}`; go.disabled=!cleanWish(ta.value);
+    wrap.querySelector('#wishLeft').textContent=`${WISH_MAX_LEN-ta.value.length} letters left · you have ${ks(S.kyat)}`; };
+  wrap.querySelectorAll<HTMLButtonElement>('.seg button').forEach(b=>b.onclick=()=>{ k=b.dataset.k as WishKind; sync(); });
+  wrap.querySelectorAll<HTMLButtonElement>('.ideas button').forEach(b=>b.onclick=()=>{ ta.value=b.textContent; sync(); ta.focus(); });
+  ta.oninput=sync; ta.addEventListener('keydown',e=>e.stopPropagation());
+  const list=wrap.querySelector('.wlist');
+  list.innerHTML=[...WISHES].reverse().slice(0,24).map(w=>`<div class="w ${w.k}"><span>${w.k==='sky'?'🎈':'🪷'}</span><div><span class="mm">${esc(w.t)}</span><small>${esc(w.n||'Someone')}${w.mine?' · you':''}</small></div></div>`).join('');
+  go.onclick=async()=>{
+    const t=cleanWish(ta.value); if(!t||!wishStore) return;
+    if(!pay(WISH_PRICE[k])) return;
+    go.disabled=true;
+    const res=await wishStore.add({k,t,n:S.settings.name||'Visitor'});
+    if(res==='full'||res==='failed'){ S.kyat+=WISH_PRICE[k]; updateHUD(); toast(res==='full'?'You already have 50 wishes glowing. They will keep shining.':'That wish could not be saved just now. Your kyat is back.'); go.disabled=false; return; }
+    if(!wishBorn.has(res.id)) wishBorn.set(res.id,T);
+    refreshWishes(); closeModal(); sfx('ding');
+    toast(k==='sky'?`<span class="z">ဆုတောင်းပြည့်ပါစေ</span>Your fire balloon is rising over the fair.`:`<span class="z">ဆုတောင်းပြည့်ပါစေ</span>Your lantern is drifting out across the pond.`,true);
+    if(!wishStore.shared) chatLine('','Your wish is saved in this browser. Open the game on claude.ai to share wishes with everyone.',true);
+  };
+  sync();
+  openModal('Thadingyut wishes · ဆုတောင်း',wrap);
+}
+function wishTags(): void {
+  const near: Array<[number, Wish, [number, number, number]]>=[];
+  for(const w of WISHES){ const p=wishSpot(w.id); if(!p) continue;
+    const d=Math.hypot((p[0]-P.x)*.05,(p[1]-P.y)*.05,p[2]);
+    const age=T-(wishBorn.get(w.id) ?? -99);
+    if(age<14&&w.mine) near.push([-1,w,p]); else if(d<(w.k==='sky'?46:20)) near.push([d,w,p]); }
+  near.sort((a,b)=>a[0]-b[0]);
+  const used: Array<[number, number]>=[]; let n=0;
+  for(const [,w,p] of near){
+    if(n>=5) break;
+    const h=p[2]+(w.k==='sky'?1.9:0.75), q=project(p[0],p[1],h,VW,VH); if(!q.ok) continue;
+    if(used.some(([x,y])=>Math.abs(x-q.sx)<170&&Math.abs(y-q.sy)<46)) continue; // keep labels from piling up
+    used.push([q.sx,q.sy]); n++;
+    placeTag(p[0],p[1],h,'bub wish '+w.k,`<span class="mm">${esc(w.t)}</span><small>${esc(w.n||'Someone')}</small>`,w.k==='sky'?70:30);
+  }
 }
 function updateTags(): void {
   tagUsed=0;
@@ -358,6 +427,7 @@ function updateTags(): void {
       if(r.sayUntil>T) placeTag(r.x,r.y,2.55,'bub',`<span class="mm">${esc(r.say)}</span><small>${esc(r.name||'Player')}</small>`,80);
       else placeTag(r.x,r.y,2.25,'tag',esc(r.name||'Player'),80);
     }
+    wishTags();
     if(S.mode==='walk') for(const s of NPC_SAY) placeTag(s.n.x,s.n.y,2.3*s.n.s,'bub npc',`<span class="mm">${s.t[0]}</span><small>${s.t[1]}</small>`,35);
   }
   for(let i=tagUsed;i<tagPool.length;i++) if(!tagPool[i].hidden) tagPool[i].hidden=true;
@@ -367,16 +437,31 @@ function updateTags(): void {
 function toast(msg: string, big?: boolean): void {
   const d=document.createElement('div'); d.className='toast'+(big?' big':''); d.innerHTML=msg; $('toasts').appendChild(d);
   while($('toasts').children.length>3) $('toasts').firstChild.remove();
-  setTimeout(()=>d.remove(),big?4200:3000);
+  setTimeout(()=>{ d.classList.add('out'); setTimeout(()=>d.remove(),RM?0:320); },big?4200:3000);
+}
+/** Cuts to black and fades back in, for jumps the camera can't glide across (stepping up to a game booth). */
+function fadeFrom(): void {
+  if(RM) return; const f=$('fade'); f.style.transition='none'; f.style.opacity='1';
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{ f.style.transition='opacity .5s ease-out'; f.style.opacity='0'; }));
+}
+function pop(e: HTMLElement, big=1.3): void { if(!RM) e.animate([{scale:String(big)},{scale:'1'}],{duration:380,easing:'cubic-bezier(.2,1.4,.4,1)'}); }
+function floatText(from: HTMLElement, txt: string, cls: string): void {
+  if(RM) return; const r=from.getBoundingClientRect(), d=document.createElement('div'); d.className='floatx '+cls; d.textContent=txt;
+  d.style.left=r.left+r.width/2+'px'; d.style.top=r.top+r.height+'px'; document.body.appendChild(d);
+  d.animate([{opacity:0,translate:'-50% 0'},{opacity:1,translate:'-50% 10px',offset:.2},{opacity:0,translate:'-50% 44px'}],{duration:1100,easing:'ease-out'}).onfinish=()=>d.remove();
 }
 function fmtClock(m: number): string { m=Math.floor(m); let h=Math.floor(m/60)%24; const mm=m%60; const ap=h>=12?'PM':'AM'; h=h%12||12; return h+':'+String(mm).padStart(2,'0')+' '+ap; }
 function journey(): Record<string, boolean> {
   return {arrive:true,discover:S.zones.length>=4,play:S.rides>0&&S.games>0,finale:S.finaleSeen};
 }
 let hudCache='';
+let hudK=-1, hudT=-1;
 function updateHUD(): void {
   $('kyat').textContent=S.kyat.toLocaleString('en-US');
   $('tix').textContent=String(S.tix);
+  if(hudK>=0&&S.kyat!==hudK){ pop($('kyat')); floatText($('kyat'),(S.kyat>hudK?'+':'−')+Math.abs(S.kyat-hudK).toLocaleString('en-US')+' Ks',S.kyat>hudK?'up':'down'); }
+  if(hudT>=0&&S.tix>hudT){ pop($('tix'),1.5); floatText($('tix'),'+'+(S.tix-hudT)+' 🎟','up'); }
+  hudK=S.kyat; hudT=S.tix;
   $('clock').textContent=fmtClock(S.clock);
   const j=journey(); let nowSet=false;
   document.querySelectorAll<HTMLElement>('#journey li').forEach(li=>{ const k=li.dataset.s; li.classList.toggle('done',j[k]); const now=!j[k]&&!nowSet; li.classList.toggle('now',now); if(now) nowSet=true; });
@@ -516,7 +601,7 @@ function openBag(): void {
   render(); wrap.appendChild(tabs); wrap.appendChild(body);
   openModal('Your bag',wrap);
 }
-function setCam(c: 'close' | 'wide'): void { S.settings.cam=c; saveSettings(); CAM.dist=c==='wide'?24:11; }
+function setCam(c: 'close' | 'wide'): void { S.settings.cam=c; saveSettings(); CAM.zoom=c==='wide'?24:11; }
 function openSettings(): void {
   const wrap=document.createElement('div');
   const opt=(label: string, key: keyof Settings, vals: Array<[unknown,string]>, fn?: (v: any)=>void)=>{ const r=document.createElement('div'); r.className='opt'; r.innerHTML=`<span>${label}</span>`; const sg=document.createElement('div'); sg.className='seg';
@@ -603,11 +688,11 @@ function startGame(kind: MiniGame['kind']): void {
   Object.assign(MG,{kind,t:0,won:0,done:false,fx:[]});
   if(kind==='ring'){ MG.left=5; MG.phase='aim'; MG.rings=[]; MG.bottles=[]; MG.flight=null; }
   if(kind==='darts'){ MG.left=6; MG.balloons=[]; MG.darts=[]; MG.aim={x:VW/2,y:VH*.42}; for(let r=0;r<4;r++) for(let c=0;c<7;c++) MG.balloons.push({r,c,col:BALLOONS[(r*3+c)%5],gold:(r===1&&c===5)||(r===3&&c===1),pop:false,ph:rand(0,9)}); }
-  S.mode='mg'; $('prompt').hidden=true;
+  S.mode='mg'; $('prompt').hidden=true; fadeFrom();
   setBar(kind==='ring'?'Stop the sweeping marker to aim, then stop the power bar. Gold bottle pays 8 tickets.':'Aim the wobbling crosshair and throw. Gold balloons pay 6 tickets.');
   syncChrome(); updateHUD();
 }
-function endGame(): void { S.mode='walk'; $('sceneBar').hidden=true; if(MG.won) toast(`You won <b>${MG.won} tickets</b>. Spend them at the prize counter.`); syncChrome(); updateHUD(); }
+function endGame(): void { fadeFrom(); S.mode='walk'; $('sceneBar').hidden=true; if(MG.won) toast(`You won <b>${MG.won} tickets</b>. Spend them at the prize counter.`); syncChrome(); updateHUD(); }
 function ringLayout(): Bottle[] {
   const m=Math.min(VW,VH), cx=VW/2, top=VH*.3, B: Bottle[]=[];
   for(let r=0;r<3;r++){ const sc=(.75+r*.18)*m/700; for(let c=0;c<4;c++) B.push({r,c,x:cx+(c-1.5)*95*sc,y:top+r*70*m/700,sc,gold:r===0&&c===2}); }
@@ -742,14 +827,14 @@ world.addEventListener('pointerdown',e=>{
 });
 world.addEventListener('pointermove',e=>{
   if(pinch.has(e.pointerId)) pinch.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(pinch.size===2){ const [a,b]=[...pinch.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); if(pinchD) CAM.dist=clamp(CAM.dist*pinchD/d,5,40); pinchD=d; return; }
+  if(pinch.size===2){ const [a,b]=[...pinch.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); if(pinchD) CAM.zoom=clamp(CAM.zoom*pinchD/d,5,40); pinchD=d; return; }
   if(e.pointerId!==drag.id) return;
   const dx=e.clientX-drag.x, dy=e.clientY-drag.y; drag.x=e.clientX; drag.y=e.clientY; drag.moved+=Math.abs(dx)+Math.abs(dy);
   CAM.yaw-=dx*.006; CAM.pitch=clamp(CAM.pitch+dy*.004,.08,1.25);
 });
 const endDrag=(e: PointerEvent)=>{ pinch.delete(e.pointerId); pinchD=0; if(e.pointerId===drag.id){ drag.id=null; world.classList.remove('drag'); } };
 world.addEventListener('pointerup',endDrag); world.addEventListener('pointercancel',endDrag);
-world.addEventListener('wheel',e=>{ e.preventDefault(); CAM.dist=clamp(CAM.dist*Math.exp(e.deltaY*.0012),5,40); },{passive:false});
+world.addEventListener('wheel',e=>{ e.preventDefault(); CAM.zoom=clamp(CAM.zoom*Math.exp(e.deltaY*.0012),5,40); },{passive:false});
 $('prompt').addEventListener('click',press);
 $('act').addEventListener('pointerdown',e=>{ e.preventDefault(); press(); });
 const joy: { x: number; y: number; id: number | null } = {x:0,y:0,id:null};
@@ -808,7 +893,8 @@ function maybeSummary(): void {
 
 // ---------- movement ----------
 function movePlayer(dt: number): void {
-  if(S.mode!=='walk'||S.paused) { P.moving=false; return; }
+  if(S.mode!=='walk'||S.paused||TR.riding) { P.moving=false; P.vx=P.vy=P.spd=0; }
+  if(S.mode!=='walk'||S.paused) return;
   if(TR.riding){
     TR.rideU+=dt*.55; const [x,y]=trackPos(TR.u-.32); P.x=x; P.y=y;
     if(TR.rideU>=TAU){ TR.riding=false; P.hidden=false; P.x=TRK.cx; P.y=TRK.cy+TRK.ry+90; toast('Toot toot! Thanks for riding the mini train.'); }
@@ -818,14 +904,23 @@ function movePlayer(dt: number): void {
   if(!chatOpen){ if(keys.ArrowLeft||keys.KeyA) ix--; if(keys.ArrowRight||keys.KeyD) ix++; if(keys.ArrowUp||keys.KeyW) iy--; if(keys.ArrowDown||keys.KeyS) iy++; }
   if(joy.id!=null){ ix=joy.x; iy=joy.y; }
   const mag=Math.hypot(ix,iy);
+  let tvx=0, tvy=0;
   if(mag>.15){
     // camera-relative: up on the stick walks away from the camera
     const fx=-Math.sin(CAM.yaw), fz=-Math.cos(CAM.yaw), rx=Math.cos(CAM.yaw), rz=-Math.sin(CAM.yaw);
     const dx=rx*ix-fx*iy, dy=rz*ix-fz*iy;
     const sp=(keys.ShiftLeft||keys.ShiftRight||mag>.95&&joy.id!=null?210:135)*Math.min(1,mag)/mag;
-    const nx=P.x+dx*sp*dt, ny=P.y+dy*sp*dt; if(!blocked(nx,P.y,6)) P.x=nx; if(!blocked(P.x,ny,6)) P.y=ny;
-    P.moving=true; turnTo(P,dx,dy,dt*1.4);
-  } else P.moving=false;
+    tvx=dx*sp; tvy=dy*sp;
+  }
+  // ease into and out of a walk rather than starting and stopping dead
+  const k=1-Math.exp(-dt*(mag>.15?9:12));
+  P.vx+=(tvx-P.vx)*k; P.vy+=(tvy-P.vy)*k;
+  const v=Math.hypot(P.vx,P.vy); if(v<2){ P.vx=P.vy=0; }
+  const nx=P.x+P.vx*dt, ny=P.y+P.vy*dt;
+  if(!blocked(nx,P.y,6)) P.x=nx; else P.vx=0;
+  if(!blocked(P.x,ny,6)) P.y=ny; else P.vy=0;
+  P.spd=Math.hypot(P.vx,P.vy)/135; P.moving=P.spd>.08;
+  if(P.moving) turnTo(P,P.vx,P.vy,dt*1.4);
 }
 
 // ---------- main loop ----------
@@ -841,7 +936,7 @@ function frameData(dt: number): Frame {
   const cam=title?{yaw:T*.05,pitch:.38,dist:46}:CAM;
   return {
     t:T, dt, night:clamp((S.clock-(18*60+30))/60,0,1), quality:S.settings.gfx,
-    me:{x:title?900:P.x,y:title?2000:P.y,hd:P.hd,moving:P.moving,wave:T<P.waveUntil,look:myLook(),balloon:S.balloon,hidden:P.hidden||title},
+    me:{x:title?900:P.x,y:title?2000:P.y,hd:P.hd,moving:P.moving,spd:P.spd,wave:T<P.waveUntil,look:myLook(),balloon:S.balloon,hidden:P.hidden||title},
     crowd:crowdBuf, bikes:BIKES, others, ride, rideT:SC.t, trainU:TR.u, cam,
     sparkle:SECRETS.map(s=>S.secrets.includes(s.id)?0:clamp(1-Math.hypot(P.x-s.x,P.y-s.y)/320,0,1)),
     steamFrom:CARTS,
@@ -857,6 +952,7 @@ function frame(now: number): void {
   }
   updFireworks(dt);
   movePlayer(dt);
+  CAM.dist+=(CAM.zoom-CAM.dist)*(1-Math.exp(-dt*8));
   TR.u+=dt*.55;
   for(const n of NPC) updateNPC(n,dt);
   updateBikes(dt);
@@ -903,7 +999,7 @@ async function boot(data: any): Promise<void> {
     if(S.mode!=='title'){ $('title').hidden=true; S.mode='walk'; } }
   init3d(world,onBoom); resize(); window.addEventListener('resize',resize);
   setCam(S.settings.cam);
-  spawnCrowd(); spawnBikes(); setSound(S.settings.sound); syncChrome(); updateHUD(); initRoom();
+  spawnCrowd(); spawnBikes(); setSound(S.settings.sound); syncChrome(); updateHUD(); initRoom(); initWishes();
   requestAnimationFrame(t=>{ last=t; frame(t); });
   await loadFonts();
   build3d(); ready=true;

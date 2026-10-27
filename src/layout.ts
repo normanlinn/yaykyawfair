@@ -37,6 +37,8 @@ export const PHOTO = { x: 625, y: 2300 };
 export const TOYS_AT = { x: 1590, y: 1920 };
 export const ARCH_Y = 2475;
 export const UNCLE = { x: 1120, y: 2520 };
+export const POND = { x: 1440, y: 2350, rx: 160, ry: 68 };   // wishing pond (water lanterns)
+export const WISH_STALL = { x: 1150, y: 2290 };              // where wishes are written
 
 export interface Snack { id: string; name: string; my: string; p: number; col: string; d: string }
 export const SNACKS: Snack[] = [
@@ -101,6 +103,9 @@ addCol(ST.x - 175, ST.y - 80, 350, 90);
 addCol(590, 2255, 70, 45);
 addCol(770, 2465, 24, 12); addCol(1006, 2465, 24, 12);
 addCol(1184, 2478, 52, 16);
+addCol(POND.x - POND.rx * .92, POND.y - POND.ry * .55, POND.rx * 1.84, POND.ry * 1.1);
+addCol(POND.x - POND.rx * .6, POND.y - POND.ry * .9, POND.rx * 1.2, POND.ry * 1.8);
+addCol(WISH_STALL.x - 70, WISH_STALL.y - 34, 140, 40);
 
 export function blocked(x: number, y: number, r: number): boolean {
   if (x < 40 + r || x > WW - 40 - r || y < NORTH + 8 + r || y > WH - 14 - r) return true;
