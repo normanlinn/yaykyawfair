@@ -8,7 +8,7 @@ const KEEP = 5000;          // wishes kept, oldest dropped first
 const SEND = 1000;          // wishes sent to each player
 const PER_HOUR = 20;        // wishes one address may make per hour
 
-function redisEnv(env = process.env) {
+export function redisEnv(env = process.env) {
   const url = env.KV_REST_API_URL || env.UPSTASH_REDIS_REST_URL;
   const token = env.KV_REST_API_TOKEN || env.UPSTASH_REDIS_REST_TOKEN;
   return url && token ? { url: url.replace(/\/$/, ''), token } : null;
