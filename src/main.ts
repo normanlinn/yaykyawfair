@@ -1,12 +1,13 @@
 // Yay Kyaw Nights: a walkable 3D night street fair inspired by Yangon's Yay Kyaw.
 // Game logic works in map units (see layout.ts); world3d.ts draws it with Three.js.
 import { Ctx, TAU, rand, pick, clamp, lerp, srng, rr, el, circ, ln, ks, MMF, DISP, BODY, $ } from './util';
-import { SHIRTS, LONS, SKINS, BALLOONS, AV_SHIRTS, AV_LONS, person, PersonOpts, Avatar, DEFAULT_AVATAR, avatarOpts, cleanAvatar, randomAvatar } from './people';
+import { SHIRTS, LONS, SKINS, BALLOONS, AV_SHIRTS, AV_LONS, person, PersonOpts, Avatar, Gender, DEFAULT_AVATAR, avatarOpts, cleanAvatar, randomAvatar, genderStartingLook } from './people';
 import { A, audioInit, sfx, bell, horn, setChatter, setMaster } from './audio';
 import {
   WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, TR as TRK, ST, FV, PHOTO, TOYS_AT, UNCLE, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
   STALLFRONTS, VENDOR_POSTS, blocked, trackPos,
 } from './layout';
+import { friends } from './friends';
 import { init3d, build3d, resize3d, render3d, launchFirework, renderPreview, capture, project, rigKey, CrowdItem, Frame, Look, RideKind } from './world3d';
 
 // ---------- canvases ----------
@@ -124,7 +125,7 @@ const cleanName = (v: unknown): string => cleanText(v,NAME_MAX);
 /** Waits (briefly) for the Myanmar and Latin fonts so the 3D signs are drawn with them. */
 async function loadFonts(): Promise<void> {
   if(!document.fonts) return;
-  const want=['400 30px "Padauk"','700 30px "Padauk"','400 14px "Brandon Text"','700 14px "Brandon Text"','400 20px "Bungee"'].map(f=>document.fonts.load(f,'ရေကျော် Aa').catch(()=>[]));
+  const want=['400 30px "Pyidaungsu"','700 30px "Pyidaungsu"','700 30px "Padauk"','400 14px "Brandon Text"','700 14px "Brandon Text"','400 20px "Bungee"'].map(f=>document.fonts.load(f,'ရေကျော် Aa').catch(()=>[]));
   await Promise.race([Promise.all(want),new Promise(r=>setTimeout(r,2500))]);
 }
 
@@ -200,6 +201,9 @@ function openAvatar(first: boolean, after?: () => void): void {
     const inp=nr.querySelector('input') as HTMLInputElement;
     inp.addEventListener('input',()=>{ nameVal=inp.value; draw(); });
     inp.addEventListener('keydown',e=>e.stopPropagation());
+    const gr=row('Body'); ([['male','Male'],['female','Female'],['unspecified','Unspecified']] as Array<[Gender,string]>).forEach(([v,l])=>{
+      const b=document.createElement('button'); b.type='button'; b.textContent=l; b.setAttribute('aria-pressed',String(a.gender===v));
+      b.onclick=()=>{ if(a.gender===v) return; Object.assign(a,genderStartingLook(v)); build(); draw(); }; gr.appendChild(b); });
     choice('Outfit','outfit',[['longyi','Longyi + shirt'],['htamein','Htamein + eingyi'],['taikpon','Taikpon jacket']]);
     swatches('Top colour','shirt',AV_SHIRTS);
     swatches('Longyi / htamein colour','lon',AV_LONS);
@@ -224,13 +228,17 @@ function openAvatar(first: boolean, after?: () => void): void {
 // ---------- multiplayer: everyone with the page open shares one fair ----------
 interface Remote { peer: string; name: string; av: Avatar; look: Look; x: number; y: number; tx: number; ty: number; hd: number; moving: boolean; where: string; balloon: string | null; wv: number; waveUntil: number; sayI: number; say: string; sayUntil: number }
 const REMOTE = new Map<string, Remote>();
-let room: typeof Claude.room | null = null;
+let room: { presence(value: Record<string, unknown>): Promise<unknown> } | null = null;
 let lastSent='', presT=0, waveCount=0, roomReady=false;
 const mySay={i:0,t:'',until:0};
 async function initRoom(): Promise<void> {
   try{
     const r=await window.claude?.use?.('room');
-    if(!r){ chatLine('','Playing solo here. Open the game from its shared link to chat and play with friends.',true); return; }
+    if(!r){ // outside claude.ai (for example on Vercel): invitation-only PeerJS friend rooms
+      const fr=friends(peers=>syncPeers(peers as unknown as Claude.room.Peer[]));
+      room=fr; roomReady=true; $('bFriends').hidden=false; $('bFriends').onclick=()=>fr.open();
+      chatLine('','Open Friends · သူငယ်ချင်း to create or join a room, then press T to chat.',true); return;
+    }
     room=r;
     r.onPeers(ch=>syncPeers(ch.peers), ()=>{ room=null; REMOTE.clear(); updatePlayers(); });
     setTimeout(()=>{ roomReady=true; },2500); // the first deliveries list who was already here: no join notes for them
