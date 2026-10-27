@@ -6,3 +6,4 @@ interface ClaudeHot {
 }
 interface Claude { hot?: ClaudeHot }
 interface Window { __ykn?: unknown }
+declare module '*.mp3' { const url: string; export default url; }
