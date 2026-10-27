@@ -391,7 +391,7 @@ function openWish(kind: WishKind): void {
     if(!pay(WISH_PRICE[k])) return;
     go.disabled=true;
     const res=await wishStore.add({k,t,n:S.settings.name||'Visitor'});
-    if(res==='full'||res==='failed'){ S.kyat+=WISH_PRICE[k]; updateHUD(); toast(res==='full'?'You already have 50 wishes glowing. They will keep shining.':'That wish could not be saved just now. Your kyat is back.'); go.disabled=false; return; }
+    if(res==='full'||res==='failed'){ S.kyat+=WISH_PRICE[k]; updateHUD(); toast(res==='full'?'You have sent lots of wishes already. They will keep shining, so try again a little later.':'That wish could not be saved just now. Your kyat is back.'); go.disabled=false; return; }
     if(!wishBorn.has(res.id)) wishBorn.set(res.id,T);
     refreshWishes(); closeModal(); sfx('ding');
     toast(k==='sky'?`<span class="z">ဆုတောင်းပြည့်ပါစေ</span>Your fire balloon is rising over the fair.`:`<span class="z">ဆုတောင်းပြည့်ပါစေ</span>Your lantern is drifting out across the pond.`,true);
