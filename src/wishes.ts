@@ -1,6 +1,7 @@
 // Thadingyut wishes (ဆုတောင်း): paper fire balloons in the sky and candle lanterns on the pond.
 // On claude.ai every wish is kept in the artifact's shared store, so everyone sees everyone's wishes, forever.
-// Elsewhere (for example on Vercel) they are kept in this browser.
+// A deployed copy with the wishes database (api/wishes.js on Vercel) shares them the same way.
+// Anywhere else they are kept in this browser.
 
 export type WishKind = 'sky' | 'water';
 export interface Wish { id: string; k: WishKind; t: string; n: string; at: number; mine?: boolean }
@@ -38,6 +39,15 @@ function parse(o: unknown, owner: string): Wish | null {
   const w = o as Record<string, unknown>, t = cleanWish(w.t);
   if (!t || (w.k !== 'sky' && w.k !== 'water') || typeof w.id !== 'string') return null;
   return { id: owner + ':' + w.id.slice(0, 24), k: w.k, t, n: typeof w.n === 'string' ? w.n.slice(0, 24) : '', at: typeof w.at === 'number' ? w.at : 0 };
+}
+
+const WISH_API = 'api/wishes';
+async function fetchWishes(): Promise<unknown[] | null> {
+  if (location.protocol !== 'http:' && location.protocol !== 'https:') return null;
+  try {
+    const r = await fetch(WISH_API, { cache: 'no-store' }); if (!r.ok) return null;
+    const j = await r.json(); return Array.isArray(j?.wishes) ? j.wishes : null;
+  } catch { return null; }
 }
 
 type Listener = (all: Wish[], fresh: Wish[]) => void;
@@ -84,6 +94,31 @@ export async function openWishes(onChange: Listener): Promise<Store> {
       const added = { ...raw, id: uid + ':' + raw.id };
       if (!mine.some(m => m.id === added.id)) { mine = [...mine, added]; known.add(added.id); emit(); }
       return added;
+    };
+    return store;
+  }
+
+  // a deployed copy (for example on Vercel) with its own wishes database: see api/wishes.js
+  const api = await fetchWishes();
+  if (api) {
+    store.shared = true;
+    let mineIds: string[] = [];
+    try { const l = JSON.parse(localStorage.getItem('ykn-wish-mine') || '[]'); if (Array.isArray(l)) mineIds = l.filter(x => typeof x === 'string'); } catch { /* storage unavailable */ }
+    const take = (rows: unknown[]): void => {
+      const all = rows.map(o => parse(o, 'w')).filter(Boolean) as Wish[];
+      mine = all.filter(w => mineIds.includes(w.id)); others = all;
+    };
+    take(api); emit(false);
+    setInterval(async () => { if (document.hidden) return; const rows = await fetchWishes(); if (rows) { take(rows); emit(); } }, 20000);
+    store.add = async w => {
+      try {
+        const r = await fetch(WISH_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ k: w.k, t: cleanWish(w.t), n: w.n.slice(0, 24) }) });
+        if (r.status === 429) return 'full';
+        if (!r.ok) return 'failed';
+        const added = parse((await r.json()).wish, 'w'); if (!added) return 'failed';
+        mineIds.push(added.id); try { localStorage.setItem('ykn-wish-mine', JSON.stringify(mineIds.slice(-200))); } catch { /* still shown this visit */ }
+        mine = [...mine, added]; known.add(added.id); emit(); return added;
+      } catch { return 'failed'; }
     };
     return store;
   }
