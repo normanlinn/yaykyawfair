@@ -1,10 +1,15 @@
 // Search and social metadata for the hosted build (dist/index.html), in English and Burmese.
-// The site address comes from SITE_URL, or on Vercel from VERCEL_PROJECT_PRODUCTION_URL (set automatically at build time).
-// Without either, links stay relative and the sitemap is skipped.
+// Settings (Vercel > Project > Settings > Environment Variables), all optional:
+//   SITE_URL                  the public address, e.g. https://yaykyaw.com once a custom domain is added (default https://yaykyawfair.vercel.app)
+//   GOOGLE_SITE_VERIFICATION  the content="..." code from Google Search Console's "HTML tag" method
+//   BING_SITE_VERIFICATION    the content="..." code from Bing Webmaster Tools
+// A Search Console "HTML file" (googleXXXX.html) can instead be dropped into public/, which is copied to the site root.
+// Vercel preview deployments are marked noindex so Google only lists the production site.
 
-const host = process.env.SITE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '');
-export const site = host.replace(/\/+$/, '');
+export const site = (process.env.SITE_URL || 'https://yaykyawfair.vercel.app').replace(/\/+$/, '');
+export const indexable = !process.env.VERCEL_ENV || process.env.VERCEL_ENV === 'production';
 const abs = p => site + p;
+const verify = { 'google-site-verification': process.env.GOOGLE_SITE_VERIFICATION, 'msvalidate.01': process.env.BING_SITE_VERIFICATION };
 
 const esc = s => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
@@ -51,10 +56,11 @@ export function head(path, title = copy.title) {
     `<title>${esc(title)}</title>`,
     `<meta name="description" content="${esc(copy.description)}">`,
     `<meta name="keywords" content="${esc(keywords)}">`,
-    `<meta name="robots" content="index,follow,max-image-preview:large">`,
+    `<meta name="robots" content="${indexable ? 'index,follow,max-image-preview:large' : 'noindex,nofollow'}">`,
+    ...Object.entries(verify).filter(([, v]) => v).map(([k, v]) => `<meta name="${k}" content="${esc(v.trim())}">`),
     `<meta name="theme-color" content="#0d0a24">`,
     `<meta http-equiv="content-language" content="en, my">`,
-    site && `<link rel="canonical" href="${url}">`,
+    `<link rel="canonical" href="${url}">`,
     ...['en', 'my', 'x-default'].map(l => `<link rel="alternate" hreflang="${l}" href="${url}">`),
     `<link rel="icon" href="/favicon.svg" type="image/svg+xml">`,
     `<meta property="og:type" content="website">`,
@@ -83,7 +89,8 @@ export const gameAbout = `<section id="about-game" style="position:absolute;widt
 <h2 lang="my">ရေကျော်ညများ: ရန်ကုန် ညပွဲတော် 3D ဂိမ်း</h2>
 <p lang="my">${copy.my}</p>
 <p><a href="/about/">About the game · ဂိမ်းအကြောင်း</a></p>
-</section>`;
+</section>
+<noscript><p style="position:fixed;inset:auto 0 0;margin:0;padding:12px 16px;background:#1e143a;color:#f7efe0;text-align:center">Yay Kyaw Nights needs JavaScript to run. ဂိမ်းကစားရန် JavaScript ဖွင့်ပေးပါ။ <a href="/about/" style="color:#f4b63f">About the game · ဂိမ်းအကြောင်း</a></p></noscript>`;
 
 // A plain, readable landing page at /about/ that search engines can index and people can share.
 export const aboutPage = `<!doctype html>
@@ -148,9 +155,9 @@ footer{color:var(--muted);font-size:14px}
 </html>
 `;
 
-export const robots = () => `User-agent: *\nAllow: /\n${site ? `\nSitemap: ${abs('/sitemap.xml')}\n` : ''}`;
+export const robots = () => indexable ? `User-agent: *\nAllow: /\n\nSitemap: ${abs('/sitemap.xml')}\n` : 'User-agent: *\nDisallow: /\n';
 
-export const sitemap = () => site && `<?xml version="1.0" encoding="UTF-8"?>
+export const sitemap = () => `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
 ${['/', '/about/'].map(p => `  <url>
     <loc>${abs(p)}</loc>
