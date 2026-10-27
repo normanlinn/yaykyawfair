@@ -763,8 +763,9 @@ interface WishObj { id: string; k: 'sky' | 'water'; born: number; seed: number; 
 const WISH_CAP = 600;
 const wishes = new Map<string, WishObj>();
 let wishOrder: WishObj[] = [];
-let balloonIM: THREE.InstancedMesh, cupIM: THREE.InstancedMesh, wishFlames: THREE.Points;
+let balloonIM: THREE.InstancedMesh, cupIM: THREE.InstancedMesh, wishFlames: THREE.Points, wishHalos: THREE.Points;
 const flamePos = new Float32Array(WISH_CAP * 2 * 3), flameCol = new Float32Array(WISH_CAP * 2 * 3);
+const haloPos = new Float32Array(WISH_CAP * 3), haloCol = new Float32Array(WISH_CAP * 3);
 function hash01(str: string, salt: number): number {
   let h = 2166136261 ^ salt; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
   return ((h >>> 0) % 100000) / 100000;
@@ -795,8 +796,13 @@ function buildWishPlace(): void {
   cupIM.count = 0; cupIM.frustumCulled = false; cupIM.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(WISH_CAP * 3), 3); scene.add(cupIM);
   const fg = new THREE.BufferGeometry();
   fg.setAttribute('position', new THREE.BufferAttribute(flamePos, 3)); fg.setAttribute('color', new THREE.BufferAttribute(flameCol, 3));
-  wishFlames = new THREE.Points(fg, new THREE.PointsMaterial({ size: 1.3, map: glowSprite, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  wishFlames = new THREE.Points(fg, new THREE.PointsMaterial({ size: 1.9, map: glowSprite, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
   wishFlames.frustumCulled = false; scene.add(wishFlames);
+  const hg = new THREE.BufferGeometry();
+  hg.setAttribute('position', new THREE.BufferAttribute(haloPos, 3)); hg.setAttribute('color', new THREE.BufferAttribute(haloCol, 3));
+  wishHalos = new THREE.Points(hg, new THREE.PointsMaterial({ size: 5.5, map: glowSprite, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  wishHalos.frustumCulled = false; scene.add(wishHalos);
+  buildPondLife();
 }
 // a Taunggyi-style paper fire balloon, open at the bottom
 const BALLOON_PROFILE = [[0.28, -0.95], [0.5, -0.6], [0.78, 0.05], [0.82, 0.6], [0.62, 1.1], [0.32, 1.38], [0.02, 1.48]].map(([r, y]) => new THREE.Vector2(r, y));
@@ -809,9 +815,81 @@ function balloonMat(): THREE.MeshBasicMaterial {
     c.fillStyle = 'rgba(122,31,43,.35)'; for (const y of [26, 70]) c.fillRect(0, y, 64, 5);
     c.fillStyle = 'rgba(255,255,255,.25)'; for (let x = 0; x < 64; x += 16) c.fillRect(x, 0, 2, 128);
   });
-  _balloonMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+  _balloonMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, fog: false });
   return _balloonMat;
 }
+// the pond moves: shimmering water, koi under the surface, lily pads, ripples and glints
+const pond = { shimmer: null as THREE.Mesh, tex: null as THREE.CanvasTexture, koi: [] as Array<{ g: THREE.Group; tail: THREE.Mesh; a: number; b: number; sp: number; ph: number }>,
+  rings: [] as Array<{ m: THREE.Mesh; t: number }>, ringNext: 0, glint: null as THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> };
+function pondPoint(u: number, v: number, inset = 0.8): [number, number] {
+  const ang = u * TAU, r = Math.sqrt(v) * inset; return [X(POND.x + Math.cos(ang) * POND.rx * r), Z(POND.y + Math.sin(ang) * POND.ry * r)];
+}
+function buildPondLife(): void {
+  const cx = X(POND.x), cz = Z(POND.y), sx = POND.rx * M, sz = POND.ry * M;
+  // a wavy, slowly drifting sheen over the water (the koi show through it)
+  pond.tex = canvasTex(256, 256, c => {
+    c.clearRect(0, 0, 256, 256); c.strokeStyle = 'rgba(150,190,255,.35)'; c.lineWidth = 2;
+    for (let y = 8; y < 256; y += 22) { c.beginPath(); for (let x = 0; x <= 256; x += 8) { const yy = y + Math.sin(x / 256 * TAU * 2 + y) * 5; x ? c.lineTo(x, yy) : c.moveTo(x, yy); } c.stroke(); }
+  }, true);
+  pond.tex.repeat.set(3, 1.4);
+  pond.shimmer = new THREE.Mesh(new THREE.CircleGeometry(1, 40), new THREE.MeshBasicMaterial({ map: pond.tex, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+  pond.shimmer.rotation.x = -Math.PI / 2; pond.shimmer.scale.set(sx, sz, 1); pond.shimmer.position.set(cx, 0.075, cz); scene.add(pond.shimmer);
+  // koi
+  const koiCols = ['#ff7a2a', '#ffffff', '#ffb000', '#ff5038', '#f6f0e0', '#ff8f4a', '#e8402a'];
+  koiCols.forEach((col, i) => {
+    const g = new THREE.Group(), mat = new THREE.MeshLambertMaterial({ color: col, emissive: col, emissiveIntensity: 0.25, transparent: true, opacity: 0.85 });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 6), mat); body.scale.set(0.55, 0.32, 1.5); g.add(body);
+    if (i % 2) { const spot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 5), lam('#ff3a20', { k: 'koi' })); spot.scale.set(0.9, 0.5, 1.2); spot.position.set(0, 0.05, 0.05); g.add(spot); }
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.3, 4), mat); tail.rotation.x = -Math.PI / 2; tail.position.z = -0.38; tail.scale.set(1, 1, 0.25); g.add(tail);
+    g.position.set(cx, 0.055, cz); scene.add(g);
+    pond.koi.push({ g, tail, a: 0.35 + (i % 3) * 0.2, b: 0.3 + ((i + 1) % 3) * 0.18, sp: 0.12 + i * 0.025, ph: i * 1.7 });
+  });
+  // lily pads, some with a lotus
+  for (let k = 0; k < 11; k++) {
+    const [x, z] = pondPoint(hash01('pad' + k, 1), 0.35 + hash01('pad' + k, 2) * 0.65, 0.9);
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(0.45 + hash01('pad' + k, 3) * 0.3, 14, 0.4, TAU - 0.5), lam('#2f6b3a', { side: THREE.DoubleSide, k: 'pad' }));
+    pad.rotation.x = -Math.PI / 2; pad.rotation.z = k; pad.position.set(x, 0.085, z); scene.add(pad);
+    if (k % 3 === 0) { const lot = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.28, 7, 1, true), lam('#ff9bc0', { side: THREE.DoubleSide, emissive: '#5a1a30', k: 'lotus' })); lot.rotation.x = Math.PI; lot.position.set(x + 0.1, 0.22, z); scene.add(lot); }
+  }
+  // ripples
+  const rg = new THREE.RingGeometry(0.85, 1, 36);
+  for (let k = 0; k < 10; k++) {
+    const m = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: '#bcd6ff', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    m.rotation.x = -Math.PI / 2; m.position.y = 0.09; m.visible = false; scene.add(m); pond.rings.push({ m, t: 99 });
+  }
+  // glints on the water
+  const gp: Array<[number, number, number, string, number?]> = [];
+  for (let k = 0; k < 40; k++) { const [x, z] = pondPoint(hash01('g' + k, 1), hash01('g' + k, 2), 0.95); gp.push([x, 0.1, z, '#cfe0ff', 0.6]); }
+  pond.glint = makeGlows(gp, 0.35); scene.add(pond.glint);
+}
+function ripple(x: number, z: number): void {
+  const r = pond.rings.find(q => q.t > 2.6); if (!r) return; r.t = 0; r.m.position.x = x; r.m.position.z = z; r.m.visible = true;
+}
+function updatePond(t: number, dt: number): void {
+  if (!pond.shimmer) return;
+  pond.tex.offset.set(t * 0.012, Math.sin(t * 0.2) * 0.03);
+  (pond.shimmer.material as THREE.MeshBasicMaterial).opacity = 0.45 + Math.sin(t * 0.9) * 0.1;
+  const cx = X(POND.x), cz = Z(POND.y), sx = POND.rx * M, sz = POND.ry * M;
+  for (const k of pond.koi) {
+    const u = t * k.sp + k.ph, x = cx + Math.sin(u) * sx * k.a * 1.6, z = cz + Math.sin(u * 2 + k.ph) * sz * k.b * 1.4;
+    const nx = cx + Math.sin(u + 0.05) * sx * k.a * 1.6, nz = cz + Math.sin((u + 0.05) * 2 + k.ph) * sz * k.b * 1.4;
+    k.g.position.set(x, 0.055, z); k.g.rotation.y = Math.atan2(nx - x, nz - z); k.tail.rotation.y = Math.sin(t * 9 + k.ph) * 0.5;
+    if (Math.sin(t * 0.7 + k.ph * 3) > 0.995 && hash01(String(Math.floor(t * 4)), k.ph) > 0.5) ripple(x, z); // a koi comes up to the surface
+  }
+  pond.ringNext -= dt;
+  if (pond.ringNext <= 0) {
+    pond.ringNext = 0.6 + Math.random() * 1.2;
+    const cand = wishOrder.filter(w => w.k === 'water');
+    if (cand.length && Math.random() < 0.6) { const w = cand[Math.floor(Math.random() * cand.length)]; ripple(w.cur.x, w.cur.z); }
+    else { const [x, z] = pondPoint(Math.random(), Math.random()); ripple(x, z); }
+  }
+  for (const r of pond.rings) {
+    if (r.t > 2.6) { r.m.visible = false; continue; }
+    r.t += dt; const u = r.t / 2.6; r.m.scale.setScalar(0.15 + u * 1.4); (r.m.material as THREE.MeshBasicMaterial).opacity = (1 - u) * 0.5;
+  }
+  pond.glint.material.size = 0.35 + Math.sin(t * 3.1) * 0.12;
+}
+
 /** Adds new wishes and drops removed ones. A wish with a born time rises (or drifts out) from the stall. */
 export function setWishes(list: WishSlot[]): void {
   const keep = new Set<string>();
@@ -821,9 +899,9 @@ export function setWishes(list: WishSlot[]): void {
     if (cur) { if (w.born >= 0 && cur.born < 0) { cur.born = w.born; cur.from.copy(w.k === 'sky' ? stallTop() : new THREE.Vector3(X(POND.x - POND.rx * 0.95), 0.1, Z(POND.y + POND.ry * 0.3))); } continue; }
     const a = hash01(w.id, 1), b = hash01(w.id, 2), c = hash01(w.id, 3), home = new THREE.Vector3();
     if (w.k === 'sky') {
-      // most hang in the sky north of the finale deck, the rest drift over the whole fair
-      if (a < 0.7) home.set(X(950 + b * 760), 11 + c * 18, Z(1450 + hash01(w.id, 4) * 700));
-      else home.set(X(180 + b * 1440), 13 + c * 16, Z(500 + hash01(w.id, 4) * 1900));
+      // they gather over the pond and the finale deck, low enough to see from the ground
+      const ang = a * TAU, r = 3 + Math.sqrt(b) * 22;
+      home.set(X(POND.x) + Math.cos(ang) * r, 5 + c * 10, Z(POND.y) - 6 + Math.sin(ang) * r * 0.8);
     } else {
       const ang = a * TAU, r = Math.sqrt(b) * 0.82;
       home.set(X(POND.x + Math.cos(ang) * POND.rx * r), 0.1, Z(POND.y + Math.sin(ang) * POND.ry * r));
@@ -843,7 +921,7 @@ export function wishSpot(id: string): [number, number, number] | null {
 const wm = new THREE.Matrix4(), wq = new THREE.Quaternion(), ws = new THREE.Vector3(), wp = new THREE.Vector3(), wup = new THREE.Vector3(0, 1, 0);
 function updateWishes(t: number, night: number): void {
   if (!balloonIM) return;
-  let nb = 0, nc = 0, nf = 0;
+  let nb = 0, nc = 0, nf = 0, nh = 0;
   for (const w of wishOrder) {
     const age = w.born >= 0 ? t - w.born : 99, s = w.seed;
     if (w.k === 'sky') {
@@ -851,25 +929,28 @@ function updateWishes(t: number, night: number): void {
       w.cur.lerpVectors(w.from, w.home, e);
       w.cur.y = lerp(w.from.y, w.home.y, Math.min(1, u * 1.15)) + Math.sin(t * 0.5 + s) * 0.5;
       w.cur.x += Math.sin(t * 0.21 + s) * 0.9; w.cur.z += Math.cos(t * 0.17 + s) * 0.6;
-      wp.copy(w.cur); wq.setFromAxisAngle(wup, t * 0.1 + s); ws.setScalar(age < 1 ? 0.3 + age * 0.7 : 1);
+      wp.copy(w.cur); wq.setFromAxisAngle(wup, t * 0.1 + s); ws.setScalar(1.5 * (age < 1 ? 0.3 + age * 0.7 : 1));
       wm.compose(wp, wq, ws); balloonIM.setMatrixAt(nb, wm); balloonIM.setColorAt(nb, w.col); nb++;
       const fl = 0.85 + Math.sin(t * 13 + s * 3) * 0.1 + Math.sin(t * 7.3 + s) * 0.05;
       flamePos.set([w.cur.x, w.cur.y - 0.75 * ws.x, w.cur.z], nf * 3); flameCol.set([1.0 * fl, 0.62 * fl, 0.25 * fl], nf * 3); nf++;
+      haloPos.set([w.cur.x, w.cur.y + 0.4 * ws.x, w.cur.z], nh * 3); haloCol.set([0.55 * fl, 0.3 * fl, 0.1 * fl], nh * 3); nh++;
     } else {
       const u = clamp(age / 7, 0, 1), e = u * u * (3 - 2 * u);
       w.cur.lerpVectors(w.from, w.home, e);
       w.cur.x += Math.sin(t * 0.13 + s) * 0.35; w.cur.z += Math.cos(t * 0.11 + s) * 0.2; w.cur.y = 0.1 + Math.sin(t * 1.3 + s) * 0.025;
       wp.copy(w.cur); wq.setFromAxisAngle(wup, t * 0.05 + s); ws.setScalar(1);
-      wm.compose(wp, wq, ws); cupIM.setMatrixAt(nc, wm); cupIM.setColorAt(nc, w.col); nc++;
+      ws.setScalar(1.6); wm.compose(wp, wq, ws); cupIM.setMatrixAt(nc, wm); cupIM.setColorAt(nc, w.col); nc++;
       const fl = 0.8 + Math.sin(t * 11 + s * 3) * 0.12;
-      flamePos.set([w.cur.x, w.cur.y + 0.3, w.cur.z], nf * 3); flameCol.set([1.0 * fl, 0.7 * fl, 0.3 * fl], nf * 3); nf++;
+      flamePos.set([w.cur.x, w.cur.y + 0.45, w.cur.z], nf * 3); flameCol.set([1.0 * fl, 0.7 * fl, 0.3 * fl], nf * 3); nf++;
+      haloPos.set([w.cur.x, w.cur.y + 0.3, w.cur.z], nh * 3); haloCol.set([0.35 * fl, 0.2 * fl, 0.08 * fl], nh * 3); nh++;
       flamePos.set([w.cur.x, 0.05, w.cur.z + 0.5], nf * 3); flameCol.set([0.35 * fl, 0.22 * fl, 0.1 * fl], nf * 3); nf++; // reflection
     }
   }
   balloonIM.count = nb; cupIM.count = nc;
   balloonIM.instanceMatrix.needsUpdate = cupIM.instanceMatrix.needsUpdate = true;
   if (balloonIM.instanceColor) balloonIM.instanceColor.needsUpdate = true; if (cupIM.instanceColor) cupIM.instanceColor.needsUpdate = true;
-  wishFlames.geometry.setDrawRange(0, nf);
+  wishFlames.geometry.setDrawRange(0, nf); wishHalos.geometry.setDrawRange(0, nh);
+  wishHalos.geometry.attributes.position.needsUpdate = true; wishHalos.geometry.attributes.color.needsUpdate = true;
   wishFlames.geometry.attributes.position.needsUpdate = true; wishFlames.geometry.attributes.color.needsUpdate = true;
   (anim.pond.material as THREE.MeshLambertMaterial).emissiveIntensity = 1 + Math.sin(t * 0.8) * 0.15 + night * 0.2;
 }
@@ -897,7 +978,7 @@ export function resize3d(w: number, h: number, dpr: number): void {
 
 export interface Look { o: PersonOpts; key: string }
 export interface Body3D { x: number; y: number; hd: number; moving: boolean; spd?: number; wave: boolean; look: Look; balloon: string | null }
-export type RideKind = 'ferris' | 'carousel' | 'pirate' | 'train' | 'finale' | null;
+export type RideKind = 'ferris' | 'carousel' | 'pirate' | 'train' | 'finale' | 'wishes' | null;
 export interface Frame {
   t: number; dt: number; night: number; quality: 'low' | 'high';
   me: Body3D & { hidden: boolean };
@@ -1042,6 +1123,9 @@ export function render3d(f: Frame): { atTop: boolean } {
   } else if (f.ride === 'train' && seat) {
     seat.getWorldPosition(tmpV); const car = anim.cars[2]; tmpV2.set(Math.sin(car.rotation.y), 0, Math.cos(car.rotation.y));
     camPos.copy(tmpV).addScaledVector(tmpV2, -5.5).setY(3.4); camTarget.copy(tmpV).addScaledVector(tmpV2, 4).setY(0.9);
+  } else if (f.ride === 'wishes') {
+    const yaw = f.cam.yaw, cx = X(POND.x), cz = Z(POND.y) - 6, R = 17;
+    camPos.set(cx + Math.sin(yaw) * R, 2.6, cz + Math.cos(yaw) * R); camTarget.set(cx - Math.sin(yaw) * 4, 8.5, cz - Math.cos(yaw) * 4);
   } else if (f.ride === 'finale') {
     camPos.set(X(FV.x) + 0.9, 3.3, Z(FV.y) + 2.8); camTarget.set(X(FV.x) - 18, 24, -40);
   } else {
@@ -1061,7 +1145,7 @@ export function render3d(f: Frame): { atTop: boolean } {
   camera.lookAt(lookNow);
   const fov = 55 + (mode === 'walk' ? clamp(((f.me.spd ?? 0) - 1.05) * 12, 0, 6) : 0);
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-dt * 4)); camera.updateProjectionMatrix(); }
-  updateDust(dt); updateSkyLanterns(t, dt, n); updateWishes(t, n);
+  updateDust(dt); updateSkyLanterns(t, dt, n); updateWishes(t, n); updatePond(t, dt);
   glowPts.material.size = 1.1 * (1 + 0.05 * Math.sin(t * 2.3));
   renderer.render(scene, camera);
   return { atTop };

@@ -153,3 +153,27 @@ export function sfx(k: Sfx): void {
   }
 }
 export function setMaster(on: boolean): void { if (A.m) A.m.gain.value = on ? 0.7 : 0; }
+
+// ---------------------------------------------------------------- spoken Burmese from the crowd
+const voiceBufs = new Map<string, AudioBuffer>();
+let voicesLoading = false;
+/** Decodes the voice clips once the audio context exists. */
+export function loadVoices(clips: Record<string, string>): void {
+  if (!A.c || voicesLoading) return; voicesLoading = true;
+  for (const [k, url] of Object.entries(clips)) {
+    fetch(url).then(r => r.arrayBuffer()).then(b => A.c.decodeAudioData(b)).then(buf => { voiceBufs.set(k, buf); }).catch(() => { /* that line stays silent */ });
+  }
+}
+/** Plays a spoken line. vol 0..1, pan -1..1, far 0..1 muffles it like someone further down the street. Returns false if the clip isn't ready. */
+export function speak(name: string, vol: number, pan = 0, far = 0): boolean {
+  const buf = voiceBufs.get(name);
+  if (!A.c || !buf || vol <= 0.01) return false;
+  const C = A.c, t = C.currentTime, src = C.createBufferSource(); src.buffer = buf;
+  src.playbackRate.value = rand(0.94, 1.08);
+  const lp = C.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4200 - clamp(far, 0, 1) * 3300; lp.Q.value = 0.4;
+  const g = C.createGain(); g.gain.value = clamp(vol, 0, 1) * 0.55;
+  let out: AudioNode = g;
+  if (C.createStereoPanner) { const p = C.createStereoPanner(); p.pan.value = clamp(pan, -1, 1); g.connect(p); out = p; }
+  src.connect(lp); lp.connect(g); out.connect(A.m); src.start(t);
+  return true;
+}
