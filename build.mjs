@@ -25,7 +25,7 @@ fs.writeFileSync('dist/index.html', standalone);
 fs.mkdirSync('dist/about', { recursive: true });
 fs.writeFileSync('dist/about/index.html', seo.aboutPage);
 fs.writeFileSync('dist/robots.txt', seo.robots());
-if (seo.site) fs.writeFileSync('dist/sitemap.xml', seo.sitemap());
+fs.writeFileSync('dist/sitemap.xml', seo.sitemap());
 for (const f of fs.existsSync('public') ? fs.readdirSync('public') : []) fs.copyFileSync(path.join('public', f), path.join('dist', f));
 
 const mime = { ttf: 'font/ttf', otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2' };
