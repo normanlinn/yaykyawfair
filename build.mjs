@@ -5,10 +5,16 @@ import * as esbuild from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as seo from './seo.mjs';
+import { execSync } from 'node:child_process';
+
+// which version this is: players with an older copy open are told an update is ready (see dist/version.json)
+const sh = (c) => { try { return execSync(c, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return ''; } };
+const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || sh('git rev-parse HEAD') || String(Date.now())).slice(0, 12);
+const NOTES = (process.env.VERCEL_GIT_COMMIT_MESSAGE || sh('git log -1 --format=%B')).split('\n')[0].slice(0, 160);
 
 const minify = process.argv.includes('--minify');
 const result = await esbuild.build({
-  entryPoints: ['src/main.ts'], bundle: true, format: 'iife', target: 'es2020', minify, write: false, legalComments: 'none', loader: { '.mp3': 'dataurl' },
+  entryPoints: ['src/main.ts'], bundle: true, format: 'iife', target: 'es2020', minify, write: false, legalComments: 'none', loader: { '.mp3': 'dataurl' }, define: { __BUILD__: JSON.stringify(BUILD) },
 });
 const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 const page = fs.readFileSync('src/index.html', 'utf8').replace('<script>/*BUNDLE*/</script>', () => `<script>\n${js}</script>`);
@@ -25,6 +31,7 @@ fs.writeFileSync('dist/index.html', standalone);
 fs.mkdirSync('dist/about', { recursive: true });
 fs.writeFileSync('dist/about/index.html', seo.aboutPage);
 fs.writeFileSync('dist/robots.txt', seo.robots());
+fs.writeFileSync('dist/version.json', JSON.stringify({ v: BUILD, notes: NOTES }) + '\n');
 fs.writeFileSync('dist/sitemap.xml', seo.sitemap());
 for (const f of fs.existsSync('public') ? fs.readdirSync('public') : []) fs.copyFileSync(path.join('public', f), path.join('dist', f));
 

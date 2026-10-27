@@ -673,6 +673,24 @@ function floatText(from: HTMLElement, txt: string, cls: string): void {
   d.style.left=r.left+r.width/2+'px'; d.style.top=r.top+r.height+'px'; document.body.appendChild(d);
   d.animate([{opacity:0,translate:'-50% 0'},{opacity:1,translate:'-50% 10px',offset:.2},{opacity:0,translate:'-50% 44px'}],{duration:1100,easing:'ease-out'}).onfinish=()=>d.remove();
 }
+// ---------- updates: tell players with the game open when a newer version has been deployed ----------
+declare const __BUILD__: string;
+let updSeen='';
+async function checkUpdate(): Promise<void> {
+  if(location.protocol!=='http:'&&location.protocol!=='https:') return; // a saved file or the claude.ai page: nothing to check
+  try{
+    const r=await fetch('version.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok) return;
+    const j=await r.json() as { v?: string; notes?: string };
+    if(!j.v||j.v===__BUILD__||j.v===updSeen) return;
+    updSeen=j.v; $('updNotes').textContent=j.notes?'New: '+j.notes:'Refresh to get the latest rides and fixes.';
+    $('updBar').hidden=false; sfx('ding');
+  }catch{ /* offline: try again later */ }
+}
+$('updGo').onclick=()=>location.reload();
+$('updLater').onclick=()=>{ $('updBar').hidden=true; };
+setInterval(checkUpdate,90_000); setTimeout(checkUpdate,8000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') checkUpdate(); });
+
 // ---------- time of day: morning, afternoon, evening and night ----------
 const TOD_NAMES: Array<[number, string, string]> = [[5,'Morning','မနက်ခင်း'],[11,'Afternoon','နေ့လည်'],[16.5,'Evening','ညနေခင်း'],[19,'Night','ညအချိန်']];
 function todOf(m: number): [string, string] { const h=(m/60)%24; let r=TOD_NAMES[3]; for(const t of TOD_NAMES) if(h>=t[0]) r=t; return [r[1],r[2]]; }
@@ -1505,4 +1523,4 @@ const hot=window.claude&&window.claude.hot;
 if(hot&&hot.ready) hot.ready(boot); else boot(hot&&hot.data||{});
 // audio needs a gesture; also unlock on first tap after a reload
 window.addEventListener('pointerdown',()=>{ if(S.mode!=='title'){ audioInit(S.settings.sound); loadVoices(VOICE_CLIPS); if(A.c&&A.c.state==='suspended') A.c.resume(); } });
-window.__ykn={S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};
+window.__ykn={checkUpdate,S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};
