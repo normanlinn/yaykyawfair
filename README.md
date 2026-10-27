@@ -15,7 +15,7 @@ You dress up as a small icon person and walk through a crowd of families, vendor
 
 Write a wish in Myanmar or English and it glows over the fair with your name. The sky and pond start with a handful of sample Burmese wishes. Walk near a balloon or lantern to read it.
 
-On claude.ai every wish is saved in the artifact's shared store, so everyone sees everyone's wishes and they stay forever (up to 50 per person). Elsewhere (for example on Vercel) wishes are saved in your browser.
+On claude.ai every wish is saved in the artifact's shared store, so everyone sees everyone's wishes and they stay forever (up to 50 per person). On Vercel, wishes are saved in an Upstash Redis database through `api/wishes.js` (see Deploy), so every player shares them too; new wishes show up for others within about 20 seconds. Anywhere without a database (a local file, or Vercel before the database is added) wishes are saved in your browser.
 
 ## Character creator
 
@@ -54,7 +54,15 @@ Press T (or the Chat button) to talk to the other players in Burmese or English.
 
 ## Deploy
 
-`vercel.json` builds with `npm run build` and serves `dist/`.
+`vercel.json` builds with `npm run build` and serves `dist/`. `api/wishes.js` runs as a Vercel function.
+
+To share wishes between everyone on Vercel, add a free Upstash Redis database once:
+
+1. In the Vercel dashboard open the project, then **Storage** → **Create Database** → **Upstash for Redis** (free plan is plenty).
+2. Connect it to this project for all environments. Vercel adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` (the `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` names work too).
+3. Redeploy. `https://<your-site>/api/wishes` should now answer `{"wishes":[]}`.
+
+The API keeps the newest 5,000 wishes, sends players the newest 1,000, and lets one address make 20 wishes an hour.
 
 ## Develop
 
@@ -73,6 +81,7 @@ npm run serve       # build, then serve dist/ on http://localhost:8000
 | `src/layout.ts` | the fair's floor plan and colliders |
 | `src/friends.ts` | PeerJS friend rooms used outside claude.ai |
 | `src/wishes.ts` | Thadingyut wishes: sample wishes and where wishes are saved |
+| `api/wishes.js` | Vercel function that stores wishes in Upstash Redis |
 | `src/people.ts` | avatar types (and the 2D icon people used on souvenir photos) |
 | `src/audio.ts` | Web Audio engine |
 | `src/util.ts` | math and canvas helpers |
