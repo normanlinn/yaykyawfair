@@ -434,7 +434,9 @@ async function initRoom(): Promise<void> {
   try{
     const r=await window.claude?.use?.('room');
     if(!r){ // outside claude.ai (for example on Vercel): everyone shares a public PeerJS fair, with private rooms for friends
-      const fr=friends(peers=>syncPeers(peers as unknown as Claude.room.Peer[]),st=>{ publicFair=fr.isPublic; netOk=fr.connected; $('pStat').title=st; updatePlayers(); });
+      // (the status callback can fire while friends() is still starting, so it must not touch `fr` before it exists)
+      let fr: ReturnType<typeof friends> | null=null;
+      fr=friends(peers=>syncPeers(peers as unknown as Claude.room.Peer[]),st=>{ if(fr){ publicFair=fr.isPublic; netOk=fr.connected; } $('pStat').title=st; updatePlayers(); });
       $('pStat').onclick=()=>fr.open(); $('pStat').style.cursor='pointer';
       room=fr; publicFair=true; setTimeout(()=>{ roomReady=true; },2500); $('bFriends').hidden=false; $('bFriends').onclick=()=>fr.open();
       updatePlayers(); return;
@@ -1381,7 +1383,8 @@ function frame(now: number): void {
   updateTrain(dt);
   for(const n of NPC) updateNPC(n,dt);
   updateBikes(dt); updateBumpers(dt); updateCandles(dt);
-  for(const r of REMOTE.values()){ const k=Math.min(1,dt*8); r.moving=Math.hypot(r.tx-r.x,r.ty-r.y)>1.5; r.x=lerp(r.x,r.tx,k); r.y=lerp(r.y,r.ty,k); }
+  const glide=(room as { slow?: boolean } | null)?.slow?2.6:8; // relayed positions come about once a second: glide between them
+  for(const r of REMOTE.values()){ const k=Math.min(1,dt*glide); r.moving=Math.hypot(r.tx-r.x,r.ty-r.y)>1.5; r.x=lerp(r.x,r.tx,k); r.y=lerp(r.y,r.ty,k); }
   updateNpcSay(dt); updateCrowdTalk(dt);
   if(S.mode==='mg') drawMG(dt);
   else if(ready){ const res=renderNow(dt); if(S.mode==='scene') updateScene(dt,res.atTop); }
