@@ -24,8 +24,8 @@ export const ZONES: Zone[] = [
     card: 'A saing waing ensemble shares the stage with a pop singer, and somebody always starts dancing.' },
   { id: 'finale', n: 8, name: 'Finale View', my: 'မီးပန်းကြည့်ရှုရာ', x: 1060, y: 1980, w: 640, h: 460, g: '#1f2236',
     card: 'The best seat in the fair for fireworks blooming over the city skyline.' },
-  { id: 'midway', n: 9, name: 'OC Midway', my: 'OC ပွဲတော်ထောင့်', x: 1780, y: 350, w: 640, h: 2090, g: '#27203a',
-    card: 'A corner inspired by the OC Fair in California: buzzing bumper cars, a drop tower, a wave swinger and deep-fried everything.' },
+  { id: 'midway', n: 9, name: 'Pwe Rides', my: 'ပွဲစီးစရာကွင်း', x: 1780, y: 350, w: 640, h: 2090, g: '#27203a',
+    card: 'The rides of a Burmese pwe: buzzing bumper cars, a wooden wheel the young men spin by hand, a flying swing under a golden roof, and banana fritters hot from the pan.' },
   { id: 'candles', n: 10, name: 'Candle Festival', my: 'ဆီမီးထွန်းပွဲ', x: 2500, y: 350, w: 640, h: 1040, g: '#2a1f2a',
     card: 'A thousand little oil lamps and a thousand flowers around a small golden stupa. Everyone lights one and makes a quiet wish.' },
   { id: 'teashop', n: 11, name: 'Teashop', my: 'လက်ဖက်ရည်ဆိုင်', x: 2500, y: 1440, w: 640, h: 1000, g: '#2c2420',
@@ -38,21 +38,25 @@ export const ZONES: Zone[] = [
 export const FW = { cx: 420, cy: 560, R: 170 };          // Ferris wheel (cy is the base line in map units)
 export const CR = { cx: 1380, cy: 640 };                  // carousel
 export const PS = { px: 1380, py: 1130 };                 // pirate ship
-export const TR = { cx: 1380, cy: 1650, rx: 210, ry: 110 }; // mini train track
+export const KIDS = { cx: 1380, cy: 1650, rx: 210, ry: 110 }; // the little garden in the Kids Corner
+// the mini train's loop through the fair: a rounded rectangle from the Kids Corner, past the pwe rides
+// and the teashop, down the side of the Wishing Lake and back along the south edge (it runs clockwise on the map)
+export const TRAIN = { x0: 1090, y0: 1415, x1: 3170, y1: 2455, r: 70 };
+export const STATION = { x: 1380, y: 1415 - 46 };          // the platform, on the north side of the track
 export const ST = { x: 360, y: 2110 };                    // music stage
 export const FV = { x: 1380, y: 2150 };                   // finale deck
 export const PHOTO = { x: 625, y: 2300 };
 export const TOYS_AT = { x: 1590, y: 1920 };
 export const ARCH_Y = 2475;
 export const UNCLE = { x: 1120, y: 2520 };
-// the OC Midway (east of the old fence line)
+// the pwe rides (east of the old fence line)
 export const BUMPER = { x: 1850, y: 470, w: 500, h: 380 };    // bumper car arena (rectangle)
-export const DROP = { x: 2100, y: 1130 };                     // drop tower
-export const SWINGER = { x: 2100, y: 1600, R: 150 };          // wave swinger
-export const OC_FOOD: Array<{ x: number; y: number; id: string; name: string; my: string; p: number; d: string }> = [
-  { x: 1900, y: 2030, id: 'corndog', name: 'Corn dog', my: 'ကော်ဒေါ့', p: 800, d: 'A hot dog dipped in cornmeal batter and fried golden, on a stick.' },
-  { x: 2100, y: 2030, id: 'funnel', name: 'Funnel cake', my: 'ဖန်နယ်ကိတ်', p: 900, d: 'Crispy swirls of fried batter under a snowdrift of powdered sugar.' },
-  { x: 2300, y: 2030, id: 'turkey', name: 'Turkey leg', my: 'ကြက်ဆင်ပေါင်', p: 1500, d: 'A smoky, giant roast turkey leg. You will need both hands.' },
+export const HAND_WHEEL = { x: 2100, y: 1130 };               // the hand-turned wooden Ferris wheel (လူအားချားရဟတ်)
+export const SWINGER = { x: 2100, y: 1600, R: 150 };          // flying swing (ဒန်းလွှဲ)
+export const PWE_FOOD: Array<{ x: number; y: number; id: string; name: string; my: string; p: number; d: string }> = [
+  { x: 1900, y: 2030, id: 'banana', name: 'Banana fritters', my: 'ငှက်ပျောကြော်', p: 500, d: 'Sweet bananas pressed flat, dipped in rice-flour batter and fried golden and crisp.' },
+  { x: 2100, y: 2030, id: 'monlone', name: 'Mont lone yay paw', my: 'မုန့်လုံးရေပေါ်', p: 500, d: 'Sticky rice balls with a melting jaggery centre, rolled in fresh coconut. A Thingyan favourite.' },
+  { x: 2300, y: 2030, id: 'tohu', name: 'Shan tofu fritters', my: 'တိုဟူးကြော်', p: 600, d: 'Golden yellow chickpea tofu fried crisp, with a sour and spicy tamarind dip.' },
 ];
 export const POND = { x: 3520, y: 1340, rx: 250, ry: 840 };  // the wishing lake (water lanterns drift slowly across it)
 export const WISH_STALL = { x: 3520, y: 2330 };              // where wishes are written, at the lake's south end
@@ -135,8 +139,8 @@ addCol(BUMPER.x - 8, BUMPER.y - 8, BUMPER.w + 16, 14);
 addCol(BUMPER.x + BUMPER.w - 6, BUMPER.y - 8, 14, BUMPER.h + 16);
 addCol(BUMPER.x - 8, BUMPER.y - 8, 14, BUMPER.h * .4); addCol(BUMPER.x - 8, BUMPER.y + BUMPER.h * .6, 14, BUMPER.h * .4 + 8);
 addCol(BUMPER.x - 8, BUMPER.y + BUMPER.h - 6, BUMPER.w * .4, 14); addCol(BUMPER.x + BUMPER.w * .6, BUMPER.y + BUMPER.h - 6, BUMPER.w * .4 + 8, 14);
-addCol(DROP.x - 70, DROP.y - 70, 140, 140);
-OC_FOOD.forEach(f => addCol(f.x - 70, f.y - 34, 140, 40));
+addCol(HAND_WHEEL.x - 125, HAND_WHEEL.y - 35, 250, 70);
+PWE_FOOD.forEach(f => addCol(f.x - 70, f.y - 34, 140, 40));
 addCol(TEA.x - 230, TEA.y - 70, 460, 100);      // the teashop's counter and kitchen
 TEA_TABS.forEach(([x, y]) => addCol(x - 30, y - 30, 60, 60)); // a table with its stools and the people on them
 
@@ -151,4 +155,33 @@ export function blocked(x: number, y: number, r: number): boolean {
   for (const b of COL) if (x + r > b.x && x - r < b.x + b.w && y + r > b.y && y - r < b.y + b.h) return true;
   return false;
 }
-export function trackPos(u: number): [number, number] { return [TR.cx + Math.cos(u) * TR.rx, TR.cy + Math.sin(u) * TR.ry]; }
+const { x0: TX0, y0: TY0, x1: TX1, y1: TY1, r: TRR } = TRAIN;
+const TSX = TX1 - TX0 - 2 * TRR, TSY = TY1 - TY0 - 2 * TRR, TARC = TRR * Math.PI / 2;
+export const TRACK_LEN = 2 * TSX + 2 * TSY + 4 * TARC;
+/** Where the stop is: the engine waits a little past the platform so the first carriage is alongside it. */
+export const TRAIN_STOP = STATION.x - TX0 - TRR + 56;
+/** How far behind the engine's centre each part of the train runs: the engine, then four carriages (map units). */
+export const TRAIN_OFF = [0, 56, 105, 154, 203];
+/** A point on the track, `d` map units along it from the top-left of the north straight, and the heading there (radians, atan2 of dy/dx). */
+export function trackPos(d: number): [number, number, number] {
+  d = ((d % TRACK_LEN) + TRACK_LEN) % TRACK_LEN;
+  const legs: Array<[number, number, number, number]> = [ // straight: start x, start y, angle, length
+    [TX0 + TRR, TY0, 0, TSX], [TX1, TY0 + TRR, Math.PI / 2, TSY], [TX1 - TRR, TY1, Math.PI, TSX], [TX0, TY1 - TRR, -Math.PI / 2, TSY]];
+  const corners: Array<[number, number]> = [[TX1 - TRR, TY0 + TRR], [TX1 - TRR, TY1 - TRR], [TX0 + TRR, TY1 - TRR], [TX0 + TRR, TY0 + TRR]];
+  for (let k = 0; k < 4; k++) {
+    const [sx, sy, a, len] = legs[k];
+    if (d <= len) return [sx + Math.cos(a) * d, sy + Math.sin(a) * d, a];
+    d -= len;
+    if (d <= TARC) { const [cx, cy] = corners[k], b = a - Math.PI / 2 + d / TRR; return [cx + Math.cos(b) * TRR, cy + Math.sin(b) * TRR, a + d / TRR]; }
+    d -= TARC;
+  }
+  return [TX0 + TRR, TY0, 0];
+}
+/** How far a point is from the track centre line (map units). */
+export function trackDist(x: number, y: number): number {
+  const cx = Math.min(Math.max(x, TX0 + TRR), TX1 - TRR), cy = Math.min(Math.max(y, TY0 + TRR), TY1 - TRR);
+  const hx = (TX1 - TX0) / 2 - TRR, hy = (TY1 - TY0) / 2 - TRR, mx = (TX0 + TX1) / 2, my = (TY0 + TY1) / 2;
+  if (Math.abs(x - mx) <= hx) return Math.abs(Math.abs(y - my) - (hy + TRR));
+  if (Math.abs(y - my) <= hy) return Math.abs(Math.abs(x - mx) - (hx + TRR));
+  return Math.abs(Math.hypot(x - cx, y - cy) - TRR);
+}
