@@ -1412,9 +1412,9 @@ const MAP_MARKS: Array<{ x: number; y: number; icon: string; en: string; my: str
   ...BOOTHS.map(b=>({x:b.x,y:b.y,icon:b.kind==='prize'?'🎁':'🎯',en:b.kind==='ring'?'Ring toss':b.kind==='darts'?'Darts':'Prizes',my:b.my,small:true})),
   ...CARTS.map(([x,y],i)=>({x,y,icon:'🍜',en:SNACKS[i].name,my:SNACKS[i].my,small:true,tiny:true})),
 ];
-interface MapView { cx: number; cy: number; s: number; w: number; h: number; big: boolean }
+interface MapView { cx: number; cy: number; s: number; w: number; h: number; big: boolean; k?: number }
 function drawMap(g: CanvasRenderingContext2D, v: MapView): void {
-  const { w, h, s, big } = v, X=(x: number)=>w/2+(x-v.cx)*s, Y=(y: number)=>h/2+(y-v.cy)*s, k=big?1:1.25;
+  const { w, h, s, big } = v, X=(x: number)=>w/2+(x-v.cx)*s, Y=(y: number)=>h/2+(y-v.cy)*s, k=v.k??(big?1:1.25);
   g.clearRect(0,0,w,h); g.fillStyle='#1b1533'; g.fillRect(0,0,w,h);
   // the lake and city to the north
   g.fillStyle='#0e1a44'; g.fillRect(0,0,w,Math.max(0,Y(NORTH)));
@@ -1429,7 +1429,9 @@ function drawMap(g: CanvasRenderingContext2D, v: MapView): void {
   g.strokeStyle='rgba(244,214,138,.55)'; g.setLineDash([10*k,10*k]); g.lineWidth=2*k; g.beginPath(); g.moveTo(X(ROAD.x+ROAD.w/2),Y(NORTH)); g.lineTo(X(ROAD.x+ROAD.w/2),Y(WH)); g.stroke(); g.setLineDash([]);
   // train track, pond, gate
   g.strokeStyle='#8a7a64'; g.lineWidth=3*k; g.beginPath(); for(let d=0;d<=TRACK_LEN;d+=20){ const [x,y]=trackPos(d); if(d) g.lineTo(X(x),Y(y)); else g.moveTo(X(x),Y(y)); } g.closePath(); g.stroke();
-  { const [x,y]=trackPos(TRN.d); g.fillStyle='#e0b040'; g.beginPath(); g.arc(X(x),Y(y),3.5*k,0,TAU); g.fill(); }
+  g.strokeStyle='rgba(30,22,40,.9)'; g.lineWidth=1*k; g.setLineDash([2*k,5*k]); g.stroke(); g.setLineDash([]);
+  { const [x,y]=trackPos(TRN.d); g.fillStyle='#e0b040'; g.strokeStyle='#2a1606'; g.lineWidth=1.5; g.beginPath(); g.arc(X(x),Y(y),4.5*k,0,TAU); g.fill(); g.stroke();
+    if(big&&s>.1){ g.font=`600 ${10*Math.min(1.3,k)}px ${BODY}`; g.fillStyle='#ffe7a3'; g.strokeStyle='rgba(13,10,36,.85)'; g.lineWidth=3; g.strokeText('🚂 train',X(x),Y(y)-10*k); g.fillText('🚂 train',X(x),Y(y)-10*k); } }
   const pg=g.createRadialGradient(X(POND.x),Y(POND.y),0,X(POND.x),Y(POND.y),POND.rx*s);
   pg.addColorStop(0,'#3b6fd0'); pg.addColorStop(1,'#152a6a'); g.fillStyle=pg;
   g.beginPath(); g.ellipse(X(POND.x),Y(POND.y),POND.rx*s,POND.ry*s,0,0,TAU); g.fill(); g.strokeStyle='#b8a888'; g.lineWidth=2*k; g.stroke();
@@ -1441,10 +1443,11 @@ function drawMap(g: CanvasRenderingContext2D, v: MapView): void {
     const x=X(m.x), y=Y(m.y), r=(m.small?9:13)*k; if(x<-30||y<-30||x>w+30||y>h+30) continue;
     g.fillStyle='rgba(13,10,36,.78)'; g.beginPath(); g.arc(x,y,r,0,TAU); g.fill(); g.strokeStyle='rgba(244,182,63,.7)'; g.lineWidth=1.2*k; g.stroke();
     g.font=`${(m.small?11:15)*k}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; g.fillText(m.icon,x,y+1);
-    if((big||!m.small)&&!m.tiny){ g.font=`700 ${(big?(m.small?10:12):11)}px ${BODY}`; g.fillStyle='#fff3d6';
-      g.strokeStyle='rgba(13,10,36,.85)'; g.lineWidth=3; g.strokeText(m.en,x,y+r+8); g.fillText(m.en,x,y+r+8);
-      if(big){ g.font=`500 ${m.small?10:12}px ${MMF}`; g.fillStyle='#f4d58a'; g.strokeText(m.my,x,y+r+22); g.fillText(m.my,x,y+r+22); } } }
-  if(big){ g.textAlign='left'; for(const z of ZONES){ g.font=`400 10px ${DISP}`; g.fillStyle=S.zones.includes(z.id)?'#f4b63f':'rgba(255,255,255,.4)'; g.fillText(`${z.n} ${z.name.toUpperCase()}`,X(z.x)+6,Y(z.y)+10); } g.textAlign='center'; }
+    const roomy=big?s>.14||!m.small:!m.small&&k>=1;
+    if(roomy&&!m.tiny||big&&s>.3){ const fs=(big?(m.small?10:12):11)*Math.min(1.3,k); g.font=`700 ${fs}px ${BODY}`; g.fillStyle='#fff3d6';
+      g.strokeStyle='rgba(13,10,36,.85)'; g.lineWidth=3; g.strokeText(m.en,x,y+r+fs*.75); g.fillText(m.en,x,y+r+fs*.75);
+      if(big&&s>.16){ g.font=`500 ${fs}px ${MMF}`; g.fillStyle='#f4d58a'; g.strokeText(m.my,x,y+r+fs*2); g.fillText(m.my,x,y+r+fs*2); } } }
+  if(big){ g.textAlign='left'; const zf=Math.max(9,Math.min(14,s*60)); for(const z of ZONES){ g.font=`400 ${zf}px ${DISP}`; g.fillStyle=S.zones.includes(z.id)?'#f4b63f':'rgba(255,255,255,.45)'; g.fillText(`${z.n} ${z.name.toUpperCase()}`,X(z.x)+6,Y(z.y)+zf); } g.textAlign='center'; }
   // other players
   for(const r of REMOTE.values()){ if(r.where!=='walk') continue; const x=X(r.x), y=Y(r.y);
     g.fillStyle='#3fc7a5'; g.beginPath(); g.arc(x,y,5*k,0,TAU); g.fill(); g.strokeStyle='#fff'; g.lineWidth=1.5; g.stroke();
@@ -1457,27 +1460,67 @@ function drawMap(g: CanvasRenderingContext2D, v: MapView): void {
   g.beginPath(); g.moveTo(px+hx*a*1.3,py+hy*a*1.3); g.lineTo(px-hx*a*.8+hy*a*.8,py-hy*a*.8-hx*a*.8); g.lineTo(px-hx*a*.35,py-hy*a*.35); g.lineTo(px-hx*a*.8-hy*a*.8,py-hy*a*.8+hx*a*.8); g.closePath(); g.fill(); g.stroke();
   if(big){ g.font=`700 12px ${BODY}`; g.fillStyle='#ffe7a3'; g.strokeStyle='rgba(13,10,36,.9)'; g.lineWidth=3; g.strokeText('You are here',px,py-20); g.fillText('You are here',px,py-20); }
 }
+let miniCss=0;
 function drawMini(): void {
-  const w=mini.width, h=mini.height;
-  mx.save(); drawMap(mx,{cx:clamp(P.x,350,WW-350),cy:clamp(P.y,NORTH+250,WH-200),s:.27,w,h,big:false});
-  mx.fillStyle='rgba(13,10,36,.75)'; mx.beginPath(); mx.arc(w-18,18,12,0,TAU); mx.fill(); mx.fillStyle='#f4b63f'; mx.font=`700 13px ${BODY}`; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('N',w-18,19);
-  mx.restore();
+  // the canvas matches its size on screen (it is smaller on phones), so icons and text stay sharp and in proportion
+  const css=mini.clientWidth||170, dpr=Math.min(2,devicePixelRatio||1);
+  if(css!==miniCss){ miniCss=css; mini.width=mini.height=Math.round(css*dpr); }
+  const w=css, h=css, k=clamp(css/150,.62,1.15), span=css<120?900:1150; // map units across: a closer view when the map is small
+  mx.setTransform(dpr,0,0,dpr,0,0);
+  drawMap(mx,{cx:clamp(P.x,span/2,WW-span/2),cy:clamp(P.y,NORTH-60+span/2,WH-span/2+60),s:css/span,w,h,big:false,k});
+  const nr=9*k+3; mx.fillStyle='rgba(13,10,36,.75)'; mx.beginPath(); mx.arc(w-nr-4,nr+4,nr,0,TAU); mx.fill(); mx.fillStyle='#f4b63f'; mx.font=`700 ${10*k+2}px ${BODY}`; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('N',w-nr-4,nr+5);
 }
 let bigMap=false;
+// the full map: fits the whole fair, and you can drag to move around and pinch, scroll or use + / − to zoom
+const MAPV={s:0,fit:0,cx:WW/2,cy:0,w:0,h:0};
+const MAP_TOP=NORTH-180, MAP_H=WH-MAP_TOP;
 function openMap(): void {
   if(S.mode!=='walk'||bigMap) return;
-  bigMap=true; S.paused=true; $('bigmap').hidden=false; drawBigMap();
+  bigMap=true; S.paused=true; $('bigmap').hidden=false; MAPV.s=0; drawBigMap();
 }
 function closeMap(): void { if(!bigMap) return; bigMap=false; S.paused=false; $('bigmap').hidden=true; }
+function clampMapView(): void {
+  MAPV.s=clamp(MAPV.s,MAPV.fit,Math.max(MAPV.fit*5,.5));
+  const hw=MAPV.w/2/MAPV.s, hh=MAPV.h/2/MAPV.s;
+  MAPV.cx=hw*2>=WW?WW/2:clamp(MAPV.cx,hw,WW-hw); MAPV.cy=hh*2>=MAP_H?MAP_TOP+MAP_H/2:clamp(MAPV.cy,MAP_TOP+hh,WH-hh);
+  $<HTMLButtonElement>('mapOut').disabled=MAPV.s<=MAPV.fit*1.01;
+}
 function drawBigMap(): void {
-  const c=$<HTMLCanvasElement>('bigmapC'), box=c.parentElement.getBoundingClientRect(), dpr=Math.min(2,devicePixelRatio||1);
-  const top=NORTH-180, H=WH-top, s=Math.min(box.width/WW,(box.height)/H);
-  c.style.width=WW*s+'px'; c.style.height=H*s+'px'; c.width=Math.round(WW*s*dpr); c.height=Math.round(H*s*dpr);
-  const g=c.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0);
-  drawMap(g,{cx:WW/2,cy:top+H/2,s,w:WW*s,h:H*s,big:true});
+  const c=$<HTMLCanvasElement>('bigmapC'), box=c.parentElement!.getBoundingClientRect(), dpr=Math.min(2,devicePixelRatio||1);
+  const w=Math.floor(box.width), h=Math.floor(box.height); if(w<10||h<10) return;
+  const fit=Math.min(w/WW,h/MAP_H);
+  if(!MAPV.s){ // first look: the whole fair, or on a narrow phone screen a closer view around you
+    MAPV.fit=fit; MAPV.s=fit; MAPV.cx=WW/2; MAPV.cy=MAP_TOP+MAP_H/2;
+    if(w/WW<.14){ MAPV.s=Math.min(.2,fit*2.4); MAPV.cx=P.x; MAPV.cy=P.y; } // a narrow, upright phone
+  } else { const was=MAPV.fit; MAPV.fit=fit; if(MAPV.s<=was*1.001) MAPV.s=fit; }
+  MAPV.w=w; MAPV.h=h; clampMapView();
+  c.style.width=w+'px'; c.style.height=h+'px'; c.width=Math.round(w*dpr); c.height=Math.round(h*dpr);
+  const g=c.getContext('2d')!; g.setTransform(dpr,0,0,dpr,0,0);
+  drawMap(g,{cx:MAPV.cx,cy:MAPV.cy,s:MAPV.s,w,h,big:true,k:clamp(MAPV.s/.16,.75,1.35)});
+}
+function zoomMap(f: number, sx=MAPV.w/2, sy=MAPV.h/2): void {
+  const mx0=MAPV.cx+(sx-MAPV.w/2)/MAPV.s, my0=MAPV.cy+(sy-MAPV.h/2)/MAPV.s;
+  MAPV.s*=f; clampMapView();
+  MAPV.cx=mx0-(sx-MAPV.w/2)/MAPV.s; MAPV.cy=my0-(sy-MAPV.h/2)/MAPV.s; drawBigMap();
+}
+{
+  const c=$<HTMLCanvasElement>('bigmapC'), pts=new Map<number, {x:number;y:number}>(); let pd=0;
+  const local=(e: PointerEvent|WheelEvent)=>{ const r=c.getBoundingClientRect(); return [e.clientX-r.left,e.clientY-r.top]; };
+  c.addEventListener('pointerdown',e=>{ c.setPointerCapture(e.pointerId); pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(pts.size===2){ const [a,b]=[...pts.values()]; pd=Math.hypot(a.x-b.x,a.y-b.y); } });
+  c.addEventListener('pointermove',e=>{
+    const p=pts.get(e.pointerId); if(!p) return;
+    if(pts.size===2){ pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); const [a,b]=[...pts.values()], d=Math.hypot(a.x-b.x,a.y-b.y), r=c.getBoundingClientRect();
+      if(pd) zoomMap(d/pd,(a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top); pd=d; return; }
+    MAPV.cx-=(e.clientX-p.x)/MAPV.s; MAPV.cy-=(e.clientY-p.y)/MAPV.s; p.x=e.clientX; p.y=e.clientY; clampMapView(); drawBigMap();
+  });
+  const up=(e: PointerEvent)=>{ pts.delete(e.pointerId); pd=0; };
+  c.addEventListener('pointerup',up); c.addEventListener('pointercancel',up);
+  c.addEventListener('wheel',e=>{ e.preventDefault(); const [x,y]=local(e); zoomMap(Math.exp(-e.deltaY*.0015),x,y); },{passive:false});
+  $('mapIn').onclick=()=>zoomMap(1.5); $('mapOut').onclick=()=>zoomMap(1/1.5);
+  $('mapMe').onclick=()=>{ if(MAPV.s<MAPV.fit*1.6) MAPV.s=Math.max(MAPV.fit*2.2,.16); MAPV.cx=P.x; MAPV.cy=P.y; clampMapView(); drawBigMap(); };
 }
 $('mini').addEventListener('click',openMap);
-$('bigmap').addEventListener('click',e=>{ if((e.target as HTMLElement).id!=='bigmapC') closeMap(); });
+$('bigmap').addEventListener('click',e=>{ if((e.target as HTMLElement).id==='bigmap') closeMap(); });
 $('bigmapClose').addEventListener('click',closeMap);
 window.addEventListener('resize',()=>{ if(bigMap) drawBigMap(); });
 
