@@ -6,9 +6,11 @@ import { A, audioInit, sfx, bell, horn, setChatter, setMaster, loadVoices, speak
 import { CROWD_LINES, VENDOR_CALLS, REPLIES, VOICE_CLIPS } from './voices';
 import {
   WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, STATION, TRAIN_STOP, TRAIN_OFF, TRACK_LEN, ST, FV, PHOTO, TOYS_AT, UNCLE, ARCH_Y, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
-  STALLFRONTS, VENDOR_POSTS, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, M, blocked, trackPos,
+  STALLFRONTS, VENDOR_POSTS, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, RESTROOMS, QUEUES, QUEUE_GAP, WATCHERS, M, blocked, trackPos,
 } from './layout';
 import { friends } from './friends';
+import CHANGES from './changelog.json';
+import { SHOPS, PWE_SHOPS, TEA_MENU, WAITER, LOCAL_LINES, Shop, Line, MenuItem, kyatMy, countMy } from './shops';
 import { openWishes, Wish, WishKind, WISH_PRICE, WISH_IDEAS, WISH_MAX_LEN, cleanWish } from './wishes';
 import { init3d, build3d, resize3d, render3d, launchFirework, fountain, renderPreview, capture, project, rigKey, setWishes, wishSpot, BUMPER_N, CANDLE_MINE, CrowdItem, Frame, Look, RideKind } from './world3d';
 
@@ -16,12 +18,12 @@ import { init3d, build3d, resize3d, render3d, launchFirework, fountain, renderPr
 const world = $<HTMLCanvasElement>('world');
 const cv = $<HTMLCanvasElement>('game'), ctx = cv.getContext('2d'); // 2D overlay for the game booths
 const mini = $<HTMLCanvasElement>('mini'), mx = mini.getContext('2d');
-let VW = 0, VH = 0, DPR = 1;
+let VW = 0, VH = 0, DPR = 1, LOWRES = 1;
 function resize(): void {
   DPR = Math.min(2, window.devicePixelRatio || 1);
   VW = window.innerWidth; VH = window.innerHeight;
   cv.width = Math.round(VW*DPR); cv.height = Math.round(VH*DPR);
-  resize3d(VW, VH, S.settings.gfx==='low' ? 1 : Math.min(DPR, 1.75));
+  resize3d(VW, VH, S.settings.gfx==='low' ? Math.min(DPR, LOWRES) : Math.min(DPR, 1.75));
 }
 
 // ---------- state ----------
@@ -42,10 +44,14 @@ const S: GameState = {
   balloon:null, fan:false, uncleAt:-999,
   settings:{density:'med', gfx:'high', cam:'close', sound:true, mini:true, av:{...DEFAULT_AVATAR}, name:'', avDone:false}
 };
-try{ const sv=JSON.parse(localStorage.getItem('ykn-settings')||'null'); if(sv){ Object.assign(S.settings,sv); S.settings.av={...DEFAULT_AVATAR,...(sv.av||{})}; } }catch{ /* storage unavailable */ }
+let savedSettings=false;
+try{ const sv=JSON.parse(localStorage.getItem('ykn-settings')||'null'); if(sv){ savedSettings=true; Object.assign(S.settings,sv); S.settings.av={...DEFAULT_AVATAR,...(sv.av||{})}; } }catch{ /* storage unavailable */ }
+// first visit on a small or modest phone: start on fast graphics and a lighter crowd
+{ const nav=navigator as Navigator & { deviceMemory?: number }, small=Math.min(screen.width,screen.height)<=420;
+  if(!savedSettings&&((nav.deviceMemory??8)<=3||(nav.hardwareConcurrency||8)<=4||small&&(nav.deviceMemory??8)<=4)){ S.settings.gfx='low'; S.settings.density='low'; } }
 function saveSettings(): void { try{ localStorage.setItem('ykn-settings',JSON.stringify(S.settings)); }catch{ /* storage unavailable */ } }
 
-const P = {x:900,y:2540,hd:Math.PI,moving:false,hidden:false,waveUntil:0,vx:0,vy:0,spd:0,kx:0,ky:0,dance:false,sit:false,standX:0,standY:0};
+const P = {x:900,y:2540,hd:Math.PI,moving:false,hidden:false,waveUntil:0,vx:0,vy:0,spd:0,kx:0,ky:0,dance:false,sit:false,standX:0,standY:0,table:-1};
 const LOOK = {yaw:0,pitch:0}; // turning your head on a ride or while watching the fireworks
 const CAM = {yaw:0,pitch:.42,dist:11,zoom:11};
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -58,7 +64,7 @@ const myLook = (): Look => lookFor(avatarOpts(S.settings.av));
 // ---------- things you can walk up to ----------
 interface Interactable { x: number; y: number; r: number; label: () => string; act: () => void }
 const IT: Interactable[] = [];
-CARTS.forEach(([x,y],i)=>{ const sn=SNACKS[i]; IT.push({x,y:y+26,r:42,label:()=>`Buy ${sn.name} · ${ks(sn.p)}`,act:()=>buySnack(sn)}); });
+CARTS.forEach(([x,y],i)=>{ const sn=SNACKS[i], sh=SHOPS[i]; IT.push({x,y:y+26,r:42,label:()=>`Talk to ${sh.who.split(',')[0]} · ${sn.name} · ${sn.my}`,act:()=>openShop(sh,NPC[i])}); });
 IT.push({x:BOOTHS[0].x,y:BOOTHS[0].y+35,r:50,label:()=>`Play ring toss · ${ks(1000)}`,act:()=>startGame('ring')});
 IT.push({x:BOOTHS[1].x,y:BOOTHS[1].y+35,r:50,label:()=>`Play balloon darts · ${ks(1000)}`,act:()=>startGame('darts')});
 IT.push({x:BOOTHS[2].x,y:BOOTHS[2].y+35,r:50,label:()=>`Trade tickets for prizes (${S.tix} tickets)`,act:openPrizes});
@@ -79,18 +85,19 @@ IT.push({x:HAND_WHEEL.x,y:HAND_WHEEL.y+80,r:60,label:()=>`Ride the hand-turned w
 IT.push({x:SWINGER.x,y:SWINGER.y+SWINGER.R+40,r:60,label:()=>`Ride the flying swing · ဒန်းလွှဲ · ${ks(1200)}`,act:()=>buyRide('swinger',1200)});
 IT.push({x:BUMPER.x-40,y:BUMPER.y+BUMPER.h/2,r:55,label:()=>`Dodge the bumper cars for 30 seconds · ${ks(1000)}`,act:startDodge});
 IT.push({x:BUMPER.x+BUMPER.w/2,y:BUMPER.y+BUMPER.h+40,r:60,label:()=>`Drive a bumper car · ကားတိုက်မောင်းမယ် · ${ks(1000)}`,act:startDrive});
-PWE_FOOD.forEach(f=>IT.push({x:f.x,y:f.y+40,r:50,label:()=>`Buy ${f.name.toLowerCase()} · ${f.my} · ${ks(f.p)}`,act:()=>buyPwe(f)}));
+PWE_FOOD.forEach((f,i)=>IT.push({x:f.x,y:f.y+40,r:50,label:()=>`Talk to ${PWE_SHOPS[i].who.split(',')[0]} · ${f.name} · ${f.my}`,act:()=>openShop(PWE_SHOPS[i])}));
 IT.push({x:ST.x,y:ST.y+130,r:95,label:()=>P.dance?'Stop dancing':'Dance with the dancers · ကခုန်မယ်',act:toggleDance});
 IT.push({x:CANDLE.x,y:CANDLE.y+CANDLE.R+30,r:70,label:()=>CAND.mine>=CANDLE_MINE?'Every lamp here is lit. Thank you!':`Light an oil lamp · ဆီမီးထွန်းမယ် · ${ks(200)}`,act:lightLamp});
 IT.push({x:CANDLE.x-CANDLE.R-30,y:CANDLE.y,r:70,label:()=>`Offer flowers · ပန်းကပ်မယ် · ${ks(300)}`,act:offerFlowers});
-IT.push({x:TEA.x-120,y:TEA.y+60,r:60,label:()=>`Order tea at the counter · ${ks(500)}`,act:orderTea});
+IT.push({x:TEA.x-120,y:TEA.y+60,r:60,label:()=>'Tea to take away at the counter · လက်ဖက်ရည် အိတ်နဲ့',act:()=>openShop(TEA_COUNTER)});
+RESTROOMS.forEach(r=>IT.push({x:r.x,y:r.y+52,r:50,label:()=>`Use the restroom · အိမ်သာ · ${ks(100)}`,act:useRestroom}));
 TEA_TABS.forEach((_,i)=>{ const [x,y]=teaStools(i)[teaFree(i)];
   const ox=TEA_TABS[i][0]+(x-TEA_TABS[i][0])/17*46, oy=TEA_TABS[i][1]+(y-TEA_TABS[i][1])/17*46;
-  IT.push({x:ox,y:oy,r:34,label:()=>P.sit?'Stand up':'Sit down at this table · ထိုင်မယ်',act:()=>sitAt(i)}); });
+  IT.push({x:ox,y:oy,r:34,label:()=>P.sit&&P.table===i?(TEAO.state==='atTable'?'Talk to the waiter · ညီလေး':TEAO.state==='idle'?'Call the waiter · ညီလေး':'The waiter is on the way…'):'Sit down at this table · ထိုင်မယ်',act:()=>P.sit&&P.table===i?callWaiter():sitAt(i)}); });
 
 // ---------- NPCs ----------
 interface Npc { x: number; y: number; tx: number; ty: number; sp: number; wait: number; ph: number; moving: boolean; stuck: number; hd: number; s: number;
-  shirt: string; lon: string; skin: string; bun: boolean; hat?: boolean; balloon?: string | null; leader?: Npc; ox?: number; oy?: number; post?: boolean; sit?: number; nod?: number }
+  shirt: string; lon: string; skin: string; bun: boolean; hat?: boolean; balloon?: string | null; leader?: Npc; ox?: number; oy?: number; post?: boolean; sit?: number; nod?: number; waiter?: boolean; q?: number; qk?: number }
 let NPC: Npc[] = [];
 function freePoint(): [number, number] { for(let k=0;k<40;k++){ const p=npcTarget(); if(!blocked(p[0],p[1],5)) return p; } return [900,2000]; }
 function npcTarget(): [number, number] {
@@ -108,6 +115,11 @@ function spawnCrowd(): void {
   NPC.push(mk({x:UNCLE.x,y:UNCLE.y,hd:0,post:true,shirt:'#ffffff',lon:'#3c5a2a',skin:'#a8714a',bun:false}));
   // people sitting at the teashop tables, and kneeling to light lamps at the candle festival
   TEA_TABS.forEach((_,i)=>teaStools(i).forEach(([x,y,hd],k)=>{ if(k===teaFree(i)) return; NPC.push(mk({x,y,hd,post:true,sit:.5,nod:rand(0,9)})); }));
+  NPC.push(waiter=mk({x:TEA.x-60,y:1690,hd:0,waiter:true,shirt:'#f3efe6',lon:'#2f5d50',skin:'#c58c5c',bun:false,sp:80})); TEAO.state='idle'; TEAO.path=[];
+  // lines of people waiting for the busiest rides, and little crowds stopping to watch
+  QUEUES.forEach((q,qi)=>{ for(let k=0;k<q.n;k++){ const [x,y]=qSlot(qi,k); NPC.push(mk({x,y,tx:x,ty:y,hd:Math.atan2(-q.dx,-q.dy),q:qi,qk:k,sp:rand(30,40),balloon:Math.random()<.15?pick(BALLOONS):null})); } });
+  WATCHERS.forEach(w=>{ for(let k=0;k<w.n;k++){ const x=w.x+rand(0,w.w), y=w.y+rand(0,w.h); NPC.push(mk({x,y,hd:Math.atan2(w.fx-x,w.fy-y),post:true,s:Math.random()<.25?.7:1})); } });
+  QT.length=0; QUEUES.forEach(()=>QT.push(rand(3,7)));
   for(let k=0;k<12;k++){ const a=Math.PI*.15+k/12*Math.PI*1.7+rand(-.05,.05), R=CANDLE.R+16; NPC.push(mk({x:CANDLE.x+Math.cos(a)*R,y:CANDLE.y+Math.sin(a)*R,hd:Math.atan2(-Math.cos(a),-Math.sin(a)),post:true,sit:.5,nod:rand(0,9),bun:Math.random()<.6})); }
   for(let i=0;i<n;i++){
     const [x,y]=freePoint(); const L=mk({x,y}); [L.tx,L.ty]=freePoint(); NPC.push(L);
@@ -115,12 +127,33 @@ function spawnCrowd(): void {
     if(Math.random()<.35){ const k=Math.random()<.4?2:1; for(let j=0;j<k;j++) NPC.push(mk({x:x+rand(-10,10),y:y+rand(4,12),s:.68,leader:L,ox:rand(-14,14),oy:rand(4,12),balloon:Math.random()<.4?pick(BALLOONS):null,bun:Math.random()<.5})); }
   }
 }
+const QT: number[] = [];
+function qSlot(qi: number, k: number): [number, number] { const q=QUEUES[qi], j=Math.sin(k*2.3+qi)*3; return [q.x+q.dx*k*QUEUE_GAP-q.dy*j, q.y+q.dy*k*QUEUE_GAP+q.dx*j]; }
+/** Every few seconds the person at the front goes in, everyone steps up, and somebody nearby joins the back. */
+function updateQueues(dt: number): void {
+  QUEUES.forEach((q,qi)=>{
+    QT[qi]-=dt; if(QT[qi]>0) return; QT[qi]=rand(4,9);
+    const line=NPC.filter(n=>n.q===qi); const front=line.find(n=>n.qk===0);
+    if(front){ front.q=undefined; front.qk=undefined; [front.tx,front.ty]=freePoint(); front.wait=0; }
+    for(const n of line) if(n!==front) n.qk!--;
+    const tail=qSlot(qi,q.n-1), joiner=NPC.filter(n=>n.q==null&&!n.post&&!n.leader&&!n.waiter&&n.s>=1&&Math.hypot(n.x-tail[0],n.y-tail[1])<500)[0];
+    if(joiner){ joiner.q=qi; joiner.qk=q.n-1; }
+    else if(front){ const [x,y]=qSlot(qi,q.n+3); front.x=x; front.y=y; front.q=qi; front.qk=q.n-1; } // nobody about: the same person queues again for another go
+  });
+}
 function turnTo(n: { hd: number }, dx: number, dy: number, dt: number): void {
   const want=Math.atan2(dx,dy); let d=want-n.hd; d=Math.atan2(Math.sin(d),Math.cos(d)); n.hd+=d*Math.min(1,dt*10);
 }
 /** The empty stool at each teashop table, kept for you. */
 function teaFree(i: number): number { return (i*3+1)%4; }
 function updateNPC(n: Npc, dt: number): void {
+  if(n.waiter){ updateWaiter(n,dt); return; }
+  if(n.q!=null){ // shuffle up to your place in the line
+    const [tx,ty]=qSlot(n.q,n.qk!), dx=tx-n.x, dy=ty-n.y, d=Math.hypot(dx,dy), q=QUEUES[n.q];
+    if(d>2){ const k=Math.min(d,n.sp*dt); n.x+=dx/d*k; n.y+=dy/d*k; turnTo(n,dx,dy,dt); n.moving=true; }
+    else { n.moving=false; turnTo(n,-q.dx,-q.dy,dt*.5); }
+    return;
+  }
   if(n.sit){ n.moving=false; if(n.nod!=null) n.nod+=dt; return; }
   if(n.post){ n.moving=false; const d=Math.hypot(P.x-n.x,P.y-n.y); if(d<160&&P.y>n.y) turnTo(n,P.x-n.x,P.y-n.y,dt*.3); return; }
   let tx: number, ty: number, sp: number;
@@ -200,7 +233,8 @@ const DODGE = {on:false,t:0,hits:0,shown:''};
 let shake=0;
 const BR=22; // a car's radius, in map units
 const inArena=(x: number, y: number)=>x>BUMPER.x&&x<BUMPER.x+BUMPER.w&&y>BUMPER.y&&y<BUMPER.y+BUMPER.h;
-function bumpTarget(b: Bumper): void { b.tx=rand(BUMPER.x+50,BUMPER.x+BUMPER.w-50); b.ty=rand(BUMPER.y+50,BUMPER.y+BUMPER.h-50); }
+function bumpTarget(b: Bumper): void { b.tx=rand(BUMPER.x+50,BUMPER.x+BUMPER.w-50); b.ty=rand(BUMPER.y+50,LANE_Y-40); }
+const LANE_Y=BUMPER.y+BUMPER.h-72; // the strip along the entrance where the empty cars wait for the next riders
 function spawnBumpers(): void {
   BUMPS.length=0;
   for(let i=0;i<BUMPER_N;i++){ const b={x:BUMPER.x+70+(i%4)*120,y:BUMPER.y+90+Math.floor(i/4)*200,hd:rand(0,TAU),sp:0,hit:0,cd:0,tx:0,ty:0}; bumpTarget(b); BUMPS.push(b); }
@@ -218,13 +252,14 @@ function updateBumpers(dt: number): void {
     let tx=b.tx, ty=b.ty, want=70;
     const mine=DRIVE.on?BUMPS[MY_CAR]:null;
     if(mine&&i%3===0&&Math.hypot(mine.x-b.x,mine.y-b.y)<320){ tx=mine.x+Math.sin(mine.hd)*mine.sp*.4; ty=mine.y+Math.cos(mine.hd)*mine.sp*.4; want=96; }
-    else if(me&&(DODGE.on||i<3)&&Math.hypot(P.x-b.x,P.y-b.y)<(DODGE.on?700:240)){ tx=P.x+P.vx*.45; ty=P.y+P.vy*.45; want=DODGE.on?100+(30-DODGE.t)*1.4:92; }
+    else if(me&&DODGE.on&&Math.hypot(P.x-b.x,P.y-b.y)<700){ tx=P.x+P.vx*.45; ty=P.y+P.vy*.45; want=100+(30-DODGE.t)*1.4; }
+    else if(me&&Math.hypot(P.x-b.x,P.y-b.y)<150){ tx=b.x*2-P.x; ty=b.y*2-P.y; want=40; } // somebody walking on the floor: the drivers steer round them
     else if(Math.hypot(tx-b.x,ty-b.y)<30) bumpTarget(b);
     let d=Math.atan2(tx-b.x,ty-b.y)-b.hd; d=Math.atan2(Math.sin(d),Math.cos(d));
     b.hd+=clamp(d,-2.3*dt,2.3*dt);
     b.sp+=(want*(Math.abs(d)>1.6?.45:1)-b.sp)*Math.min(1,dt*2);
     b.x+=Math.sin(b.hd)*b.sp*dt; b.y+=Math.cos(b.hd)*b.sp*dt;
-    const x0=BUMPER.x+BR+6, x1=BUMPER.x+BUMPER.w-BR-6, y0=BUMPER.y+BR+6, y1=BUMPER.y+BUMPER.h-BR-6;
+    const x0=BUMPER.x+BR+6, x1=BUMPER.x+BUMPER.w-BR-6, y0=BUMPER.y+BR+6, y1=LANE_Y-BR;
     if(b.x<x0||b.x>x1){ b.x=clamp(b.x,x0,x1); b.hd=-b.hd; b.sp*=.5; bang(b,.6); }
     if(b.y<y0||b.y>y1){ b.y=clamp(b.y,y0,y1); b.hd=Math.PI-b.hd; b.sp*=.5; bang(b,.6); }
   });
@@ -237,21 +272,24 @@ function updateBumpers(dt: number): void {
   if(me) for(const b of BUMPS){
     const dx=P.x-b.x, dy=P.y-b.y, d=Math.hypot(dx,dy)||1;
     if(d<BR+12&&b.cd<=0){
-      const k=150+b.sp*2.4; P.kx+=dx/d*k; P.ky+=dy/d*k; shake=Math.max(shake,.75);
-      bang(b,1); sfx('zap'); b.sp*=.2; b.hd+=Math.PI*.7;
-      if(DODGE.on){ DODGE.hits++; } else toast('Bzzt! A bumper car got you. Run!');
+      if(DODGE.on){ const k=150+b.sp*2.4; P.kx+=dx/d*k; P.ky+=dy/d*k; shake=Math.max(shake,.75); bang(b,1); sfx('zap'); DODGE.hits++; }
+      else { P.kx+=dx/d*40; P.ky+=dy/d*40; b.cd=.8; } // just walking about: the driver brakes and you get a gentle nudge
+      b.sp*=.2; b.hd+=Math.PI*.7;
     }
   }
   shake=Math.max(0,shake-dt*2.2);
 }
 // driving one yourself: W/S or the stick for go and reverse, A/D to steer; bump as many cars as you can in a minute
-const DRIVE={on:false,given:0,taken:0,kx:0,ky:0,shown:''};
+const DRIVE={on:false,given:0,taken:0,kx:0,ky:0,shown:'',pov:false};
 const MY_CAR=3, DRIVE_SECS=60;
 function startDrive(): void {
   if(!pay(1000)) return; S.games++; S.rides++;
-  const b=BUMPS[MY_CAR]; b.x=BUMPER.x+BUMPER.w/2; b.y=BUMPER.y+BUMPER.h-50; b.hd=Math.PI; b.sp=0; b.cd=0;
+  const b=BUMPS[MY_CAR]; b.x=BUMPER.x+BUMPER.w/2; b.y=LANE_Y-BR-2; b.hd=Math.PI; b.sp=0; b.cd=0;
+  for(const o of BUMPS) if(o!==b&&Math.hypot(o.x-b.x,o.y-b.y)<110){ o.y=Math.min(o.y,b.y-110); bumpTarget(o); }
   DRIVE.on=true; DRIVE.given=DRIVE.taken=0; DRIVE.kx=DRIVE.ky=0; DRIVE.shown='';
-  startScene('bumper'); sfx('zap'); updateHUD();
+  startScene('bumper'); setBar(RIDECAP.bumper,DRIVE.pov?'Camera: behind':'Camera: my eyes',toggleDriveCam); sfx('zap'); updateHUD();
+}
+function toggleDriveCam(): void { DRIVE.pov=!DRIVE.pov; $('sceneAlt').textContent=DRIVE.pov?'Camera: behind':'Camera: my eyes'; LOOK.yaw=LOOK.pitch=0;
 }
 function driveCar(b: Bumper, dt: number): void {
   let thr=0, st=0;
@@ -262,7 +300,7 @@ function driveCar(b: Bumper, dt: number): void {
   b.hd-=st*(1.3+Math.min(1,Math.abs(b.sp)/90)*1.1)*dt; // bumper cars turn on the spot, faster when moving
   b.x+=(Math.sin(b.hd)*b.sp+DRIVE.kx)*dt; b.y+=(Math.cos(b.hd)*b.sp+DRIVE.ky)*dt;
   const f=Math.exp(-dt*4); DRIVE.kx*=f; DRIVE.ky*=f;
-  const x0=BUMPER.x+BR+6, x1=BUMPER.x+BUMPER.w-BR-6, y0=BUMPER.y+BR+6, y1=BUMPER.y+BUMPER.h-BR-6;
+  const x0=BUMPER.x+BR+6, x1=BUMPER.x+BUMPER.w-BR-6, y0=BUMPER.y+BR+6, y1=LANE_Y-BR;
   const wall=(fast: number)=>{ if(fast>35&&b.cd<=0){ b.cd=.4; b.hit=.8; sfx('bump'); shake=Math.max(shake,clamp(fast/160,.2,.6)); } };
   if(b.x<x0||b.x>x1){ b.x=clamp(b.x,x0,x1); wall(Math.abs(Math.sin(b.hd)*b.sp+DRIVE.kx)); DRIVE.kx*=-.5; b.sp*=-.3; }
   if(b.y<y0||b.y>y1){ b.y=clamp(b.y,y0,y1); wall(Math.abs(Math.cos(b.hd)*b.sp+DRIVE.ky)); DRIVE.ky*=-.5; b.sp*=-.3; }
@@ -277,7 +315,8 @@ function carHit(p: Bumper, o: Bumper, nx: number, ny: number): void {
   shake=Math.max(shake,clamp(Math.max(mine,theirs)/120,.25,.9));
 }
 function endDrive(): void {
-  if(!DRIVE.on) return; DRIVE.on=false; bumpTarget(BUMPS[MY_CAR]);
+  if(!DRIVE.on) return; DRIVE.on=false; const b0=BUMPS[MY_CAR]; bumpTarget(b0);
+  b0.x=BUMPER.x+BUMPER.w/2; b0.y=LANE_Y-BR-30;
   P.x=BUMPER.x+BUMPER.w/2; P.y=BUMPER.y+BUMPER.h+46; P.hd=0; P.vx=P.vy=P.kx=P.ky=0;
   const won=clamp(1+Math.floor(DRIVE.given/2),1,10); S.tix+=won; S.ticketsWon+=won; sfx('ding');
   toast(`<span class="z">Round over! · ကားတိုက်</span>You bumped ${DRIVE.given} car${DRIVE.given===1?'':'s'} and got bumped ${DRIVE.taken} time${DRIVE.taken===1?'':'s'}. <b>+${won} tickets</b>`,true);
@@ -523,6 +562,7 @@ PHRASES.forEach(([my,en])=>{ const b=document.createElement('button'); b.type='b
 $('chatForm').addEventListener('submit',e=>{ e.preventDefault(); const i=$<HTMLInputElement>('chatIn'); say(i.value); i.value=''; closeChat(); });
 $('chatIn').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Escape'){ e.preventDefault(); closeChat(); } });
 
+function zoneAt(x: number, y: number): string { if(x>=ROAD.x&&x<=ROAD.x+ROAD.w) return 'street'; for(const z of ZONES) if(x>=z.x&&x<=z.x+z.w&&y>=z.y&&y<=z.y+z.h) return z.id; return 'street'; }
 // people at the fair chat too (shown as bubbles near you)
 const NPC_LINES = CROWD_LINES;
 const NPC_SAY: Array<{ n: Npc; t: [string, string]; until: number }> = [];
@@ -540,7 +580,9 @@ function updateNpcSay(dt: number): void {
   if(npcSayT>0||S.mode!=='walk') return; npcSayT=rand(3,7);
   const near=NPC.filter(n=>!n.leader&&n.s>=1&&Math.hypot(n.x-P.x,n.y-P.y)<260&&!NPC_SAY.some(s=>s.n===n));
   if(!near.length||NPC_SAY.length>=2) return;
-  const n=pick(near), i=Math.floor(Math.random()*NPC_LINES.length);
+  const n=pick(near), local=LOCAL_LINES[zoneAt(n.x,n.y)];
+  if(local&&Math.random()<.6){ NPC_SAY.push({n,t:pick(local),until:T+4.5}); voiceFrom(n,`say${Math.floor(Math.random()*NPC_LINES.length)}${voiceOf(n)}`,.35); return; } // what people talk about where they are
+  const i=Math.floor(Math.random()*NPC_LINES.length);
   NPC_SAY.push({n,t:NPC_LINES[i],until:T+4.5}); voiceFrom(n,`say${i}${voiceOf(n)}`,1);
 }
 /** Background talk: people further off saying things you half catch, and snack sellers calling out. */
@@ -677,14 +719,25 @@ function floatText(from: HTMLElement, txt: string, cls: string): void {
 }
 // ---------- updates: tell players with the game open when a newer version has been deployed ----------
 declare const __BUILD__: string;
+// what changed in each version, newest first: shown from the title screen and Settings, and once after an update
+const VER=CHANGES[0].v;
+function openChangelog(onClose?: () => void): void {
+  const w=document.createElement('div'); w.className='vers';
+  w.innerHTML=`<p class="muted" style="margin:0;font-size:13px">You are playing version ${VER}. <span class="mm" style="font-family:var(--mm)">ပြင်ဆင်ချက်များ</span></p>`+CHANGES.map((c,i)=>`<details class="ver${i===0?' cur':''}"${i===0?' open':''}><summary><span class="vn">v${c.v}</span><b>${esc(c.title)}</b><span class="vd">${c.date}${i===0?' · now':''}</span><span class="mm">${esc(c.my)}</span></summary><ul>${c.notes.map(n=>`<li>${esc(n)}</li>`).join('')}</ul></details>`).join('');
+  openModal("What's new · Version history",w,onClose); markVerSeen();
+}
+function markVerSeen(): void { try{ localStorage.setItem('ykn-ver',VER); }catch{ /* storage unavailable */ } syncVerBtn(); }
+function verSeen(): string | null { try{ return localStorage.getItem('ykn-ver'); }catch{ return VER; } }
+function syncVerBtn(): void { const s=verSeen(); $('verBtn').innerHTML=(s&&s!==VER?'<span class="new">NEW</span>':'')+`v${VER} · What's new`; }
+$('verBtn').onclick=()=>openChangelog(); syncVerBtn();
 let updSeen='';
 async function checkUpdate(): Promise<void> {
   if(location.protocol!=='http:'&&location.protocol!=='https:') return; // a saved file or the claude.ai page: nothing to check
   try{
     const r=await fetch('version.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok) return;
-    const j=await r.json() as { v?: string; notes?: string };
+    const j=await r.json() as { v?: string; notes?: string; ver?: string };
     if(!j.v||j.v===__BUILD__||j.v===updSeen) return;
-    updSeen=j.v; $('updNotes').textContent=j.notes?'New: '+j.notes:'Refresh to get the latest rides and fixes.';
+    updSeen=j.v; $('updNotes').textContent=j.notes?(j.ver&&j.ver!==VER?`v${j.ver}: `:'New: ')+j.notes:'Refresh to get the latest rides and fixes.';
     $('updBar').hidden=false; sfx('ding');
   }catch{ /* offline: try again later */ }
 }
@@ -843,12 +896,145 @@ function orderTea(): void {
 function sitAt(i: number): void {
   if(P.sit){ standUp(); return; }
   const [x,y,hd]=teaStools(i)[teaFree(i)];
-  P.standX=P.x; P.standY=P.y; P.x=x; P.y=y; P.hd=hd; P.sit=true; P.dance=false; P.vx=P.vy=0;
-  toast('You pull up a tiny stool. Move to stand up again.');
+  P.standX=P.x; P.standY=P.y; P.x=x; P.y=y; P.hd=hd; P.sit=true; P.table=i; P.dance=false; P.vx=P.vy=0; TEAO.table=i; TEAO.served=[]; TEAO.bill=0; TEAO.greeted=false;
+  toast('You pull up a tiny stool. The waiter has seen you and is coming over. Move to stand up again.');
+  setTimeout(()=>{ if(P.sit&&P.table===i) callWaiter(); },1200);
   const near=NPC.filter(n=>n.sit&&Math.hypot(n.x-TEA_TABS[i][0],n.y-TEA_TABS[i][1])<25);
   if(near.length){ const n=pick(near); setTimeout(()=>{ if(!P.sit) return; NPC_SAY.push({n,t:REPLIES[0],until:T+4}); voiceFrom(n,`rep0${voiceOf(n)}`,1.3); },900); }
 }
-function standUp(): void { if(!P.sit) return; P.sit=false; P.x=P.standX; P.y=P.standY; }
+function standUp(): void {
+  if(!P.sit) return; P.sit=false; P.x=P.standX; P.y=P.standY;
+  if(P.table>=0){ if(TEAO.bill>0){ const b=TEAO.bill; S.kyat=Math.max(0,S.kyat-b); TEAO.bill=0; sfx('coin'); toast(`You pay <b>${ks(b)}</b> at the counter on your way out. <span class="mm">ကျေးဇူးတင်ပါတယ်</span>`); updateHUD(); }
+    TEAO.served=[]; TEAO.pending=[]; TEAO.table=-1; P.table=-1; if(TEAO.state!=='idle'){ waiterTo('counter'); TEAO.state='returning'; } }
+}
+// ---------- shopkeepers: say hello, ask about the food, order, and chat ----------
+const ALL_DISHES: Array<{ id: string; name: string; my: string }> = [...[...SHOPS, ...PWE_SHOPS].flatMap(sh=>sh.menu), ...TEA_MENU].filter((d,i,a)=>a.findIndex(x=>x.id===d.id)===i);
+const TEA_COUNTER: Shop = {
+  who: 'U Ba Thein, teashop owner', whoMy: 'လက်ဖက်ရည်ဆိုင်ပိုင်ရှင် ဦးဘသိန်း',
+  hello: [['လာ လာ၊ ထိုင်ချင်ရင် စားပွဲမှာ ထိုင်ပါ၊ ညီလေးက လာမှာပေးမယ်', 'Come in! Sit at a table if you like, the waiter will take your order.'], ['သွားရင်း သောက်ချင်ရင် အိတ်နဲ့ ထည့်ပေးမယ်', 'Or I can pour it in a bag to take away.']],
+  menu: TEA_MENU.filter(t=>t.kind==='drink').map(t=>({id:t.id,name:t.name+' (in a bag)',my:t.my+' အိတ်',p:t.p,d:t.d+' Poured into a plastic bag with a straw, the takeaway way.',
+    ask:[`${t.my} တစ်အိတ် ထည့်ပေးပါ`,`One ${t.name.toLowerCase()} to take away, please.`] as Line,serve:['ရော့၊ ပိုက်လေးနဲ့ သောက်','Here, with a straw.'] as Line})),
+  topics: [{q:['ဆိုင် ဘယ်လောက်ကြာပြီလဲ','How old is the shop?'],a:['အဖေ့လက်ထက်ကတည်းက နှစ်ငါးဆယ်ရှိပြီ','Fifty years, since my father’s day.']},{q:['လက်ဖက်ခြောက် ဘယ်ကလဲ','Where is the tea from?'],a:['ရှမ်းပြည်ကပါ၊ ကိုယ်တိုင် ဖျော်တာ','From Shan State. I brew it myself.']}],
+  bye: ['ကျေးဇူးပါ၊ နောက်လည်း လာခဲ့','Thank you, come again!'],
+};
+interface ChatBox { wrap: HTMLElement; say: (t: Line, me: boolean) => void; mid: HTMLElement; q: HTMLElement }
+function chatBox(prompt='Say something:'): ChatBox {
+  const wrap=document.createElement('div'); wrap.className='talk';
+  wrap.innerHTML=`<div class="tlog" aria-live="polite"></div><div class="tmid"></div><p class="muted">${prompt}</p><div class="tq"></div>`;
+  const log=wrap.querySelector('.tlog') as HTMLElement;
+  const say=(t: Line, me: boolean)=>{ const d=document.createElement('div'); d.className='tl'+(me?' me':'');
+    d.innerHTML=`<span class="mm">${esc(t[0])}</span><small>${esc(t[1])}</small>`; log.appendChild(d); log.scrollTop=log.scrollHeight;
+    if(!RM) d.animate([{opacity:0,translate:me?'12px 0':'-12px 0'},{opacity:1,translate:'0 0'}],{duration:260,easing:'ease-out'}); };
+  return {wrap,say,mid:wrap.querySelector('.tmid') as HTMLElement,q:wrap.querySelector('.tq') as HTMLElement};
+}
+function optBtn(c: ChatBox, l: Line, fn: () => void, cls=''): HTMLButtonElement {
+  const b=document.createElement('button'); b.type='button'; if(cls) b.className=cls; b.innerHTML=`<span class="mm">${esc(l[0])}</span><small>${esc(l[1])}</small>`; b.onclick=fn; c.q.appendChild(b); return b;
+}
+function tasted(d: { id: string; name: string; my: string; d?: string }): void {
+  if(!S.snacks.includes(d.id)){ S.snacks.push(d.id); toast(`<b>${esc(d.name)}</b> <span class="mm">${d.my}</span>${d.d?'<br>'+esc(d.d):''}`); }
+}
+function openShop(shop: Shop, keeper?: Npc): void {
+  if(keeper){ keeper.hd=Math.atan2(P.x-keeper.x,P.y-keeper.y); P.hd=Math.atan2(keeper.x-P.x,keeper.y-P.y); }
+  const c=chatBox('Ask or order:'); let busy=false;
+  const reply=(l: Line, then?: () => void, ms=750)=>{ busy=true; setTimeout(()=>{ c.say(l,false); sfx('chat'); if(keeper) NPC_SAY.push({n:keeper,t:l,until:T+4}); busy=false; then?.(); },ms); };
+  shop.hello.forEach((l,k)=>setTimeout(()=>c.say(l,false),k*500));
+  const menu=document.createElement('div'); menu.className='menu';
+  shop.menu.forEach(it=>{ const r=document.createElement('button'); r.type='button'; r.className='mi';
+    r.innerHTML=`<span class="mn"><b>${esc(it.name)}</b><span class="mm">${it.my}</span><small>${esc(it.d)}</small></span><span class="mp">${ks(it.p)}<small class="mm">${kyatMy(it.p)}</small></span>`;
+    r.onclick=()=>order(it); menu.appendChild(r); });
+  c.mid.appendChild(menu);
+  function order(it: MenuItem): void {
+    if(busy) return; c.say(it.ask,true);
+    if(S.kyat<it.p){ reply(['ပိုက်ဆံ မလောက်ဘူး ထင်တယ်၊ ဂိတ်နားက ဦးလေးဆီ သွားတောင်းကြည့်','Looks like you’re a bit short. Ask Uncle by the gate.']); return; }
+    reply([`ဟုတ်ကဲ့၊ ${kyatMy(it.p)} ပါ`,`Sure, that’s ${ks(it.p)}.`],()=>{ pay(it.p); reply(it.serve,()=>tasted(it),1100); });
+  }
+  shop.topics.forEach(t=>optBtn(c,t.q,()=>{ if(busy) return; c.say(t.q,true); reply(t.a); }));
+  optBtn(c,['ကျေးဇူးတင်ပါတယ်','Thank you, bye!'],()=>{ if(busy) return; c.say(['ကျေးဇူးတင်ပါတယ်','Thank you, bye!'],true); reply(shop.bye,()=>setTimeout(closeModal,900)); },'bye');
+  openModal(`${shop.who.split(',')[0]} · ${shop.whoMy}`,c.wrap);
+}
+
+// ---------- the teashop waiter: comes to your table, takes your order, brings it, and brings the bill ----------
+let waiter: Npc | null=null;
+const TEAO={table:-1,state:'idle' as 'idle'|'coming'|'atTable'|'fetching'|'bringing'|'returning',path:[] as Array<[number,number]>,wait:0,pending:[] as string[],served:[] as string[],bill:0,greeted:false,leaveT:0};
+const COUNTER_SPOT: [number, number] = [TEA.x-60,1690];
+function tableSpot(i: number): [number, number] { return [2640+(i%4)*120+60,TEA_TABS[i][1]]; }
+function waiterTo(where: 'table'|'counter'): void {
+  if(!waiter) return; const ax=TEAO.table>=0?tableSpot(TEAO.table)[0]:waiter.x;
+  TEAO.path=where==='table'&&TEAO.table>=0?[[waiter.x,1690],[ax,1690],tableSpot(TEAO.table)]:[[ax,1690],COUNTER_SPOT];
+}
+function callWaiter(): void {
+  if(!waiter||!P.sit||P.table<0) return;
+  if(TEAO.state==='atTable'){ openWaiter(); return; }
+  if(TEAO.state==='idle'||TEAO.state==='returning'){ TEAO.table=P.table; waiterTo('table'); TEAO.state='coming'; sfx('chat'); NPC_SAY.push({n:waiter,t:['လာပြီ ခင်ဗျ','Coming!'],until:T+2.5}); return; }
+  toast('The waiter is bringing your order. Just a moment.');
+}
+function updateWaiter(n: Npc, dt: number): void {
+  const st=TEAO.state;
+  if(TEAO.path.length){
+    const [tx,ty]=TEAO.path[0], dx=tx-n.x, dy=ty-n.y, d=Math.hypot(dx,dy);
+    if(d<3){ TEAO.path.shift(); }
+    else { const k=Math.min(d,n.sp*dt); n.x+=dx/d*k; n.y+=dy/d*k; turnTo(n,dx,dy,dt); n.moving=true; return; }
+    if(TEAO.path.length) return;
+  }
+  n.moving=false;
+  if(st==='coming'){ TEAO.state='atTable'; TEAO.leaveT=20; n.hd=Math.atan2(P.x-n.x,P.y-n.y); if(P.sit&&P.table===TEAO.table&&S.mode==='walk'&&$('modal').hidden) openWaiter(); }
+  else if(st==='atTable'){ TEAO.leaveT-=dt; if(TEAO.leaveT<=0&&$('modal').hidden){ waiterTo('counter'); TEAO.state='returning'; } }
+  else if(st==='fetching'){ TEAO.wait-=dt; n.hd=Math.PI; if(TEAO.wait<=0){ waiterTo('table'); TEAO.state='bringing'; } }
+  else if(st==='bringing'){
+    TEAO.served.push(...TEAO.pending); const names=TEAO.pending.map(id=>TEA_MENU.find(t=>t.id===id)!); TEAO.pending=[];
+    names.forEach(tasted); sfx('ding'); NPC_SAY.push({n,t:WAITER.serve,until:T+4});
+    toast(`<span class="mm">${WAITER.serve[0]}</span><br>${WAITER.serve[1]} ${names.map(x=>x.name.toLowerCase()).join(', ')} on your table.`);
+    TEAO.state='atTable'; TEAO.leaveT=6;
+  }
+  else if(st==='returning'){ TEAO.state='idle'; n.hd=0; }
+}
+function openWaiter(): void {
+  if(!waiter) return;
+  const c=chatBox('Talk to the waiter:'); let busy=false; const qty=new Map<string, number>();
+  const reply=(l: Line, then?: () => void, ms=700)=>{ busy=true; setTimeout(()=>{ c.say(l,false); sfx('chat'); NPC_SAY.push({n:waiter!,t:l,until:T+4}); busy=false; then?.(); },ms); };
+  if(!TEAO.greeted){ TEAO.greeted=true; WAITER.hello.forEach((l,k)=>setTimeout(()=>c.say(l,false),k*600)); TEAO.served.push('yaynway'); }
+  else setTimeout(()=>c.say(WAITER.more,false),100);
+  const menu=document.createElement('div'); menu.className='menu teamenu';
+  const total=()=>[...qty].reduce((a,[id,n])=>a+TEA_MENU.find(t=>t.id===id)!.p*n,0);
+  const go=document.createElement('button'); go.type='button'; go.className='cta';
+  const sync=()=>{ const t=total(); go.disabled=!t; go.innerHTML=t?`Order · မှာမယ် · ${ks(t)}`:'Pick something from the menu'; bill.textContent=TEAO.bill?`Your bill so far: ${ks(TEAO.bill)}`:'Green tea (ရေနွေးကြမ်း) is free and always on the table.'; };
+  for(const kind of ['drink','food'] as const){
+    const h=document.createElement('div'); h.className='mh'; h.innerHTML=kind==='drink'?'Drinks · <span class="mm">သောက်စရာ</span>':'Food · <span class="mm">စားစရာ</span>'; menu.appendChild(h);
+    TEA_MENU.filter(t=>t.kind===kind).forEach(t=>{ const r=document.createElement('div'); r.className='mi';
+      r.innerHTML=`<span class="mn"><b>${esc(t.name)}</b><span class="mm">${t.my}</span><small>${esc(t.d)}</small></span><span class="mp">${ks(t.p)}</span><span class="qty"><button type="button" aria-label="One less">−</button><b>0</b><button type="button" aria-label="One more">+</button></span>`;
+      const [minus,plus]=r.querySelectorAll('button'), nb=r.querySelector('.qty b') as HTMLElement;
+      const set=(n: number)=>{ n=clamp(n,0,5); if(n) qty.set(t.id,n); else qty.delete(t.id); nb.textContent=String(n); r.classList.toggle('on',n>0); sync(); };
+      minus.onclick=()=>set((qty.get(t.id)||0)-1); plus.onclick=()=>set((qty.get(t.id)||0)+1);
+      menu.appendChild(r); });
+  }
+  const bill=document.createElement('p'); bill.className='muted bill';
+  c.mid.append(menu,bill,go); sync();
+  go.onclick=()=>{
+    if(busy||!qty.size) return; const t=total();
+    const list=[...qty].map(([id,n])=>{ const it=TEA_MENU.find(x=>x.id===id)!; return countMy(it.my,n,it.cl); }).join('၊ ');
+    c.say([`ညီလေး၊ ${list} ပေးပါ`,'Waiter, can I have '+[...qty].map(([id,n])=>`${n} ${TEA_MENU.find(x=>x.id===id)!.name.toLowerCase()}`).join(', ')+'?'],true);
+    if(S.kyat<TEAO.bill+t){ reply(WAITER.short); return; }
+    TEAO.bill+=t; for(const [id,n] of qty) for(let k=0;k<n;k++) TEAO.pending.push(id);
+    qty.clear(); menu.querySelectorAll('.qty b').forEach(b=>b.textContent='0'); menu.querySelectorAll('.mi').forEach(r=>r.classList.remove('on')); sync();
+    reply(WAITER.confirm(list),()=>setTimeout(()=>{ closeModal(); waiterTo('counter'); TEAO.state='fetching'; TEAO.wait=rand(3,5); },1300));
+  };
+  WAITER.topics.forEach(tp=>optBtn(c,tp.q,()=>{ if(busy) return; c.say(tp.q,true); reply(tp.a); }));
+  optBtn(c,WAITER.pay,()=>{ if(busy) return; c.say(WAITER.pay,true);
+    if(!TEAO.bill){ reply(['ဘာမှ မမှာရသေးဘူး ခင်ဗျ၊ ရေနွေးကြမ်းက အလကားပါ','You haven’t ordered anything yet. The green tea is free.']); return; }
+    const b=TEAO.bill; reply(WAITER.bill(b),()=>{ S.kyat=Math.max(0,S.kyat-b); TEAO.bill=0; sfx('coin'); updateHUD(); sync(); reply(WAITER.thanks); },700); },'bye');
+  optBtn(c,['ဒါပဲ၊ ကျေးဇူးပဲ','That’s all, thanks.'],()=>{ if(busy) return; c.say(['ဒါပဲ၊ ကျေးဇူးပဲ','That’s all, thanks.'],true); reply(['ဟုတ်ကဲ့ ခင်ဗျ၊ လိုတာရှိရင် ခေါ်လိုက်နော်','Sure, call me if you need anything.'],()=>setTimeout(closeModal,800)); });
+  openModal('The teashop waiter · စားပွဲထိုး',c.wrap,()=>{ if(TEAO.state==='atTable') TEAO.leaveT=Math.min(TEAO.leaveT,4); });
+}
+// ---------- restrooms ----------
+function useRestroom(): void {
+  if(!pay(100)) return;
+  fadeFrom(); sfx('ding');
+  toast(pick([
+    '<span class="mm">အိမ်သာ</span> The attendant takes your 100 Ks and hands you a little packet of tissues. Clean and tidy!',
+    '<span class="mm">လက်ဆေးပါ</span> You wash your hands at the tap outside. There’s even a tiny bar of soap.',
+    '<span class="mm">ကျေးဇူးပါ</span> A short queue, but it’s clean. Back to the fair!',
+  ]));
+}
 // ---------- talking to people ----------
 const TALK: Array<[string, string, number]> = [
   ['မင်္ဂလာပါ','Hello',0], ['နေကောင်းလား','How are you?',1], ['ဘာစားရင် ကောင်းမလဲ','What should I eat?',2],
@@ -938,7 +1124,7 @@ function openBag(): void {
         g.appendChild(d); }); body.appendChild(g); }
     if(bagTab==='souvenirs'){
       const list: string[]=[];
-      S.snacks.forEach(id=>{ const s=SNACKS.find(x=>x.id===id)||PWE_FOOD.find(x=>x.id===id)||{name:'Laphet yay',my:'လက်ဖက်ရည်'}; list.push(`<div class="item"><div class="t"><b>${s.name} <span class="mm muted">${s.my}</span></b><small>Snack tasted</small></div></div>`); });
+      S.snacks.forEach(id=>{ const s=ALL_DISHES.find(x=>x.id===id)||{name:'Laphet yay',my:'လက်ဖက်ရည်'}; list.push(`<div class="item"><div class="t"><b>${s.name} <span class="mm muted">${s.my}</span></b><small>Snack tasted</small></div></div>`); });
       S.toys.forEach(id=>{ const s=TOYS.find(x=>x.id===id); list.push(`<div class="item"><div class="t"><b>${s.name}</b><small>Toy from the Kids Corner stall</small></div></div>`); });
       S.prizes.forEach(id=>{ const s=PRIZES.find(x=>x.id===id); list.push(`<div class="item"><div class="t"><b>${s.name}</b><small>Prize won with tickets</small></div></div>`); });
       body.innerHTML=list.length?`<div class="items">${list.join('')}</div>`:'<p class="muted">Nothing yet. Try a snack on Food Street, a toy in the Kids Corner, or win a prize at the Game Booths.</p>'; }
@@ -961,6 +1147,7 @@ function openSettings(): void {
   opt('Camera','cam',[['close','Close'],['wide','Wide']],v=>setCam(v));
   opt('Mini map','mini',[[true,'Show'],[false,'Hide']],()=>syncChrome());
   opt('Sound','sound',[[true,'On'],[false,'Off']],v=>setSound(v));
+  const vb=document.createElement('button'); vb.textContent=`What's new · version ${VER}`; vb.style.marginTop='12px'; vb.style.marginRight='8px'; vb.onclick=()=>{ closeModal(); openChangelog(); }; wrap.appendChild(vb);
   const ob=document.createElement('button'); ob.className='cta'; ob.textContent='Change outfit and name'; ob.style.marginTop='12px'; ob.onclick=()=>{ closeModal(); openAvatar(false); }; wrap.appendChild(ob);
   const k=document.createElement('div'); k.innerHTML=`<h3 style="font-family:var(--display);font-weight:400;font-size:15px;color:var(--gold);margin:16px 0 6px">Controls</h3>
   <table class="keys"><tr><td><b>WASD / arrows</b></td><td>Walk (hold Shift to hurry)</td></tr><tr><td><b>Drag / mouse wheel</b></td><td>Look around, zoom</td></tr><tr><td><b>E / Space</b></td><td>Interact, throw, stop the meter</td></tr><tr><td><b>T / Enter</b></td><td>Chat with other players</td></tr><tr><td><b>P</b></td><td>Photo mode</td></tr><tr><td><b>C</b></td><td>Close or wide camera</td></tr><tr><td><b>B</b></td><td>Open your bag</td></tr><tr><td><b>Q</b></td><td>Wave to other players</td></tr><tr><td><b>Esc</b></td><td>Close, leave a ride or game</td></tr></table>
@@ -969,9 +1156,24 @@ function openSettings(): void {
   openModal('Settings',wrap);
 }
 
+// ---------- keeping it smooth on slow phones: if the fair runs under ~24 fps for a while, step the graphics down once at a time ----------
+const FPS={t:0,n:0,steps:0,cool:8};
+function watchFps(dt: number): void {
+  if(S.mode!=='walk'||S.paused||document.hidden||FPS.steps>=3){ FPS.t=FPS.n=0; return; }
+  FPS.cool-=dt; if(FPS.cool>0) return;
+  FPS.t+=dt; FPS.n++; if(FPS.t<5) return;
+  const fps=FPS.n/FPS.t; FPS.t=FPS.n=0;
+  if(fps>=24) return;
+  FPS.cool=6; FPS.steps++;
+  if(S.settings.gfx==='high'){ S.settings.gfx='low'; resize(); toast('Switched to fast graphics so the fair runs smoother. You can change it in Settings.'); }
+  else if(S.settings.density!=='low'){ S.settings.density='low'; spawnCrowd(); }
+  else if(LOWRES>.7){ LOWRES=.7; resize(); }
+  saveSettings();
+}
+
 // ---------- fireworks ----------
 // Little shows over the lake every minute or so from 7 PM, then the big finale at 9:30. Each time you're asked if you want to watch.
-let fwNext=0, fountT=0;
+let fwNext=0, fountT=0, salvoT=6;
 const MINI = {next:30, t:0, declined:0};
 function launch(): void { launchFirework(); sfx('launch'); }
 function onBoom(): void { setTimeout(()=>{ sfx('boom'); if(Math.random()<.5) sfx('crackle'); },250+Math.random()*350); }
@@ -982,11 +1184,13 @@ function showFountains(): void {
 }
 function updFireworks(dt: number): void {
   if(S.mode!=='title'&&!S.paused&&!S.showStarted&&S.clock>=19*60&&S.clock<21*60+25){
-    MINI.next-=dt; if(MINI.next<=0&&MINI.t<=0){ MINI.t=15; MINI.next=rand(45,70); fwNext=0; onShow(false); }
+    MINI.next-=dt; if(MINI.next<=0&&MINI.t<=0){ MINI.t=24; MINI.next=rand(32,50); fwNext=0; onShow(false); }
   }
-  if(MINI.t>0){ MINI.t-=dt; fwNext-=dt; if(fwNext<=0){ launch(); if(Math.random()<.25) launch(); fwNext=rand(.45,1.0); } if(MINI.t<=0) miniOver(); }
+  if(MINI.t>0){ MINI.t-=dt; fwNext-=dt; if(fwNext<=0){ launch(); if(Math.random()<.35) launch(); if(MINI.t<4&&Math.random()<.5) launchFirework({type:pick(['lotus','star','goldrain'])}); fwNext=rand(.35,.85); } if(MINI.t<=0) miniOver(); }
   if(S.showStarted&&!S.showDone){
     fwNext-=dt; const fin=S.showT<12;
+    // every so often a festival salvo: a row of lotuses or stars right across the lake, for Thadingyut and Tazaungdaing
+    salvoT-=dt; if(salvoT<=0&&!fin){ salvoT=rand(9,14); const ty=pick(['lotus','star','goldrain','ring','heart']); for(let k=0;k<5;k++) setTimeout(()=>launchFirework({x:20+k*30,type:ty,up:rand(34,38)}),k*180); sfx('launch'); }
     if(fwNext<=0){ launch(); if(fin){ launch(); if(Math.random()<.7) launch(); if(Math.random()<.35) launchFirework({type:pick(['double','kamuro','brocade','chrys']),up:rand(42,50)}); } fwNext=fin?rand(.12,.3):rand(.35,.85); }
     fountT-=dt; if(fountT<=0){ fountT=fin?4:14; showFountains(); }
   }
@@ -1030,7 +1234,7 @@ const RIDECAP: Record<string, string> = {
   pirate:'Hold on tight, it swings higher each time. Drag to look around.',
   handwheel:'You climb into a little wooden seat. The young men swing up onto the spokes to turn the wheel by hand… drag to look around.',
   train:'All aboard! You squeeze onto the front bench of the first carriage, right behind the engine. Drag to look around.',
-  bumper:'You squeeze into a bumper car. W / S or the stick to go and reverse, A / D to steer. Bump as many cars as you can!',
+  bumper:'You climb into your bumper car. W / S or the stick to go and reverse, A / D to steer, C to switch the camera. Bump as many cars as you can!',
   swinger:'Lifting off on the flying swing under its golden roof. Drag to look around and press Q to wave.',
 };
 function buyRide(kind: SceneKind, price: number): void { if(!pay(price)) return; S.rides++; startScene(kind); updateHUD(); }
@@ -1207,6 +1411,7 @@ window.addEventListener('keydown',e=>{
   if((e.code==='KeyT'||e.code==='Enter')&&S.mode!=='mg'){ e.preventDefault(); openChat(); return; }
   if(e.code==='KeyE'||e.code==='Space'||e.code==='Enter'){ if(document.activeElement&&document.activeElement.tagName==='BUTTON'&&e.code!=='KeyE') return; press(); }
   if(e.code==='KeyP'){ S.photo?exitPhotoMode():enterPhotoMode(); }
+  if(e.code==='KeyC'&&S.mode==='scene'&&SC.kind==='bumper'){ toggleDriveCam(); return; }
   if(e.code==='KeyC') setCam(S.settings.cam==='close'?'wide':'close');
   if(e.code==='KeyB'&&S.mode==='walk') openBag();
   if(e.code==='KeyQ') wave();
@@ -1309,7 +1514,7 @@ function maybeSummary(): void {
   if(!S.showDone||S.summaryShown||S.mode!=='walk') return;
   S.summaryShown=true; S.finaleSeen=true; updateHUD();
   openModal('What a night!',`<p>The last sparks drift over the skyline. Here is your Yay Kyaw night:</p>
-  <div class="statgrid"><div><b>${S.zones.length}/${ZONES.length}</b>Postcards</div><div><b>${S.secrets.length}/6</b>Secrets</div><div><b>${S.snacks.length}/${SNACKS.length+PWE_FOOD.length+1}</b>Snacks tasted</div><div><b>${S.rides}</b>Rides</div><div><b>${S.ticketsWon}</b>Tickets won</div><div><b>${S.prizes.length+S.toys.length}</b>Souvenirs</div><div><b>${S.photos.length}</b>Photos</div></div>
+  <div class="statgrid"><div><b>${S.zones.length}/${ZONES.length}</b>Postcards</div><div><b>${S.secrets.length}/6</b>Secrets</div><div><b>${S.snacks.length}/${ALL_DISHES.length}</b>Dishes tasted</div><div><b>${S.rides}</b>Rides</div><div><b>${S.ticketsWon}</b>Tickets won</div><div><b>${S.prizes.length+S.toys.length}</b>Souvenirs</div><div><b>${S.photos.length}</b>Photos</div></div>
   <p class="muted">The fair stays open. Keep exploring, find the rest of the secrets, or watch the finale again from the Finale View deck.</p>`);
 }
 
@@ -1367,6 +1572,8 @@ function frameData(dt: number): Frame {
     sparkle:SECRETS.map(s=>S.secrets.includes(s.id)?0:clamp(1-Math.hypot(P.x-s.x,P.y-s.y)/320,0,1)),
     steamFrom:CARTS, look:LOOK, bumpers:BUMPS, shake:RM?0:shake,
     candles:{lamps:CAND.lamps,mine:CAND.mine,flowers:CAND.flowers},
+    bumperPov:DRIVE.pov,
+    tea:P.table>=0?{table:P.table,seat:teaFree(P.table),items:TEAO.served}:undefined,
   };
 }
 function renderNow(dt: number): { atTop: boolean } { return render3d(frameData(dt)); }
@@ -1374,15 +1581,15 @@ function frame(now: number): void {
   const dt=Math.min(.05,(now-last)/1000); last=now; T+=dt;
   if(S.mode!=='title'&&!S.paused){
     tickClock(dt);
-    if(!S.showStarted&&S.clock>=21*60+30&&S.clock<22*60){ S.showStarted=true; S.showT=75; fountT=0; MINI.t=0; onShow(true); updateHUD(); }
+    if(!S.showStarted&&S.clock>=21*60+30&&S.clock<22*60){ S.showStarted=true; S.showT=110; fountT=0; salvoT=6; toast('<span class="z">သီတင်းကျွတ် · တန်ဆောင်တိုင် မင်္ဂလာပါ</span>Happy Thadingyut and Tazaungdaing! The festival of lights finale begins.',true); MINI.t=0; onShow(true); updateHUD(); }
     if(S.showStarted&&!S.showDone){ S.showT-=dt; if(S.showT<=0){ S.showDone=true; if(S.mode==='scene'&&SC.kind==='finale'){ S.finaleSeen=true; setBar('That was beautiful. Stay for an encore, or head back to the fair.','Encore',()=>{ SC.replay=true; $('sceneAlt').hidden=true; },'Back to the fair'); } else maybeSummary(); updateHUD(); } }
   }
-  updFireworks(dt);
+  updFireworks(dt); watchFps(dt);
   movePlayer(dt);
   CAM.dist+=(CAM.zoom-CAM.dist)*(1-Math.exp(-dt*8));
   updateTrain(dt);
   for(const n of NPC) updateNPC(n,dt);
-  updateBikes(dt); updateBumpers(dt); updateCandles(dt);
+  updateBikes(dt); updateBumpers(dt); updateCandles(dt); updateQueues(dt);
   const glide=(room as { slow?: boolean } | null)?.slow?2.6:8; // relayed positions come about once a second: glide between them
   for(const r of REMOTE.values()){ const k=Math.min(1,dt*glide); r.moving=Math.hypot(r.tx-r.x,r.ty-r.y)>1.5; r.x=lerp(r.x,r.tx,k); r.y=lerp(r.y,r.ty,k); }
   updateNpcSay(dt); updateCrowdTalk(dt);
@@ -1405,6 +1612,7 @@ const MAP_MARKS: Array<{ x: number; y: number; icon: string; en: string; my: str
   {x:PHOTO.x,y:PHOTO.y,icon:'📸',en:'Photo booth',my:'ဓာတ်ပုံ',small:true}, {x:TOYS_AT.x,y:TOYS_AT.y,icon:'🧸',en:'Toys',my:'အရုပ်',small:true},
   {x:WISH_STALL.x,y:WISH_STALL.y,icon:'🏮',en:'Wish stall',my:'ဆုတောင်း'}, {x:POND.x,y:POND.y,icon:'🪷',en:'Wishing Lake',my:'ဆုတောင်းကန်'},
   {x:UNCLE.x,y:UNCLE.y,icon:'👴',en:'Uncle',my:'ဦးလေး',small:true,tiny:true},
+  ...RESTROOMS.map(r=>({x:r.x,y:r.y,icon:'🚻',en:'Restroom',my:'အိမ်သာ',small:true})),
   {x:BUMPER.x+BUMPER.w/2,y:BUMPER.y+BUMPER.h/2,icon:'🚗',en:'Bumper cars',my:'ကားတိုက်'}, {x:HAND_WHEEL.x,y:HAND_WHEEL.y,icon:'🎡',en:'Hand-turned wheel',my:'လူအားချားရဟတ်'},
   {x:SWINGER.x,y:SWINGER.y,icon:'🎢',en:'Flying swing',my:'ဒန်းလွှဲ'},
   {x:CANDLE.x,y:CANDLE.y,icon:'🪔',en:'Oil lamps',my:'ဆီမီးထွန်းပွဲ'}, {x:TEA.x,y:TEA.y+60,icon:'☕',en:'Teashop',my:'လက်ဖက်ရည်ဆိုင်'},
@@ -1549,7 +1757,9 @@ function startGameFlow(): void {
   P.x=900; P.y=2545; P.hd=Math.PI; CAM.yaw=0;
   syncChrome(); updateHUD();
   const welcome=()=>{ setTimeout(()=>toast(`<span class="z">Welcome${S.settings.name?', '+esc(S.settings.name):''}!</span>${ZONES.length} zones, six hidden secrets, little fireworks shows all evening and the finale at 9:30 PM. Press T to chat, and walk up to people to talk.`,true),300); };
-  if(!S.settings.avDone) openAvatar(true,welcome); else welcome();
+  const seen=verSeen(), news=!!seen&&seen!==VER;
+  if(!seen) markVerSeen(); // a first visit: nothing to announce
+  if(!S.settings.avDone) openAvatar(true,welcome); else if(news) openChangelog(welcome); else welcome();
 }
 $('start').onclick=()=>{ goLandscape(); startGameFlow(); };
 // phones: go full screen and turn sideways where the browser allows it (Android); elsewhere a hint asks you to turn the phone
@@ -1577,4 +1787,4 @@ const hot=window.claude&&window.claude.hot;
 if(hot&&hot.ready) hot.ready(boot); else boot(hot&&hot.data||{});
 // audio needs a gesture; also unlock on first tap after a reload
 window.addEventListener('pointerdown',()=>{ if(S.mode!=='title'){ audioInit(S.settings.sound); loadVoices(VOICE_CLIPS); if(A.c&&A.c.state==='suspended') A.c.resume(); } });
-window.__ykn={checkUpdate,S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};
+window.__ykn={openShop,SHOPS,callWaiter,TEAO,useRestroom,launchFirework,checkUpdate,S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};
