@@ -58,6 +58,20 @@ export const PWE_FOOD: Array<{ x: number; y: number; id: string; name: string; m
   { x: 2100, y: 2030, id: 'monlone', name: 'Mont lone yay paw', my: 'မုန့်လုံးရေပေါ်', p: 500, d: 'Sticky rice balls with a melting jaggery centre, rolled in fresh coconut. A Thingyan favourite.' },
   { x: 2300, y: 2030, id: 'tohu', name: 'Shan tofu fritters', my: 'တိုဟူးကြော်', p: 600, d: 'Golden yellow chickpea tofu fried crisp, with a sour and spicy tamarind dip.' },
 ];
+/** Queues at the busiest rides: where the line starts (at the entrance), which way it runs, and how many are in it. */
+export const QUEUES: Array<{ x: number; y: number; dx: number; dy: number; n: number; ride: string }> = [
+  { x: 560, y: 864, dx: -1, dy: 0, n: 11, ride: 'ferris' },
+  { x: 1330, y: 1222, dx: -1, dy: 0, n: 8, ride: 'pirate' },
+  { x: 2150, y: 896, dx: 1, dy: 0, n: 9, ride: 'bumper' },
+];
+export const QUEUE_GAP = 21;
+/** People who stop to watch: a loose crowd in front of the hand-turned wheel and around the carousel. */
+export const WATCHERS: Array<{ x: number; y: number; w: number; h: number; n: number; fx: number; fy: number }> = [
+  { x: 1985, y: 1225, w: 230, h: 40, n: 9, fx: 2100, fy: 1130 },
+  { x: 1240, y: 815, w: 280, h: 34, n: 6, fx: 1380, fy: 640 },
+];
+/** Public restrooms (အိမ်သာ): one near each corner of the fair and one behind the teashop. Doors face south. */
+export const RESTROOMS: Array<{ x: number; y: number }> = [{ x: 180, y: 405 }, { x: 3755, y: 420 }, { x: 420, y: 2528 }, { x: 3700, y: 2528 }, { x: 3060, y: 2385 }];
 export const POND = { x: 3520, y: 1340, rx: 250, ry: 840 };  // the wishing lake (water lanterns drift slowly across it)
 export const WISH_STALL = { x: 3520, y: 2330 };              // where wishes are written, at the lake's south end
 // the oil-lamp festival (ဆီမီးထွန်းပွဲ): lamps and flowers in rings around a little stupa
@@ -139,10 +153,14 @@ addCol(BUMPER.x - 8, BUMPER.y - 8, BUMPER.w + 16, 14);
 addCol(BUMPER.x + BUMPER.w - 6, BUMPER.y - 8, 14, BUMPER.h + 16);
 addCol(BUMPER.x - 8, BUMPER.y - 8, 14, BUMPER.h * .4); addCol(BUMPER.x - 8, BUMPER.y + BUMPER.h * .6, 14, BUMPER.h * .4 + 8);
 addCol(BUMPER.x - 8, BUMPER.y + BUMPER.h - 6, BUMPER.w * .4, 14); addCol(BUMPER.x + BUMPER.w * .6, BUMPER.y + BUMPER.h - 6, BUMPER.w * .4 + 8, 14);
+// the empty bumper cars parked in a row along the south rail, either side of the gate, waiting for the next riders
+export const PARKED: Array<[number, number]> = [45, 100, 155, 345, 400, 455].map(dx => [BUMPER.x + dx, BUMPER.y + BUMPER.h - 34]);
+addCol(BUMPER.x + 18, BUMPER.y + BUMPER.h - 56, 164, 44); addCol(BUMPER.x + 318, BUMPER.y + BUMPER.h - 56, 164, 44);
 addCol(HAND_WHEEL.x - 125, HAND_WHEEL.y - 35, 250, 70);
 PWE_FOOD.forEach(f => addCol(f.x - 70, f.y - 34, 140, 40));
 addCol(TEA.x - 230, TEA.y - 70, 460, 100);      // the teashop's counter and kitchen
-TEA_TABS.forEach(([x, y]) => addCol(x - 30, y - 30, 60, 60)); // a table with its stools and the people on them
+TEA_TABS.forEach(([x, y]) => addCol(x - 30, y - 30, 60, 60));
+RESTROOMS.forEach(r => addCol(r.x - 52, r.y - 32, 104, 60));
 
 export function blocked(x: number, y: number, r: number): boolean {
   if (x < 40 + r || x > WW - 40 - r || y < NORTH + 8 + r || y > WH - 14 - r) return true;
