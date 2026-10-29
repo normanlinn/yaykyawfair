@@ -13,7 +13,7 @@ You dress up as a small icon person and walk through a crowd of families, vendor
 - sit down at a low table in the teashop: the waiter comes over with free green tea, you order from the menu (tea, coffee, palata, nan bya, samusa and more), chat about the football or the best dish, and your order arrives at your table. Pay when you get up
 - talk with every food seller on Food Street and at the pwe stalls, order from their menus and hear what they say about their food
 - use the public restrooms (အိမ်သာ, 🚻) near the corners of the fair
-- join the queues at the big wheel, the pirate ship and the bumper cars, or watch with the crowds at the hand-turned wheel and the carousel
+- queue for the big wheel, the pirate ship and the bumper cars: your ticket walks you to the back of the line, you step up as each person goes in, and you ride when it's your turn (about a minute). Move to step out and get your money back. Crowds also watch the hand-turned wheel and the carousel
 - walk up to people in the crowd and talk to them in Burmese
 - play ring toss and balloon darts to win tickets, then trade them for prizes
 - buy mohinga, mont lin ma yar, shwe yin aye and other snacks with kyat

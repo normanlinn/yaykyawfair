@@ -1,5 +1,14 @@
 [
   {
+    "v": "1.6.1", "date": "2026-10-30", "title": "Wait your turn in the ride queues", "my": "စက်စီးရန် တန်းစီပါ",
+    "notes": [
+      "Buying a ticket for the Ferris wheel, the pirate ship or the bumper cars walks you to the back of the line. Nobody cuts in.",
+      "You shuffle up as each person goes in, and you can see how many are ahead of you. When it's your turn, you get on.",
+      "Move to step out of the line, and your ticket money is refunded.",
+      "The What's new window now opens on top of the title screen."
+    ]
+  },
+  {
     "v": "1.6.0", "date": "2026-10-30", "title": "Teashop waiters, restrooms and festival fireworks", "my": "လက်ဖက်ရည်ဆိုင်၊ အိမ်သာနဲ့ မီးပန်းပွဲ",
     "notes": [
       "Sit at the teashop, read the menu, chat with the waiter and order. Your tea and snacks arrive at your table.",
