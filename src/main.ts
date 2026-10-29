@@ -68,9 +68,9 @@ CARTS.forEach(([x,y],i)=>{ const sn=SNACKS[i], sh=SHOPS[i]; IT.push({x,y:y+26,r:
 IT.push({x:BOOTHS[0].x,y:BOOTHS[0].y+35,r:50,label:()=>`Play ring toss · ${ks(1000)}`,act:()=>startGame('ring')});
 IT.push({x:BOOTHS[1].x,y:BOOTHS[1].y+35,r:50,label:()=>`Play balloon darts · ${ks(1000)}`,act:()=>startGame('darts')});
 IT.push({x:BOOTHS[2].x,y:BOOTHS[2].y+35,r:50,label:()=>`Trade tickets for prizes (${S.tix} tickets)`,act:openPrizes});
-IT.push({x:590,y:850,r:50,label:()=>`Ride the Ferris wheel · ${ks(1500)}`,act:()=>buyRide('ferris',1500)});
+IT.push({x:590,y:850,r:50,label:()=>`Ride the Ferris wheel · ${ks(1500)}`,act:()=>joinQueue('ferris',1500,()=>rideNow('ferris'))});
 IT.push({x:CR.cx,y:CR.cy+165,r:60,label:()=>`Ride the carousel · ${ks(1000)}`,act:()=>buyRide('carousel',1000)});
-IT.push({x:PS.px,y:PS.py+75,r:60,label:()=>`Ride the pirate ship · ${ks(1200)}`,act:()=>buyRide('pirate',1200)});
+IT.push({x:PS.px,y:PS.py+75,r:60,label:()=>`Ride the pirate ship · ${ks(1200)}`,act:()=>joinQueue('pirate',1200,()=>rideNow('pirate'))});
 IT.push({x:STATION.x,y:STATION.y,r:80,label:()=>TRN.waiting?(TRN.dwell>0?'Hop on the mini train!':'Waiting for the mini train… it is coming'):`Ride the mini train round the whole fair · ရထားလေး · ${ks(500)}`,act:buyTrain});
 IT.push({x:TOYS_AT.x,y:TOYS_AT.y+30,r:48,label:()=>'Browse the toy stall',act:openToys});
 IT.push({x:PHOTO.x,y:PHOTO.y+30,r:45,label:()=>`Souvenir photo booth · ${ks(500)}`,act:boothPhoto});
@@ -84,7 +84,7 @@ IT.push({x:WISH_STALL.x-150,y:WISH_STALL.y-40,r:70,label:()=>`Float a wish on th
 IT.push({x:HAND_WHEEL.x,y:HAND_WHEEL.y+80,r:60,label:()=>`Ride the hand-turned wheel · လူအားချားရဟတ် · ${ks(1500)}`,act:()=>buyRide('handwheel',1500)});
 IT.push({x:SWINGER.x,y:SWINGER.y+SWINGER.R+40,r:60,label:()=>`Ride the flying swing · ဒန်းလွှဲ · ${ks(1200)}`,act:()=>buyRide('swinger',1200)});
 IT.push({x:BUMPER.x-40,y:BUMPER.y+BUMPER.h/2,r:55,label:()=>`Dodge the bumper cars for 30 seconds · ${ks(1000)}`,act:startDodge});
-IT.push({x:BUMPER.x+BUMPER.w/2,y:BUMPER.y+BUMPER.h+40,r:60,label:()=>`Drive a bumper car · ကားတိုက်မောင်းမယ် · ${ks(1000)}`,act:startDrive});
+IT.push({x:BUMPER.x+BUMPER.w/2,y:BUMPER.y+BUMPER.h+40,r:60,label:()=>`Drive a bumper car · ကားတိုက်မောင်းမယ် · ${ks(1000)}`,act:()=>joinQueue('bumper',1000,beginDrive)});
 PWE_FOOD.forEach((f,i)=>IT.push({x:f.x,y:f.y+40,r:50,label:()=>`Talk to ${PWE_SHOPS[i].who.split(',')[0]} · ${f.name} · ${f.my}`,act:()=>openShop(PWE_SHOPS[i])}));
 IT.push({x:ST.x,y:ST.y+130,r:95,label:()=>P.dance?'Stop dancing':'Dance with the dancers · ကခုန်မယ်',act:toggleDance});
 IT.push({x:CANDLE.x,y:CANDLE.y+CANDLE.R+30,r:70,label:()=>CAND.mine>=CANDLE_MINE?'Every lamp here is lit. Thank you!':`Light an oil lamp · ဆီမီးထွန်းမယ် · ${ks(200)}`,act:lightLamp});
@@ -130,16 +130,53 @@ function spawnCrowd(): void {
 const QT: number[] = [];
 function qSlot(qi: number, k: number): [number, number] { const q=QUEUES[qi], j=Math.sin(k*2.3+qi)*3; return [q.x+q.dx*k*QUEUE_GAP-q.dy*j, q.y+q.dy*k*QUEUE_GAP+q.dx*j]; }
 /** Every few seconds the person at the front goes in, everyone steps up, and somebody nearby joins the back. */
+// You queue too: tap a ride with a line and you walk to the back of it, shuffle up as people go in, and ride when it's your turn.
+const PQ={qi:-1,k:0,price:0,name:'',go:null as null|(()=>void),shown:''};
+const QNAME: Record<string,string>={ferris:'the Ferris wheel',pirate:'the pirate ship',bumper:'the bumper cars'};
+function joinQueue(ride: string, price: number, go: () => void): void {
+  const qi=QUEUES.findIndex(q=>q.ride===ride); if(qi<0){ if(pay(price)) go(); return; }
+  if(PQ.qi>=0) return; if(!pay(price)) return;
+  PQ.qi=qi; PQ.k=NPC.filter(n=>n.q===qi).length; PQ.price=price; PQ.name=QNAME[ride]||'the ride'; PQ.go=go; PQ.shown='';
+  P.sit&&standUp(); P.dance=false; QT[qi]=Math.min(QT[qi],rand(3,5));
+  toast(`Ticket bought. You join the back of the line for ${PQ.name}. <span class="mm">တန်းစီပါ</span>`);
+}
+function leaveQueue(refund: boolean): void {
+  if(PQ.qi<0) return; const qi=PQ.qi; PQ.qi=-1; PQ.go=null; $('prompt').hidden=true; lastIT=null;
+  for(const n of NPC) if(n.q===qi&&n.qk!>PQ.k) n.qk!--; // close the gap you leave
+  if(refund){ S.kyat+=PQ.price; updateHUD(); toast(`You stepped out of the line. Your ${ks(PQ.price)} is refunded.`); }
+}
+/** Every few seconds whoever is at the front goes in, everyone steps up, and somebody nearby joins the back. */
 function updateQueues(dt: number): void {
   QUEUES.forEach((q,qi)=>{
-    QT[qi]-=dt; if(QT[qi]>0) return; QT[qi]=rand(4,9);
-    const line=NPC.filter(n=>n.q===qi); const front=line.find(n=>n.qk===0);
+    QT[qi]-=dt; if(QT[qi]>0) return;
+    const mine=PQ.qi===qi; QT[qi]=mine?rand(3,5.5):rand(4,9); // the line moves a little faster while you're in it, so you wait about a minute
+    const line=NPC.filter(n=>n.q===qi);
+    if(mine&&PQ.k===0){ // your turn!
+      const [fx,fy]=qSlot(qi,0); if(Math.hypot(P.x-fx,P.y-fy)>30){ QT[qi]=1; return; } // still walking up
+      const go=PQ.go; PQ.qi=-1; PQ.go=null; $('prompt').hidden=true; lastIT=null;
+      for(const n of line) n.qk!--;
+      sfx('ding'); go&&go(); return;
+    }
+    const front=line.find(n=>n.qk===0);
     if(front){ front.q=undefined; front.qk=undefined; [front.tx,front.ty]=freePoint(); front.wait=0; }
     for(const n of line) if(n!==front) n.qk!--;
-    const tail=qSlot(qi,q.n-1), joiner=NPC.filter(n=>n.q==null&&!n.post&&!n.leader&&!n.waiter&&n.s>=1&&Math.hypot(n.x-tail[0],n.y-tail[1])<500)[0];
-    if(joiner){ joiner.q=qi; joiner.qk=q.n-1; }
-    else if(front){ const [x,y]=qSlot(qi,q.n+3); front.x=x; front.y=y; front.q=qi; front.qk=q.n-1; } // nobody about: the same person queues again for another go
+    if(mine) PQ.k--;
+    const count=line.length-(front?1:0)+(mine?1:0);
+    if(count>=q.n) return;
+    const tail=qSlot(qi,count), joiner=NPC.filter(n=>n.q==null&&!n.post&&!n.leader&&!n.waiter&&!n.sit&&n.s>=1&&Math.hypot(n.x-tail[0],n.y-tail[1])<500)[0];
+    if(joiner){ joiner.q=qi; joiner.qk=count; }
+    else if(front){ const [x,y]=qSlot(qi,count+3); front.x=x; front.y=y; front.q=qi; front.qk=count; } // nobody about: the same person queues again for another go
   });
+}
+/** Walks you to your place in the line; moving the stick or the keys steps you out of it. */
+function queueWalk(dt: number, mag: number): boolean {
+  if(PQ.qi<0) return false;
+  if(mag>.15){ leaveQueue(true); return false; }
+  const q=QUEUES[PQ.qi], [tx,ty]=qSlot(PQ.qi,PQ.k), dx=tx-P.x, dy=ty-P.y, d=Math.hypot(dx,dy);
+  P.vx=P.vy=P.kx=P.ky=0;
+  if(d>2){ const k=Math.min(d,(d>60?150:55)*dt); P.x+=dx/d*k; P.y+=dy/d*k; P.hd=Math.atan2(dx,dy); P.moving=true; P.spd=d>60?1.3:.6; }
+  else { P.moving=false; P.spd=0; let a=Math.atan2(-q.dx,-q.dy)-P.hd; a=Math.atan2(Math.sin(a),Math.cos(a)); P.hd+=a*Math.min(1,dt*4); }
+  return true;
 }
 function turnTo(n: { hd: number }, dx: number, dy: number, dt: number): void {
   const want=Math.atan2(dx,dy); let d=want-n.hd; d=Math.atan2(Math.sin(d),Math.cos(d)); n.hd+=d*Math.min(1,dt*10);
@@ -282,8 +319,9 @@ function updateBumpers(dt: number): void {
 // driving one yourself: W/S or the stick for go and reverse, A/D to steer; bump as many cars as you can in a minute
 const DRIVE={on:false,given:0,taken:0,kx:0,ky:0,shown:'',pov:false};
 const MY_CAR=3, DRIVE_SECS=60;
-function startDrive(): void {
-  if(!pay(1000)) return; S.games++; S.rides++;
+function startDrive(): void { if(pay(1000)) beginDrive(); }
+function beginDrive(): void {
+  S.games++; S.rides++;
   const b=BUMPS[MY_CAR]; b.x=BUMPER.x+BUMPER.w/2; b.y=LANE_Y-BR-2; b.hd=Math.PI; b.sp=0; b.cd=0;
   for(const o of BUMPS) if(o!==b&&Math.hypot(o.x-b.x,o.y-b.y)<110){ o.y=Math.min(o.y,b.y-110); bumpTarget(o); }
   DRIVE.on=true; DRIVE.given=DRIVE.taken=0; DRIVE.kx=DRIVE.ky=0; DRIVE.shown='';
@@ -1214,7 +1252,7 @@ function answerFireworks(yes: boolean): void {
   if(!yes){ if(!S.showStarted) MINI.declined++; toast('Okay! You can watch any time from the Finale View deck.'); return; }
   if(S.mode==='scene'&&SC.kind==='train') leaveTrain(); else if(S.mode==='scene'&&SC.kind==='bumper') endScene();
   if(S.mode!=='walk') return;
-  P.dance=false; standUp(); closeModal(); closeMap();
+  P.dance=false; standUp(); leaveQueue(true); closeModal(); closeMap();
   startScene('finale');
 }
 $('fwYes').onclick=()=>answerFireworks(true);
@@ -1237,7 +1275,8 @@ const RIDECAP: Record<string, string> = {
   bumper:'You climb into your bumper car. W / S or the stick to go and reverse, A / D to steer, C to switch the camera. Bump as many cars as you can!',
   swinger:'Lifting off on the flying swing under its golden roof. Drag to look around and press Q to wave.',
 };
-function buyRide(kind: SceneKind, price: number): void { if(!pay(price)) return; S.rides++; startScene(kind); updateHUD(); }
+function buyRide(kind: SceneKind, price: number): void { if(!pay(price)) return; rideNow(kind); }
+function rideNow(kind: SceneKind): void { S.rides++; startScene(kind); updateHUD(); }
 function startScene(kind: SceneKind): void {
   closeChat();
   SC.kind=kind; SC.t=0; SC.dur={ferris:28,carousel:16,pirate:16,handwheel:22,swinger:24,train:9999,bumper:DRIVE_SECS,finale:9999,wishes:9999}[kind]; SC.replay=false; SC.topSaid=false; SC.cue=0; LOOK.yaw=LOOK.pitch=0;
@@ -1507,6 +1546,8 @@ function checkWorld(): void {
   for(const s of SECRETS){ if(!S.secrets.includes(s.id)&&Math.hypot(P.x-s.x,P.y-s.y)<50){ S.secrets.push(s.id); S.kyat+=300; sfx('ding'); toast(`Secret found: <b>${s.name}</b><br>${s.d} <span class="muted">(+300 Ks)</span>`); updateHUD(); } }
   if(DODGE.on){ const t=`<span class="key">⏱</span>${Math.ceil(DODGE.t)} s left · ${DODGE.hits} bump${DODGE.hits===1?'':'s'} · keep running!`;
     if(t!==DODGE.shown){ $('prompt').innerHTML=t; $('prompt').hidden=false; DODGE.shown=t; } lastIT=null; return; }
+  if(PQ.qi>=0){ const a=PQ.k, t=a===0?`<span class="key">🎟</span>You're next for ${PQ.name}! Get ready…`:`<span class="key">🎟</span>In line for ${PQ.name} · ${a} ${a===1?'person':'people'} ahead of you · move to leave the line`;
+    if(t!==PQ.shown){ $('prompt').innerHTML=t; $('prompt').hidden=false; PQ.shown=t; } lastIT=null; return; }
   const it=(S.mode==='walk'&&!S.photo)?nearIT():null;
   if(it!==lastIT||it){ if(it){ $('prompt').innerHTML=`<span class="key">${touchMode?'GO':'E'}</span>${it.label()}`; $('prompt').hidden=false; } else $('prompt').hidden=true; lastIT=it; }
 }
@@ -1528,6 +1569,7 @@ function movePlayer(dt: number): void {
   const mag=Math.hypot(ix,iy);
   if(mag>.15){ if(P.sit) standUp(); if(P.dance){ P.dance=false; } }
   if(P.sit){ P.vx=P.vy=0; P.moving=false; P.spd=0; return; }
+  if(queueWalk(dt,mag)) return;
   let tvx=0, tvy=0;
   if(mag>.15){
     // camera-relative: up on the stick walks away from the camera
@@ -1787,4 +1829,4 @@ const hot=window.claude&&window.claude.hot;
 if(hot&&hot.ready) hot.ready(boot); else boot(hot&&hot.data||{});
 // audio needs a gesture; also unlock on first tap after a reload
 window.addEventListener('pointerdown',()=>{ if(S.mode!=='title'){ audioInit(S.settings.sound); loadVoices(VOICE_CLIPS); if(A.c&&A.c.state==='suspended') A.c.resume(); } });
-window.__ykn={openShop,SHOPS,callWaiter,TEAO,useRestroom,launchFirework,checkUpdate,S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};
+window.__ykn={PQ,joinQueue,QUEUES,openShop,SHOPS,callWaiter,TEAO,useRestroom,launchFirework,checkUpdate,S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};
