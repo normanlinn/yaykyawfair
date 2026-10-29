@@ -3,9 +3,10 @@
 import * as THREE from 'three';
 import { TAU, srng, rand, pick, clamp, lerp, MMF, BODY, DISP } from './util';
 import { PersonOpts, bodyProfile } from './people';
+import { SHOPS, PWE_SHOPS, Shop, mmNum } from './shops';
 import {
   M, WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, KIDS, TRAIN, STATION, TRAIN_OFF, TRACK_LEN, ST, FV, PHOTO, TOYS_AT, ARCH_Y, SNACKS, CARTS, TEA_TABLES, BOOTHS, SECRETS,
-  STRINGS, TREES, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, trackPos,
+  STRINGS, TREES, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, RESTROOMS, PARKED, QUEUES, QUEUE_GAP, trackPos,
 } from './layout';
 
 // ---------------------------------------------------------------- basics
@@ -558,6 +559,29 @@ function buildPirate(): void {
   const pl = new THREE.PointLight('#8fb4ff', 60, 20, 2); pl.position.set(px, 6, pz + 5); scene.add(pl);
 }
 
+/** A hand-painted price board for a stall: each dish in Myanmar with its price, the way they're chalked up at the fair. */
+function menuTex(shop: Shop, bg: string): THREE.CanvasTexture {
+  const n = shop.menu.length, w = 256, h = 96 + n * 52;
+  return canvasTex(w, h, c => {
+    c.fillStyle = bg; c.fillRect(0, 0, w, h); c.strokeStyle = '#c9a46a'; c.lineWidth = 8; c.strokeRect(4, 4, w - 8, h - 8);
+    c.textBaseline = 'middle'; c.textAlign = 'center'; c.fillStyle = '#ffe7a3'; c.font = `700 30px ${MMF}`; c.fillText('ဈေးနှုန်း', w / 2, 40);
+    shop.menu.forEach((m, k) => {
+      const y = 96 + k * 52;
+      c.textAlign = 'left'; c.fillStyle = '#fff6e6'; c.font = `24px ${MMF}`; c.fillText(m.my, 16, y, 150);
+      c.textAlign = 'right'; c.fillStyle = '#ffd27a'; c.font = `700 22px ${MMF}`; c.fillText(mmNum(m.p), w - 14, y);
+    });
+  });
+}
+/** The little things that make a stall look lived in: a price board on an easel, the gas bottle and a string of bulbs. */
+function stallLife(g: THREE.Group, shop: Shop | undefined, bg: string, sx: number, front: number, top: number): void {
+  if (shop) {
+    const n = shop.menu.length, h = 0.38 * (96 + n * 52) / 52;
+    const b = board(menuTex(shop, bg), 1.0, h * 0.5, g, sx, 0.9 + h * 0.25, front, sx < 0 ? 0.35 : -0.35);
+    for (const lx of [-0.4, 0.4]) { cyl(0.025, 0.025, 0.95, lam('#6b4a2e'), b, lx, -h * 0.25 - 0.45, -0.03, 4); }
+  }
+  cyl(0.2, 0.2, 0.75, lam('#2d6bb6'), g, sx < 0 ? 2.5 : -2.5, 0.38, -2.0, 10); cyl(0.06, 0.06, 0.12, lam('#c8ccd8'), g, sx < 0 ? 2.5 : -2.5, 0.8, -2.0, 6);
+  for (let k = 0; k < 8; k++) GLOWS.push([g.position.x - 2.6 + k * 0.74, top - Math.sin(k / 7 * Math.PI) * 0.18, g.position.z + front, k % 3 ? '#ffe7a3' : '#ffb35a', 0.8]);
+}
 function buildFood(): void {
   CARTS.forEach(([x, y], i) => {
     const sn = SNACKS[i], g = add(new THREE.Group(), scene, X(x), 0, Z(y));
@@ -571,6 +595,7 @@ function buildFood(): void {
     GLOWS.push([X(x) - 2.9, 3.9, Z(y) - 0.3, '#ffd27a', 1], [X(x) + 2.9, 3.9, Z(y) - 0.3, '#ffd27a', 1]);
     const pl = new THREE.PointLight('#ffd27a', 22, 9, 2); pl.position.set(0, 3.4, 0.6); g.add(pl);
     buildDish(g, sn.id);
+    stallLife(g, SHOPS[i], '#23402f', -3.75, 0.5, 3.75);
   });
   TEA_TABLES.forEach(([x, y], i) => {
     const g = add(new THREE.Group(), scene, X(x), 0, Z(y));
@@ -865,7 +890,7 @@ function fwAdd(x: number, y: number, z: number, vx: number, vy: number, vz: numb
   const c = new THREE.Color(col); fw.base.set([c.r, c.g, c.b], i * 3);
   fw.life[i] = life; fw.max[i] = life; fw.drag[i] = drag; fw.grav[i] = g; fw.kind[i] = kind; fw.type[i] = type;
 }
-export const FW_TYPES = ['peony', 'ring', 'willow', 'crossette', 'heart', 'palm', 'strobe', 'chrys', 'double', 'brocade', 'kamuro'];
+export const FW_TYPES = ['peony', 'ring', 'willow', 'crossette', 'heart', 'palm', 'strobe', 'chrys', 'double', 'brocade', 'kamuro', 'lotus', 'star', 'goldrain'];
 /** Sends up one shell. Optional spot (metres), type and how high it climbs. */
 export function launchFirework(o: { x?: number; z?: number; type?: string; up?: number } = {}): void {
   const x = o.x ?? rand(0, 160), z = o.z ?? rand(-40, 4), col = pick(FCOL), type = o.type ?? pick(['peony', 'peony', ...FW_TYPES]);
@@ -878,6 +903,25 @@ function burst(i: number): void {
   const n = type === 'willow' || type === 'brocade' || type === 'kamuro' ? 170 : type === 'palm' ? 12 : type === 'heart' ? 110 : 130;
   const ax = new THREE.Vector3(rand(-1, 1), rand(-0.3, 0.3), rand(-1, 1)).normalize(), v = new THREE.Vector3(), perp = new THREE.Vector3();
   const col2 = pick(FCOL.filter(c => c !== col));
+  if (type === 'lotus') {
+    // ကြာပန်း: eight pink petals opening round a gold heart, like the lotus on a Thadingyut lantern
+    for (let p = 0; p < 8; p++) {
+      const a = p / 8 * TAU;
+      for (let k = 0; k < 16; k++) { const u = k / 15, w = Math.sin(u * Math.PI) * 0.35, b = a + (k % 2 ? w : -w);
+        fwAdd(x, y, z, Math.cos(b) * (6 + u * 9), 3 + u * 7 - u * u * 6, Math.sin(b) * (6 + u * 9), rand(1.6, 2.1), u > 0.7 ? '#ffffff' : '#ff8ad8', 1.1, 3); }
+    }
+    for (let k = 0; k < 30; k++) { v.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(1.5, 3)); fwAdd(x, y, z, v.x, v.y, v.z, rand(1.4, 1.9), '#ffd27a', 1, 1.5); }
+    fw.flash = Math.min(1, fw.flash + 0.5); onBoom?.(); return;
+  }
+  if (type === 'star') {
+    for (let k = 0; k < 150; k++) { const a = k / 150 * TAU, r5 = 0.55 + 0.45 * Math.abs(Math.cos(a * 2.5)) ** 3;
+      fwAdd(x, y, z, Math.sin(a) * 15 * r5, Math.cos(a) * 15 * r5, rand(-0.5, 0.5), rand(1.5, 1.9), k % 9 ? '#ffe28a' : '#ffffff', 1.1, 1.5); }
+    fw.flash = Math.min(1, fw.flash + 0.5); onBoom?.(); return;
+  }
+  if (type === 'goldrain') {
+    for (let k = 0; k < 190; k++) { v.set(rand(-1, 1), rand(-0.2, 1), rand(-1, 1)).normalize().multiplyScalar(rand(4, 9)); fwAdd(x, y, z, v.x, v.y, v.z, rand(3.4, 4.4), '#ffcf6a', 1.6, 2.2, 4); }
+    fw.flash = Math.min(1, fw.flash + 0.4); onBoom?.(); return;
+  }
   if (type === 'double') for (let k = 0; k < 70; k++) { v.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(4, 7)); fwAdd(x, y, z, v.x, v.y, v.z, rand(1.0, 1.4), col2, 1.0, 5); }
   for (let k = 0; k < n; k++) {
     if (type === 'heart') {
@@ -1319,6 +1363,7 @@ function buildPweStall(f: { x: number; y: number; id: string; name: string; my: 
   for (const sx of [-2.8, 2.8]) for (const sz of [-1.7, 0.2]) cyl(0.07, 0.07, 3.6, bamboo, g, sx, 1.8, sz, 6);
   const thatch = add(new THREE.Mesh(new THREE.ConeGeometry(4.4, 1.3, 4, 1, true), lam('#a8844a', { side: DS, k: 'thatch' })), g, 0, 4.15, -0.75); thatch.rotation.y = Math.PI / 4; thatch.scale.set(1, 1, 0.5);
   board(signTex(f.my, f.name + ' · ' + f.p.toLocaleString('en-US') + ' Ks', col, 512, 160), 4.2, 1.3, g, 0, 3.0, 0.25);
+  stallLife(g, PWE_SHOPS[i], '#3a2414', 3.7, 0.4, 3.35);
   const Y = 1.18, Zf = -0.3;
   // the wok on its charcoal stove, with a bit of glow
   cyl(0.45, 0.5, 0.5, lam('#3a3030'), g, -1.8, Y + 0.25, Zf, 12); sphere(0.38, glowMat('#ff5a1a'), g, -1.8, Y + 0.5, Zf, 10).scale.y = 0.15;
@@ -1341,7 +1386,7 @@ function buildPweStall(f: { x: number; y: number; id: string; name: string; my: 
 export const BUMPER_N = 8;
 const mid = {
   cars: [] as Array<{ g: THREE.Group; pole: THREE.Object3D }>, sparkPos: new Float32Array(260 * 3), sparkCol: new Float32Array(260 * 3), sparkVel: new Float32Array(260 * 3), sparkLife: new Float32Array(260), sparkNext: 0,
-  sparks: null as THREE.Points, hw: null as THREE.Group, hwSeats: [] as THREE.Group[], hwSeat: null as THREE.Object3D, hwAngle: 0, drvSeat: null as THREE.Object3D,
+  sparks: null as THREE.Points, hw: null as THREE.Group, hwSeats: [] as THREE.Group[], hwSeat: null as THREE.Object3D, hwAngle: 0, drvSeat: null as THREE.Object3D, car3Driver: null as THREE.Object3D,
   swTop: null as THREE.Group, swChairs: [] as THREE.Group[], swSeat: null as THREE.Object3D, swAngle: 0, swW: 0,
 };
 const BCOLS = ['#e0353f', '#2d7bb6', '#e0a526', '#3fae7a', '#ff6f91', '#8a5ad8', '#ff8a3d', '#3fc7a5'];
@@ -1369,16 +1414,23 @@ function buildMidway(): void {
   for (let k = 0; k < 24; k++) GLOWS.push([x0 + aw * k / 23, H + 0.55, z1 + 0.12, LANTERN_COLS[k % 5], 1]);
   for (let k = 0; k < 24; k++) GLOWS.push([x0 + aw * k / 23, H + 0.55, z0 - 0.12, LANTERN_COLS[(k + 2) % 5], 1]);
   const al = new THREE.PointLight('#a8c0ff', 40, 18, 2); al.position.set(ax, H - 0.5, az); scene.add(al);
-  for (let i = 0; i < BUMPER_N; i++) {
-    const g = add(new THREE.Group(), scene, ax, 0, az), col = BCOLS[i % BCOLS.length];
+  const makeCar = (col: string, pole: boolean) => {
+    const g = add(new THREE.Group(), scene, ax, 0, az);
     const body = add(new THREE.Mesh(new THREE.CapsuleGeometry(0.55, 0.7, 4, 12), lam(col)), g, 0, 0.42, 0); body.rotation.x = Math.PI / 2; body.scale.set(1, 1, 0.55);
     const bump = add(new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.13, 6, 24), lam('#1b1420')), g, 0, 0.32, 0); bump.rotation.x = Math.PI / 2; bump.scale.set(0.95, 1.3, 1);
     box(0.6, 0.35, 0.3, lam('#2a2238'), g, 0, 0.7, -0.25);
     const sw = add(new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.025, 4, 12), lam('#2a2238')), g, 0, 0.85, 0.35); sw.rotation.x = -0.9;
-    const pole = add(new THREE.Group(), g, 0, 0, -0.55);
-    cyl(0.03, 0.03, H - 0.6, lam('#c8ccd8'), pole, 0, (H - 0.6) / 2 + 0.6, 0, 5); cyl(0.12, 0.12, 0.06, glowMat('#cfe0ff'), pole, 0, H - 0.03, 0, 8);
-    GLOWS; sphere(0.09, glowMat('#ffe7a3'), g, 0.3, 0.55, 0.85, 6); sphere(0.09, glowMat('#ffe7a3'), g, -0.3, 0.55, 0.85, 6);
-    if (i % 4 !== 3) { const d = buildPerson({ shirt: pick(['#f3efe6', '#f7b7c3', '#9fd3f0', '#b5e6c8']), lon: pick(['#6b2335', '#2f5d50', '#283a6b']), skin: pick(['#d9a77a', '#c58c5c', '#a8714a']), s: 0.78, bun: i % 2 === 1 }); d.g.position.set(0, 0.15, -0.1); d.footL.visible = d.footR.visible = false; g.add(d.g); }
+    const p = add(new THREE.Group(), g, 0, 0, -0.55);
+    if (pole) { cyl(0.03, 0.03, H - 0.6, lam('#c8ccd8'), p, 0, (H - 0.6) / 2 + 0.6, 0, 5); cyl(0.12, 0.12, 0.06, glowMat('#cfe0ff'), p, 0, H - 0.03, 0, 8); }
+    else cyl(0.03, 0.03, 1.1, lam('#c8ccd8'), p, 0, 1.1, 0, 5); // parked: the pole is folded down
+    sphere(0.09, glowMat('#ffe7a3'), g, 0.3, 0.55, 0.85, 6); sphere(0.09, glowMat('#ffe7a3'), g, -0.3, 0.55, 0.85, 6);
+    return { g, pole: p };
+  };
+  // the empty cars waiting in a row by the gate for whoever is next in the queue
+  PARKED.forEach(([x, y], k) => { const c = makeCar(BCOLS[(k + 3) % BCOLS.length], false); c.g.position.set(X(x), 0, Z(y)); c.g.rotation.y = Math.PI + (k % 2 ? 0.06 : -0.05); });
+  for (let i = 0; i < BUMPER_N; i++) {
+    const { g, pole } = makeCar(BCOLS[i % BCOLS.length], true);
+    { const d = buildPerson({ shirt: pick(['#f3efe6', '#f7b7c3', '#9fd3f0', '#b5e6c8']), lon: pick(['#6b2335', '#2f5d50', '#283a6b']), skin: pick(['#d9a77a', '#c58c5c', '#a8714a']), s: 0.78, bun: i % 2 === 1 }); d.g.position.set(0, 0.15, -0.1); d.footL.visible = d.footR.visible = false; g.add(d.g); if (i === 3) mid.car3Driver = d.g; }
     if (i === 3) { mid.drvSeat = add(new THREE.Group(), g, 0, 0.32, -0.1); mid.drvSeat.name = 'seat'; }
     mid.cars.push({ g, pole });
   }
@@ -1631,6 +1683,34 @@ function drawPitch(c: CanvasRenderingContext2D, t: number): void {
   c.fillStyle = '#fff'; c.beginPath(); c.arc(bx, by, 2, 0, TAU); c.fill();
   c.fillStyle = 'rgba(0,0,0,.5)'; c.fillRect(2, 2, 34, 9); c.fillStyle = '#fff'; c.font = '700 8px sans-serif'; c.fillText('MYA 1-0', 4, 9);
 }
+// what you ordered at the teashop, set out on your table on the side where you sit
+let teaDishes: THREE.Group | null = null, teaKey = '';
+function dishFor(id: string, g: THREE.Group, x: number, z: number): void {
+  const Y = 0.53, white = lam('#f6f2ea');
+  const cup = (col: string) => { disc(0.07, white, g, x, Y, z); cyl(0.045, 0.036, 0.1, lam('#e8f0f4', { transparent: true, opacity: 0.55, k: 'glass' }), g, x, Y + 0.05, z, 10); cyl(0.042, 0.034, 0.075, lam(col), g, x, Y + 0.04, z, 10); };
+  const plate = () => add(new THREE.Mesh(plateGeo, white), g, x, Y + 0.005, z).scale.set(0.6, 1, 0.6);
+  if (id === 'yaynway') { sphere(0.07, lam('#c8ccd8'), g, x, Y + 0.07, z, 10).scale.y = 0.85; cyl(0.03, 0.025, 0.05, lam('#f2f2f2'), g, x + 0.12, Y + 0.025, z, 8); return; }
+  if (id === 'kopi') { cup('#5a3a20'); return; }
+  if (['pawkseint', 'choseint', 'kyaseint'].includes(id)) { cup(id === 'kyaseint' ? '#a8713a' : id === 'choseint' ? '#d9a86a' : '#c99258'); return; }
+  plate();
+  if (id === 'palata' || id === 'palata_egg') { const p = cyl(0.09, 0.09, 0.02, lam('#e8b65a'), g, x, Y + 0.025, z, 12); p.scale.z = 0.8; if (id === 'palata_egg') disc(0.035, lam('#ffd23a'), g, x, Y + 0.04, z); }
+  else if (id === 'nanbya') { const n = cyl(0.08, 0.08, 0.02, lam('#d8a868'), g, x - 0.02, Y + 0.025, z, 12); n.scale.x = 1.4; disc(0.04, lam('#8a9a3a'), g, x + 0.06, Y + 0.04, z); }
+  else if (id === 'ekyakway') { for (const d of [-0.025, 0.025]) { const s = cyl(0.016, 0.016, 0.17, lam('#d9952a'), g, x, Y + 0.03, z + d, 6); s.rotation.z = Math.PI / 2; } }
+  else if (id === 'samusa') { for (let k = 0; k < 3; k++) { const c = cone(0.04, 0.03, lam('#d9a040'), g, x - 0.05 + k * 0.05, Y + 0.035, z, 3); c.rotation.x = Math.PI / 2; } }
+  else if (id === 'paukzi') sphere(0.05, lam('#fbf7ee'), g, x, Y + 0.05, z, 10).scale.y = 0.8;
+  else if (id === 'nangyi') { add(new THREE.Mesh(bowlGeo, white), g, x, Y, z).scale.setScalar(0.45); disc(0.07, lam('#e0b040'), g, x, Y + 0.045, z); }
+}
+function updateTeaDishes(f: Frame): void {
+  const key = f.tea ? f.tea.table + ':' + f.tea.items.join(',') : '';
+  if (key === teaKey) return; teaKey = key;
+  if (teaDishes) { teaDishes.removeFromParent(); teaDishes = null; }
+  if (!f.tea) return;
+  const [tx, ty] = TEA_TABS[f.tea.table], [sx, sy] = teaStools(f.tea.table)[f.tea.seat];
+  const ux = (sx - tx) / 17, uy = (sy - ty) / 17; // toward your stool
+  teaDishes = add(new THREE.Group(), scene); const items = f.tea.items.slice(-8);
+  items.forEach((id, k) => { const side = (k - (items.length - 1) / 2) * 0.17, near = 0.17 + (k % 2) * 0.04;
+    dishFor(id, teaDishes!, X(tx) + ux * near - uy * side, Z(ty) + uy * near + ux * side); });
+}
 function updateTeashop(t: number): void {
   if (!teaAnim.tv) return;
   if (t - teaAnim.tvT > 0.12) { teaAnim.tvT = t; const c = (teaAnim.tv.image as HTMLCanvasElement).getContext('2d')!; drawPitch(c, t); teaAnim.tv.needsUpdate = true; }
@@ -1654,7 +1734,7 @@ function updateFountains(dt: number): void {
 
 export function build3d(): void {
   buildSkyAndCity(); buildGround(); buildTrees(); buildLanterns(); buildFerris(); buildCarousel(); buildPirate();
-  buildFood(); buildBooths(); buildKids(); buildStage(); buildFinaleAndGate(); buildSecrets(); buildWishPlace(); buildMidway(); buildCandles(); buildTeashop();
+  buildFood(); buildBooths(); buildKids(); buildStage(); buildFinaleAndGate(); buildSecrets(); buildWishPlace(); buildMidway(); buildCandles(); buildTeashop(); buildRestrooms(); buildQueueRopes();
   glowPts = makeGlows(GLOWS, 1.1); scene.add(glowPts);
   buildDust(); buildSkyLanterns();
   crowd = new Crowd(400);
@@ -1688,8 +1768,43 @@ export interface Frame {
   sparkle: number[]; // 0..1 per secret
   look?: { yaw: number; pitch: number };   // where you've turned your head on a ride
   bumpers: Array<{ x: number; y: number; hd: number; hit: number }>;
+  bumperPov?: boolean; // driving a bumper car: true looks out of your own eyes, false follows behind your car
   shake: number;
   steamFrom: Array<[number, number]>;
+  tea?: { table: number; seat: number; items: string[] };
+}
+
+// ---------------------------------------------------------------- public restrooms (အိမ်သာ) and queue ropes
+function buildRestrooms(): void {
+  RESTROOMS.forEach((r, i) => {
+    const g = add(new THREE.Group(), scene, X(r.x), 0, Z(r.y));
+    box(5.0, 2.7, 2.8, lam('#e8e0cc'), g, 0, 1.35, 0);
+    box(5.04, 0.5, 2.84, lam('#7a8a9a'), g, 0, 0.25, 0);
+    box(5.5, 0.14, 3.3, lam('#9aa2aa'), g, 0, 2.78, 0.1);
+    cyl(0.45, 0.45, 0.8, lam('#2a4a8a'), g, 1.6, 3.25, -0.6, 14); // the water tank on the roof
+    for (const [dx, col, my, en] of [[-1.15, '#2d6bb6', 'အမျိုးသား', 'Men'], [1.15, '#c25a7a', 'အမျိုးသမီး', 'Women']] as Array<[number, string, string, string]>) {
+      box(0.95, 2.0, 0.08, lam(col), g, dx, 1.0, 1.42);
+      board(signTex(my, en, col, 256, 110), 0.9, 0.38, g, dx, 2.3, 1.45);
+    }
+    board(signTex('အိမ်သာ', 'Restroom · 100 Ks', '#2a1606', 384, 120), 2.2, 0.68, g, 0, 3.3, 1.5);
+    box(0.7, 0.75, 0.45, lam('#c8ccd0'), g, 2.85, 0.4, 1.0); cyl(0.02, 0.02, 0.2, lam('#b8bcc4'), g, 2.85, 0.88, 0.9, 6); // a sink and tap outside
+    box(0.6, 0.6, 0.45, lam('#8a5a32'), g, -2.95, 0.3, 1.25); // the attendant's little table, with a tin for the coins
+    cyl(0.07, 0.07, 0.1, lam('#c8b070'), g, -2.95, 0.65, 1.25, 8);
+    const att = buildPerson({ shirt: pick(['#f3efe6', '#9fd3f0']), lon: pick(['#6b2335', '#2f5d50']), skin: '#a8714a', s: 0.85, bun: i % 2 === 0 });
+    att.g.position.set(-2.95, 0.05, 1.75); att.g.rotation.y = Math.PI; animatePerson(att, i, false, false, true); g.add(att.g);
+    GLOWS.push([X(r.x), 2.6, Z(r.y) + 1.5, '#fff6dc', 0.9]);
+  });
+}
+function buildQueueRopes(): void {
+  const post = lam('#c9a032'), rope = new THREE.LineBasicMaterial({ color: '#b8323a' });
+  QUEUES.forEach(q => {
+    const len = (q.n + 1) * QUEUE_GAP, ox = -q.dy * 16, oy = q.dx * 16;
+    for (const sd of [-1, 1]) {
+      const pts: THREE.Vector3[] = [];
+      for (let d = 0; d <= len; d += 40) { const x = q.x + q.dx * d + ox * sd, y = q.y + q.dy * d + oy * sd; cyl(0.04, 0.06, 0.95, post, scene, X(x), 0.47, Z(y), 6); pts.push(new THREE.Vector3(X(x), 0.85, Z(y))); }
+      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), rope));
+    }
+  });
 }
 
 // the sky through the day: [hour, sky overhead, sky at the horizon]
@@ -1857,7 +1972,11 @@ export function render3d(f: Frame): { atTop: boolean } {
   if (seat) { player.g.position.set(0, f.ride === 'ferris' ? -2.05 : f.ride === 'carousel' ? -0.55 : f.ride === 'handwheel' || f.ride === 'swinger' ? -0.35 : 0, 0); player.g.rotation.y = 0; animatePerson(player, t, false, f.me.wave || f.ride === 'pirate' && arms, true); }
   else if (f.me.sit) { player.g.position.set(X(f.me.x), -0.5, Z(f.me.y)); player.g.rotation.y = f.me.hd; animatePerson(player, t, false, f.me.wave, true); player.body.rotation.x = Math.sin(t * 0.7) * 0.04; }
   else { player.g.position.set(X(f.me.x), 0, Z(f.me.y)); player.g.rotation.y = f.me.hd; if (f.me.dance && !f.me.moving) animateDancer(player, t, 1); else if (animatePerson(player, t, f.me.moving, f.me.wave, false, dt, f.me.spd ?? 1) && !f.me.hidden) kickDust(player, f.me.spd ?? 1); }
-  player.g.visible = (!f.me.hidden || !!seat) && !POV[f.ride as string];
+  const chase = f.ride === 'bumper' && !f.bumperPov;
+  if (f.ride === 'bumper') player.g.position.y = -0.2;
+  if (mid.car3Driver) mid.car3Driver.visible = f.ride !== 'bumper';
+  if (mid.cars[3]) mid.cars[3].pole.visible = !chase; // the camera sits right behind your own car's pole
+  player.g.visible = (!f.me.hidden || !!seat) && (!POV[f.ride as string] || chase);
   if (f.ride === 'finale') { player.g.position.set(X(FV.x) - 1.6, 0.6, Z(FV.y) - 1.2); player.g.rotation.y = Math.PI; }
   setBalloon(player, f.me.balloon);
 
@@ -1874,8 +1993,14 @@ export function render3d(f: Frame): { atTop: boolean } {
   let atTop = false;
   scene.updateMatrixWorld();
   let wantUp = UP;
-  const pov = POV[f.ride as string];
-  if (seat && pov) {
+  const pov = chase ? undefined : POV[f.ride as string];
+  if (seat && chase) {
+    // behind your own bumper car, high enough to see over it; drag to swing round it
+    seat.getWorldPosition(tmpV);
+    const hd = (f.bumpers[3]?.hd ?? 0) + (f.look?.yaw ?? 0), lp = clamp(f.look?.pitch ?? 0, -0.3, 0.6);
+    camPos.set(tmpV.x - Math.sin(hd) * 4.4, tmpV.y + 2.3 + lp * 3, tmpV.z - Math.cos(hd) * 4.4);
+    camTarget.set(tmpV.x + Math.sin(hd) * 2.5, tmpV.y + 0.5, tmpV.z + Math.cos(hd) * 2.5);
+  } else if (seat && pov) {
     // first person from your seat: the seat's own motion carries the view, and you can turn your head
     seat.getWorldPosition(tmpV); if (f.ride === 'ferris') atTop = tmpV.y > 17;
     seat.getWorldQuaternion(povQ);
@@ -1917,7 +2042,7 @@ export function render3d(f: Frame): { atTop: boolean } {
   if (fpArm.visible) fpArm.rotation.z = 0.5 + Math.sin(t * 12) * 0.35;
   const fov = (mode === 'finale' ? 66 : 55) + (mode === 'walk' ? clamp(((f.me.spd ?? 0) - 1.05) * 12, 0, 6) : 0);
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-dt * 4)); camera.updateProjectionMatrix(); }
-  updateDust(dt); updateSkyLanterns(t, dt, f.night); updateWishes(t, f.night); updatePond(t, dt); updateMidway(f, t, dt); updateFountains(dt); updateCandles(f, t); updateTeashop(t);
+  updateDust(dt); updateSkyLanterns(t, dt, f.night); updateWishes(t, f.night); updatePond(t, dt); updateMidway(f, t, dt); updateFountains(dt); updateCandles(f, t); updateTeashop(t); updateTeaDishes(f);
   for (const e of embers) e.emissiveIntensity = 0.8 + Math.sin(t * 5 + Math.sin(t * 13)) * 0.25;
   glowPts.material.size = 1.1 * (1 + 0.05 * Math.sin(t * 2.3));
   renderer.render(scene, camera);

@@ -1,0 +1,64 @@
+[
+  {
+    "v": "1.6.0", "date": "2026-10-30", "title": "Teashop waiters, restrooms and festival fireworks", "my": "လက်ဖက်ရည်ဆိုင်၊ အိမ်သာနဲ့ မီးပန်းပွဲ",
+    "notes": [
+      "Sit at the teashop, read the menu, chat with the waiter and order. Your tea and snacks arrive at your table.",
+      "Talk with every food seller on Food Street and at the pwe stalls, and buy from their menus.",
+      "Stalls have price boards in Myanmar, gas bottles and strings of bulbs.",
+      "The crowd talks about what is around them: the food, the rides, the stage and the pagoda.",
+      "Public restrooms (🚻) near the corners of the fair, on the map too.",
+      "Queues at the big wheel, the pirate ship and the bumper cars, and crowds watching the hand-turned wheel and the carousel.",
+      "Bumper cars: you sit in your own car with a camera behind you (C or the button switches to first person). Empty cars wait by the gate, and the cars no longer chase you when you just walk in.",
+      "More fireworks for Thadingyut and Tazaungdaing: lotus, star and golden rain shells, salvos across the lake, longer little shows and a longer finale.",
+      "Runs smoother on small and older phones: lighter graphics to start, and it steps down by itself if the fair starts to lag.",
+      "Version history and patch notes, here in the game."
+    ]
+  },
+  {
+    "v": "1.5.0", "date": "2026-10-28", "title": "Phones sideways and better maps", "my": "ဖုန်းကို အလျားလိုက်ကစားရန်နဲ့ မြေပုံအသစ်",
+    "notes": [
+      "Play with your phone sideways, with a compact layout and a turn-your-phone hint.",
+      "A sharp mini map sized to your screen.",
+      "A full map you can drag and zoom, with a Me button and a legend."
+    ]
+  },
+  {
+    "v": "1.4.1", "date": "2026-10-27", "title": "Live players fixed and update alerts", "my": "ကစားသူများ အချိန်နဲ့တပြေးညီ ပြင်ဆင်ချက်",
+    "notes": [
+      "Players on other devices now show up in the fair in real time.",
+      "The game tells you when a new version is ready, with a Refresh button."
+    ]
+  },
+  {
+    "v": "1.4.0", "date": "2026-10-27", "title": "Pwe rides, the mini train and day and night", "my": "ပွဲစီးစရာများ၊ ရထားလေးနဲ့ နေ့ည",
+    "notes": [
+      "Burmese pwe rides: the hand-turned wheel and the flying swing.",
+      "A mini train that runs its loop around the fair.",
+      "Drive your own bumper car.",
+      "Morning, afternoon, evening and night, with a time picker and live Yangon time.",
+      "A new HUD with your pwe ticket and tonight's journey."
+    ]
+  },
+  {
+    "v": "1.3.0", "date": "2026-10-27", "title": "Wishing Lake, teashop and candle festival", "my": "ဆုတောင်းကန်၊ လက်ဖက်ရည်ဆိုင်နဲ့ မီးထွန်းပွဲ",
+    "notes": [
+      "The crowd speaks Myanmar, and there is a big Wishing Lake with lanterns and candles.",
+      "First-person views on the rides.",
+      "A public fair where everyone online meets, Myanmar dance and music, the candle festival and the teashop."
+    ]
+  },
+  {
+    "v": "1.2.0", "date": "2026-10-27", "title": "The fair in 3D and Thadingyut wishes", "my": "၃D ပွဲတော်နဲ့ သီတင်းကျွတ် ဆုတောင်း",
+    "notes": [
+      "The whole fair rebuilt in 3D, with chat in Myanmar.",
+      "Thadingyut wishes saved for everyone to see.",
+      "Smoother walking and the KhitHaung font."
+    ]
+  },
+  {
+    "v": "1.0.0", "date": "2026-10-26", "title": "The first night", "my": "ပထမဆုံးည",
+    "notes": [
+      "Yay Kyaw Nights opens: Myanmar avatars, friend rooms and the fair map."
+    ]
+  }
+]

@@ -6,17 +6,21 @@ You dress up as a small icon person and walk through a crowd of families, vendor
 
 - ride the Ferris wheel, carousel, pirate ship, the hand-turned wooden wheel (လူအားချားရဟတ်) that young men spin by climbing its spokes, and the flying swing (ဒန်းလွှဲ), seen first person from your seat (drag to look around, Q to wave)
 - take the mini train (ရထားလေး), a little steam engine with open carriages, on a loop of the whole fair: board at the station by the Kids Corner, sit on the front bench behind the engine and roll past the pwe rides, the candle festival, the teashop and the Wishing Lake, with smoke, chuffs, rail clacks and the whistle. If the train is away when you buy a ticket, it hurries round to pick you up. Walk on the track and it toots and nudges you off
-- drive a bumper car (ကားတိုက်) yourself for a minute: W/S or the stick to go and reverse, A/D to steer, and score tickets for every car you ram. Or run from them on foot, or pay to dodge them for 30 seconds
+- drive a bumper car (ကားတိုက်) yourself for a minute: you sit in your own car with a camera behind it (C or the camera button switches to first person), W/S or the stick to go and reverse, A/D to steer, and score tickets for every car you ram. Empty cars wait in a row by the gate for the people queuing. Walking on the floor is safe; pay to dodge them for 30 seconds if you want them to chase you
 - buy banana fritters, mont lone yay paw or Shan tofu fritters at the bamboo pwe stalls
 - dance with the Myanmar classical dancers in front of the Live Music stage while the saing waing plays
 - light one of 1,000 oil lamps and offer flowers at the Candle Festival
-- sit down at a low table in the teashop with a laphet yay while the football plays on the TV
+- sit down at a low table in the teashop: the waiter comes over with free green tea, you order from the menu (tea, coffee, palata, nan bya, samusa and more), chat about the football or the best dish, and your order arrives at your table. Pay when you get up
+- talk with every food seller on Food Street and at the pwe stalls, order from their menus and hear what they say about their food
+- use the public restrooms (အိမ်သာ, 🚻) near the corners of the fair
+- join the queues at the big wheel, the pirate ship and the bumper cars, or watch with the crowds at the hand-turned wheel and the carousel
 - walk up to people in the crowd and talk to them in Burmese
 - play ring toss and balloon darts to win tickets, then trade them for prizes
 - buy mohinga, mont lin ma yar, shwe yin aye and other snacks with kyat
 - collect zone postcards, find six hidden secrets and take photos
 - play in the morning, afternoon, evening or night: tap the clock to pick a time of day, or follow live Myanmar time. The sky, sun, moon, clouds and lights change through the day
-- watch little fireworks shows over the lake from 7 PM (you are asked if you want to watch each time) and the big finale at 9:30 PM game time, with ground fountains along the lake
+- watch little fireworks shows over the lake from 7 PM (you are asked if you want to watch each time) and the big finale at 9:30 PM game time, with ground fountains along the lake. For Thadingyut and Tazaungdaing there are lotus, star and golden rain shells and salvos across the lake
+- see what changed: the title screen and Settings have the version history and patch notes (edit `src/changelog.json` with each release; the newest entry also names the update in the "new version" banner)
 - make a Thadingyut wish (ဆုတောင်း) at the wish stall at the south end of the Wishing Lake: send it up on a paper fire balloon (1,000 Ks) or float it on the lake as a candle lantern (500 Ks)
 
 ## Thadingyut wishes

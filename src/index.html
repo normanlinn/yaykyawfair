@@ -212,6 +212,19 @@ table.keys td{padding:3px 10px 3px 0;vertical-align:top}
 #title p{margin:0;color:var(--muted);font-size:15px;line-height:1.45;max-width:46ch}
 #title .cta{font-size:20px;padding:14px 28px;border-radius:999px;font-family:var(--display);font-weight:400;letter-spacing:.04em}
 #title small{color:var(--muted);font-size:12.5px}
+#verBtn{background:rgba(255,255,255,.06);border:1px solid rgba(244,182,63,.35);color:var(--muted);border-radius:999px;padding:5px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+#verBtn:hover,#verBtn:focus-visible{color:var(--gold);border-color:var(--gold)}
+#verBtn .new{background:var(--gold);color:#2a1606;border-radius:999px;padding:1px 7px;margin-right:6px;font-weight:700;font-size:11px}
+.vers{display:flex;flex-direction:column;gap:10px}
+.ver{border:1px solid rgba(244,182,63,.2);border-radius:12px;padding:10px 12px;background:rgba(255,255,255,.04)}
+.ver.cur{border-color:var(--gold);background:rgba(244,182,63,.08)}
+.ver summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.ver summary::-webkit-details-marker{display:none}
+.ver summary b{font-size:14.5px}
+.ver .vn{font-family:var(--display);color:var(--gold);font-size:14px}
+.ver .vd{color:var(--muted);font-size:12px}
+.ver .mm{font-family:var(--mm);color:var(--gold);font-size:13.5px;line-height:1.6;width:100%}
+.ver ul{margin:8px 0 2px;padding-left:18px;display:flex;flex-direction:column;gap:5px;font-size:13.5px;line-height:1.45}
 body.inplay .quest{display:none}
 @media (max-width:560px){#mini{width:112px;height:112px;bottom:calc(150px + env(safe-area-inset-bottom,0px));top:auto;border-radius:12px}#hud{max-width:calc(100vw - 120px)}#tools{max-width:150px}#tools kbd,#bCam,#bSound,#bAv,#bWave{display:none}#toasts{top:calc(268px + env(safe-area-inset-top,0px))}.journey li{min-width:52px;font-size:9.5px}.journey .jl small{display:none}.stat{padding:6px 9px 5px;gap:6px}.stat i{font-size:15px}.stat .lbl .mm{display:none}.stat b{font-size:15px}#goal{font-size:11.5px}}
 #tags .bub.wish{background:rgba(42,22,6,.78);color:#ffe7a3;border:1px solid rgba(255,179,71,.7);box-shadow:0 0 18px rgba(255,160,60,.45);font-size:14px}
@@ -291,6 +304,26 @@ button:active{transform:scale(.94)}
 .talk .tq button{display:flex;flex-direction:column;align-items:flex-start;padding:7px 11px;border-radius:12px;text-align:left}
 .talk .tq .mm{font-family:var(--mm);font-size:15px;line-height:1.6}
 .talk .tq small{color:var(--muted);font-size:11px}
+.talk .tq button.bye{border-color:var(--gold)}
+.talk .tmid:empty{display:none}
+.menu{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px;max-height:min(42vh,340px);overflow:auto;padding-right:2px}
+.menu .mh{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:6px 2px 0}
+.menu .mh .mm{letter-spacing:0;text-transform:none;color:var(--gold)}
+.menu .mi{box-sizing:border-box;display:flex;align-items:center;gap:10px;text-align:left;width:100%;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(244,182,63,.18);color:inherit;font:inherit}
+.menu button.mi{cursor:pointer}
+.menu button.mi:hover,.menu button.mi:focus-visible,.menu .mi.on{background:rgba(244,182,63,.14);border-color:var(--gold)}
+.menu .mn{flex:1;display:flex;flex-direction:column;min-width:0}
+.menu .mn b{font-size:14px}
+.menu .mn .mm{font-family:var(--mm);color:var(--gold);font-size:14px;line-height:1.6}
+.menu .mn small{color:var(--muted);font-size:11.5px;line-height:1.35}
+.menu .mp{flex:none;text-align:right;font-family:var(--display);color:var(--gold);font-size:14px;display:flex;flex-direction:column}
+.menu .mp .mm{font-family:var(--mm);font-size:11px;color:var(--muted)}
+.menu .qty{flex:none;display:flex;align-items:center;gap:6px}
+.menu .qty button{width:30px;height:30px;padding:0;border-radius:50%;font-size:16px}
+.menu .qty b{min-width:14px;text-align:center}
+.talk .bill{margin:0 0 8px}
+.talk .tmid>.cta{width:100%;margin-bottom:6px}
+@media (max-width:600px),(max-height:500px){.menu .mn small{display:none}.menu{max-height:34vh}.talk .tlog{max-height:150px}}
 /* title screen: drifting lanterns, twinkling stars, a shimmer on the name, everything rising in one by one */
 #title .tsky{position:absolute;inset:0;overflow:hidden;pointer-events:none}
 #title .tsky i{position:absolute;bottom:-60px;width:var(--s);height:calc(var(--s)*1.25);border-radius:45% 45% 40% 40%;background:radial-gradient(circle at 50% 60%,#fff3c4,var(--c) 45%,rgba(0,0,0,0) 72%);filter:drop-shadow(0 0 12px var(--c));opacity:0;animation:lantern var(--d) linear var(--w) infinite}
@@ -430,6 +463,7 @@ button:active{transform:scale(.94)}
     <div class="mmt">ရေကျော်ညများ</div>
     <p>The sun has set over the street fair. Lanterns are glowing, the carts are steaming and the fireworks start at 9:30 PM. Wander, ride, play and collect a night to remember.</p>
     <button class="cta" id="start">Enter the fair</button>
+    <button id="verBtn" type="button"></button>
     <small id="titleOnline" hidden></small>
     <small>Move with WASD or arrows, drag to look around, E or Space to interact, T to chat. On a phone, use the stick and the GO button.</small>
   </div>

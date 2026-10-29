@@ -10,7 +10,9 @@ import { execSync } from 'node:child_process';
 // which version this is: players with an older copy open are told an update is ready (see dist/version.json)
 const sh = (c) => { try { return execSync(c, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return ''; } };
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || sh('git rev-parse HEAD') || String(Date.now())).slice(0, 12);
-const NOTES = (process.env.VERCEL_GIT_COMMIT_MESSAGE || sh('git log -1 --format=%B')).split('\n')[0].slice(0, 160);
+// the newest entry of the in-game version history names the version and what it brings
+const LATEST = JSON.parse(fs.readFileSync('src/changelog.json', 'utf8'))[0];
+const NOTES = LATEST.title;
 
 const minify = process.argv.includes('--minify');
 const result = await esbuild.build({
@@ -31,7 +33,7 @@ fs.writeFileSync('dist/index.html', standalone);
 fs.mkdirSync('dist/about', { recursive: true });
 fs.writeFileSync('dist/about/index.html', seo.aboutPage);
 fs.writeFileSync('dist/robots.txt', seo.robots());
-fs.writeFileSync('dist/version.json', JSON.stringify({ v: BUILD, notes: NOTES }) + '\n');
+fs.writeFileSync('dist/version.json', JSON.stringify({ v: BUILD, ver: LATEST.v, notes: NOTES }) + '\n');
 fs.writeFileSync('dist/sitemap.xml', seo.sitemap());
 for (const f of fs.existsSync('public') ? fs.readdirSync('public') : []) fs.copyFileSync(path.join('public', f), path.join('dist', f));
 
