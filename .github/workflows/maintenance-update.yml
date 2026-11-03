@@ -1,0 +1,41 @@
+name: Prepare compatible dependency updates
+on:
+  push:
+    branches: [maintenance/repository-health]
+    paths: [.github/workflows/maintenance-update.yml]
+permissions:
+  contents: write
+concurrency:
+  group: dependency-maintenance
+  cancel-in-progress: false
+jobs:
+  update:
+    if: github.repository_owner == 'normanlinn'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: maintenance/repository-health
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '22'
+      - name: Update within supported ranges and validate
+        run: |
+          npm update --no-fund
+          npm audit fix --no-fund || echo 'Remaining advisories require manual review.'
+          npm run typecheck
+          npm run test
+          npm run build
+          npm audit --audit-level=high || echo 'Security audit still requires follow-up; see the separate audit check.'
+          git config user.name 'Zaw Lin Naing'
+          git config user.email 'mrzawlinnaing1001@gmail.com'
+          git add package.json package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update compatible dependencies after validation"
+            git push origin HEAD:maintenance/repository-health
+          fi
