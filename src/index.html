@@ -309,6 +309,20 @@ button:active{transform:scale(.94)}
 .menu{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px;max-height:min(42vh,340px);overflow:auto;padding-right:2px}
 .menu .mh{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:6px 2px 0}
 .menu .mh .mm{letter-spacing:0;text-transform:none;color:var(--gold)}
+.give{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 10px;font-size:13px;color:var(--muted)}
+.give>span{flex:1 1 100%}
+.give .mm{font-family:var(--mm);color:var(--gold)}
+.give button{flex:1;min-width:70px;padding:8px 10px;border-radius:10px;border:1px solid rgba(244,182,63,.35);background:rgba(244,182,63,.1);color:inherit;font:inherit;font-weight:700;cursor:pointer}
+.give button:hover,.give button:focus-visible{background:rgba(244,182,63,.22);border-color:var(--gold)}
+.weave .loom{position:relative;height:150px;border-radius:12px;background:linear-gradient(#3a2414,#2a1a10);border:1px solid rgba(244,182,63,.3);overflow:hidden;margin-bottom:10px}
+.weave .cloth{position:absolute;left:8%;right:8%;bottom:0;display:flex;flex-direction:column-reverse}
+.weave .cloth i{display:block;height:14px;border-top:1px solid rgba(255,255,255,.12)}
+.weave .track{position:absolute;left:6%;right:6%;top:26px;height:22px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12)}
+.weave .mark{position:absolute;top:-4px;bottom:-4px;width:15%;transform:translateX(-50%);background:rgba(244,182,63,.35);border:1px solid var(--gold);border-radius:8px}
+.weave .shuttle{position:absolute;top:2px;width:42px;height:16px;transform:translateX(-50%);border-radius:50%;background:linear-gradient(#e8c98a,#9a6a32);box-shadow:0 0 10px rgba(255,210,122,.6)}
+.weave .wstat{font-size:13px;color:var(--muted);margin-bottom:8px}
+.weave .wsay{margin-bottom:10px}
+.weave .wthrow{width:100%}
 .menu .mi{box-sizing:border-box;display:flex;align-items:center;gap:10px;text-align:left;width:100%;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(244,182,63,.18);color:inherit;font:inherit}
 .menu button.mi{cursor:pointer}
 .menu button.mi:hover,.menu button.mi:focus-visible,.menu .mi.on{background:rgba(244,182,63,.14);border-color:var(--gold)}

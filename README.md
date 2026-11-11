@@ -2,7 +2,7 @@
 
 A walkable 3D street-fair game inspired by Yangon's Yay Kyaw, written in TypeScript with Three.js.
 
-You dress up as a small icon person and walk through a crowd of families, vendors, bicycles and motorbikes. The fair has twelve zones: Ferris wheel, carousel, Food Street, pirate ship, game booths, Kids Corner, the music stage and photo booth, the Finale View, the Pwe Rides (ပွဲစီးစရာကွင်း), the Candle Festival (ဆီမီးထွန်းပွဲ), the Teashop (လက်ဖက်ရည်ဆိုင်) and the Wishing Lake (ဆုတောင်းကန်). Along the way you can:
+You dress up as a small icon person and walk through a crowd of families, vendors, bicycles and motorbikes. The fair has fourteen zones: Ferris wheel, carousel, Food Street, pirate ship, game booths, Kids Corner, the music stage and photo booth, the Finale View, the Pwe Rides (ပွဲစီးစရာကွင်း), the Candle Festival (ဆီမီးထွန်းပွဲ), the Teashop (လက်ဖက်ရည်ဆိုင်), the Wishing Lake (ဆုတောင်းကန်), the Nibbana Market (နိဗ္ဗာန်ဈေး) and the Tazaungdaing grounds (တန်ဆောင်တိုင်ပွဲ). Along the way you can:
 
 - ride the Ferris wheel, carousel, pirate ship, the hand-turned wooden wheel (လူအားချားရဟတ်) that young men spin by climbing its spokes, and the flying swing (ဒန်းလွှဲ), seen first person from your seat (drag to look around, Q to wave)
 - take the mini train (ရထားလေး), a little steam engine with open carriages, on a loop of the whole fair: board at the station by the Kids Corner, sit on the front bench behind the engine and roll past the pwe rides, the candle festival, the teashop and the Wishing Lake, with smoke, chuffs, rail clacks and the whistle. If the train is away when you buy a ticket, it hurries round to pick you up. Walk on the track and it toots and nudges you off
@@ -21,6 +21,8 @@ You dress up as a small icon person and walk through a crowd of families, vendor
 - play in the morning, afternoon, evening or night: tap the clock to pick a time of day, or follow live Myanmar time. The sky, sun, moon, clouds and lights change through the day
 - watch little fireworks shows over the lake from 7 PM (you are asked if you want to watch each time) and the big finale at 9:30 PM game time, with ground fountains along the lake. For Thadingyut and Tazaungdaing there are lotus, star and golden rain shells and salvos across the lake
 - see what changed: the title screen and Settings have the version history and patch notes (edit `src/changelog.json` with each release; the newest entry also names the update in the "new version" banner)
+- visit the Nibbana market (နိဗ္ဗာန်ဈေး), the Tazaungdaing free-giving market east of the Wishing Lake: nothing is sold, and families give away mohinga, tea, mezali flower salad, dan bauk, fruit, cold water, thanaka and jasmine. Talk with each donor, add to their offering and say sadhu to earn merit (ကုသိုလ်). Queue for the free mohinga, and let Grandma Daw Thein draw thanaka on your cheeks
+- on the Tazaungdaing grounds, help the weavers finish the matho thingan (မသိုးသင်္ကန်း) robe before dawn with a shuttle-timing game, hang a note on the padaythabin (ပဒေသာပင်) money tree, and join a chinlone (ခြင်းလုံး) circle: press E or GO as the cane ball drops to your foot
 - make a Thadingyut wish (ဆုတောင်း) at the wish stall at the south end of the Wishing Lake: send it up on a paper fire balloon (1,000 Ks) or float it on the lake as a candle lantern (500 Ks)
 
 ## Thadingyut wishes

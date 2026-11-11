@@ -7,7 +7,7 @@ const text = (v: unknown, max: number) => typeof v === 'string' ? v.replace(/[\u
 // when they leave, the others race to take it over. A full fair spills into the next one.
 const PUBLIC = (n: number) => `ykn-public-fair-v1-${n}`;
 const SHARDS = 4, PUBLIC_MAX = 12, ROOM_MAX = 8;
-const WW = 3900, WH = 2600;
+const WW = 4700, WH = 2600;
 // STUN finds a direct route between browsers; TURN relays the data when two networks (for example mobile data and home
 // wi-fi) can't reach each other directly. These are free public servers.
 const OPTS = { debug: 1, config: { iceServers: [

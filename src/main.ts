@@ -7,9 +7,11 @@ import { CROWD_LINES, VENDOR_CALLS, REPLIES, VOICE_CLIPS } from './voices';
 import {
   WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, STATION, TRAIN_STOP, TRAIN_OFF, TRACK_LEN, ST, FV, PHOTO, TOYS_AT, UNCLE, ARCH_Y, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
   STALLFRONTS, VENDOR_POSTS, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, RESTROOMS, QUEUES, QUEUE_GAP, WATCHERS, M, blocked, trackPos,
+  NIB_STALLS, nibFront, NIB_GATE, LOOMS, MONEY_TREE, CHINLONE, ROBE_STRIPS,
 } from './layout';
 import { friends } from './friends';
 import CHANGES from './changelog.json';
+import { GIVINGS, Giving, DONATE_SAY, SADHU, THANKS, BYE_ME, BYE_THEM, WEAVE_LINES } from './nibbana';
 import { SHOPS, PWE_SHOPS, TEA_MENU, WAITER, LOCAL_LINES, Shop, Line, MenuItem, kyatMy, countMy } from './shops';
 import { openWishes, Wish, WishKind, WISH_PRICE, WISH_IDEAS, WISH_MAX_LEN, cleanWish } from './wishes';
 import { init3d, build3d, resize3d, render3d, launchFirework, fountain, renderPreview, capture, project, rigKey, setWishes, wishSpot, BUMPER_N, CANDLE_MINE, CrowdItem, Frame, Look, RideKind } from './world3d';
@@ -34,6 +36,7 @@ interface GameState {
   zones: string[]; secrets: string[]; snacks: string[]; toys: string[]; prizes: string[]; photos: string[];
   rides: number; games: number; ticketsWon: number; finaleSeen: boolean; showStarted: boolean; showDone: boolean; summaryShown: boolean;
   balloon: string | null; fan: boolean; uncleAt: number; showT: number; paused: boolean; photo: boolean;
+  merit: number; given: string[]; flowersFree: number;
   settings: Settings;
 }
 const S: GameState = {
@@ -41,7 +44,7 @@ const S: GameState = {
   mode:'title', kyat:15000, tix:0, clock:17*60,
   zones:[], secrets:[], snacks:[], toys:[], prizes:[], photos:[],
   rides:0, games:0, ticketsWon:0, finaleSeen:false, showStarted:false, showDone:false, summaryShown:false,
-  balloon:null, fan:false, uncleAt:-999,
+  balloon:null, fan:false, uncleAt:-999, merit:0, given:[], flowersFree:0,
   settings:{density:'med', gfx:'high', cam:'close', sound:true, mini:true, av:{...DEFAULT_AVATAR}, name:'', avDone:false}
 };
 let savedSettings=false;
@@ -88,9 +91,13 @@ IT.push({x:BUMPER.x+BUMPER.w/2,y:BUMPER.y+BUMPER.h+40,r:60,label:()=>`Drive a bu
 PWE_FOOD.forEach((f,i)=>IT.push({x:f.x,y:f.y+40,r:50,label:()=>`Talk to ${PWE_SHOPS[i].who.split(',')[0]} · ${f.name} · ${f.my}`,act:()=>openShop(PWE_SHOPS[i])}));
 IT.push({x:ST.x,y:ST.y+130,r:95,label:()=>P.dance?'Stop dancing':'Dance with the dancers · ကခုန်မယ်',act:toggleDance});
 IT.push({x:CANDLE.x,y:CANDLE.y+CANDLE.R+30,r:70,label:()=>CAND.mine>=CANDLE_MINE?'Every lamp here is lit. Thank you!':`Light an oil lamp · ဆီမီးထွန်းမယ် · ${ks(200)}`,act:lightLamp});
-IT.push({x:CANDLE.x-CANDLE.R-30,y:CANDLE.y,r:70,label:()=>`Offer flowers · ပန်းကပ်မယ် · ${ks(300)}`,act:offerFlowers});
+IT.push({x:CANDLE.x-CANDLE.R-30,y:CANDLE.y,r:70,label:()=>S.flowersFree>0?'Offer the jasmine from the Nibbana market · ပန်းကပ်မယ်':`Offer flowers · ပန်းကပ်မယ် · ${ks(300)}`,act:offerFlowers});
 IT.push({x:TEA.x-120,y:TEA.y+60,r:60,label:()=>'Tea to take away at the counter · လက်ဖက်ရည် အိတ်နဲ့',act:()=>openShop(TEA_COUNTER)});
 RESTROOMS.forEach(r=>IT.push({x:r.x,y:r.y+52,r:50,label:()=>`Use the restroom · အိမ်သာ · ${ks(100)}`,act:useRestroom}));
+GIVINGS.forEach((g,i)=>{ const [x,y]=nibFront(i); IT.push({x,y,r:55,label:()=>`${g.banner[1]} from ${g.who} · ${g.banner[0]} · free`,act:()=>i===0?joinQueue('nib_mohinga',0,()=>openGiving(0)):openGiving(i)}); });
+IT.push({x:MONEY_TREE.x,y:MONEY_TREE.y+60,r:55,label:()=>`Hang a note on the money tree · ပဒေသာပင် · ${ks(1000)}`,act:hangNote});
+IT.push({x:LOOMS.x,y:LOOMS.y+70,r:70,label:()=>`Help weave the monk’s robe · မသိုးသင်္ကန်း ရက်ကူမယ် (${robePct()}% woven)`,act:openWeave});
+IT.push({x:CHINLONE.x,y:CHINLONE.y+CHINLONE.R+34,r:50,label:()=>'Join the chinlone circle · ခြင်းလုံး ခတ်မယ်',act:joinChin});
 TEA_TABS.forEach((_,i)=>{ const [x,y]=teaStools(i)[teaFree(i)];
   const ox=TEA_TABS[i][0]+(x-TEA_TABS[i][0])/17*46, oy=TEA_TABS[i][1]+(y-TEA_TABS[i][1])/17*46;
   IT.push({x:ox,y:oy,r:34,label:()=>P.sit&&P.table===i?(TEAO.state==='atTable'?'Talk to the waiter · ညီလေး':TEAO.state==='idle'?'Call the waiter · ညီလေး':'The waiter is on the way…'):'Sit down at this table · ထိုင်မယ်',act:()=>P.sit&&P.table===i?callWaiter():sitAt(i)}); });
@@ -132,18 +139,18 @@ function qSlot(qi: number, k: number): [number, number] { const q=QUEUES[qi], j=
 /** Every few seconds the person at the front goes in, everyone steps up, and somebody nearby joins the back. */
 // You queue too: tap a ride with a line and you walk to the back of it, shuffle up as people go in, and ride when it's your turn.
 const PQ={qi:-1,k:0,price:0,name:'',go:null as null|(()=>void),shown:''};
-const QNAME: Record<string,string>={ferris:'the Ferris wheel',pirate:'the pirate ship',bumper:'the bumper cars'};
+const QNAME: Record<string,string>={ferris:'the Ferris wheel',pirate:'the pirate ship',bumper:'the bumper cars',nib_mohinga:'free mohinga'};
 function joinQueue(ride: string, price: number, go: () => void): void {
   const qi=QUEUES.findIndex(q=>q.ride===ride); if(qi<0){ if(pay(price)) go(); return; }
   if(PQ.qi>=0) return; if(!pay(price)) return;
   PQ.qi=qi; PQ.k=NPC.filter(n=>n.q===qi).length; PQ.price=price; PQ.name=QNAME[ride]||'the ride'; PQ.go=go; PQ.shown='';
   P.sit&&standUp(); P.dance=false; QT[qi]=Math.min(QT[qi],rand(3,5));
-  toast(`Ticket bought. You join the back of the line for ${PQ.name}. <span class="mm">တန်းစီပါ</span>`);
+  toast(price?`Ticket bought. You join the back of the line for ${PQ.name}. <span class="mm">တန်းစီပါ</span>`:`You join the back of the line for ${PQ.name}. <span class="mm">တန်းစီပါ</span>`);
 }
 function leaveQueue(refund: boolean): void {
   if(PQ.qi<0) return; const qi=PQ.qi; PQ.qi=-1; PQ.go=null; $('prompt').hidden=true; lastIT=null;
   for(const n of NPC) if(n.q===qi&&n.qk!>PQ.k) n.qk!--; // close the gap you leave
-  if(refund){ S.kyat+=PQ.price; updateHUD(); toast(`You stepped out of the line. Your ${ks(PQ.price)} is refunded.`); }
+  if(refund&&PQ.price){ S.kyat+=PQ.price; updateHUD(); toast(`You stepped out of the line. Your ${ks(PQ.price)} is refunded.`); }
 }
 /** Every few seconds whoever is at the front goes in, everyone steps up, and somebody nearby joins the back. */
 function updateQueues(dt: number): void {
@@ -917,7 +924,7 @@ function lightLamp(): void {
 }
 function offerFlowers(): void {
   if(CAND.flowers>=FLOWER_N){ toast('The flower cups are all full. A thousand flowers!'); return; }
-  if(!pay(300)) return;
+  if(S.flowersFree>0){ S.flowersFree--; S.merit++; } else if(!pay(300)) return;
   CAND.flowers=Math.min(FLOWER_N,CAND.flowers+5); sfx('ding');
   toast(`<span class="z">ပန်းကပ်လှူ</span>You lay jasmine, marigolds and roses in the cups. ${CAND.flowers.toLocaleString('en-US')} of ${FLOWER_N.toLocaleString('en-US')} flowers offered tonight.`,true);
 }
@@ -989,6 +996,148 @@ function openShop(shop: Shop, keeper?: Npc): void {
   shop.topics.forEach(t=>optBtn(c,t.q,()=>{ if(busy) return; c.say(t.q,true); reply(t.a); }));
   optBtn(c,['ကျေးဇူးတင်ပါတယ်','Thank you, bye!'],()=>{ if(busy) return; c.say(['ကျေးဇူးတင်ပါတယ်','Thank you, bye!'],true); reply(shop.bye,()=>setTimeout(closeModal,900)); },'bye');
   openModal(`${shop.who.split(',')[0]} · ${shop.whoMy}`,c.wrap);
+}
+
+// ---------- the Tazaungdaing side: the Nibbana market, the robe weavers, the money tree and the chinlone circle ----------
+function merit(n: number, why: string): void {
+  S.merit+=n; sfx('ding');
+  toast(`<span class="z">သာဓု သာဓု သာဓု</span>${why} <b>+${n} merit</b> <span class="mm">ကုသိုလ်</span> (${S.merit})`,true);
+}
+/** The donor standing behind stall i: whichever posted person is closest. */
+function donorAt(i: number): Npc | undefined {
+  const s=NIB_STALLS[i]; let best: Npc | undefined, bd=1e9;
+  for(const n of NPC) if(n.post){ const d=Math.hypot(n.x-s.x,n.y-s.y); if(d<bd){ bd=d; best=n; } }
+  return bd<60?best:undefined;
+}
+function openGiving(i: number): void {
+  const g: Giving=GIVINGS[i], keeper=donorAt(i);
+  if(keeper){ keeper.hd=Math.atan2(P.x-keeper.x,P.y-keeper.y); P.hd=Math.atan2(keeper.x-P.x,keeper.y-P.y); }
+  const c=chatBox('Take, give or ask:'); let busy=false;
+  const reply=(l: Line, then?: () => void, ms=750)=>{ busy=true; setTimeout(()=>{ c.say(l,false); sfx('chat'); if(keeper) NPC_SAY.push({n:keeper,t:l,until:T+4}); busy=false; then?.(); },ms); };
+  g.hello.forEach((l,k)=>setTimeout(()=>c.say(l,false),k*500));
+  const menu=document.createElement('div'); menu.className='menu';
+  g.gifts.forEach(it=>{ const r=document.createElement('button'); r.type='button'; r.className='mi';
+    r.innerHTML=`<span class="mn"><b>${esc(it.name)}</b><span class="mm">${it.my}</span><small>${esc(it.d)}</small></span><span class="mp">Free<small class="mm">အခမဲ့</small></span>`;
+    r.onclick=()=>take(it); menu.appendChild(r); });
+  c.mid.appendChild(menu);
+  const give=document.createElement('div'); give.className='give';
+  give.innerHTML='<span>Add to their offering <span class="mm">အလှူငွေ ထည့်မယ်</span></span>';
+  [500,1000,5000].forEach(n=>{ const b=document.createElement('button'); b.type='button'; b.textContent=ks(n); b.onclick=()=>donate(n); give.appendChild(b); });
+  c.mid.appendChild(give);
+  function take(it: MenuItem): void {
+    if(busy) return; c.say(it.ask,true);
+    const again=S.given.includes(it.id);
+    reply(again?['ထပ်ယူပါ ထပ်ယူပါ၊ အများကြီး ရှိသေးတယ်','Take another, there’s plenty left!']:it.serve,()=>{
+      if(!again) S.given.push(it.id);
+      if(it.id==='thanaka'){ S.settings.av={...S.settings.av,thanaka:true}; saveSettings(); sfx('ding'); toast('<span class="z">သနပ်ခါး</span>Grandma draws cool, fragrant thanaka on your cheeks. Everyone can see it now.',true); }
+      else if(it.id==='nib_flowers'){ S.flowersFree++; toast('<b>Jasmine and a candle</b><br>Offer them at the Candle Festival stupa, west of the Wishing Lake.'); }
+      else tasted(it);
+      setTimeout(()=>{ c.say(SADHU,true); },700);
+    },900);
+  }
+  function donate(n: number): void {
+    if(busy) return; if(S.kyat<n){ toast(`Not enough kyat. You have ${ks(S.kyat)}.`); sfx('miss'); return; }
+    c.say(DONATE_SAY[0],true); pay(n);
+    reply(THANKS,()=>{ c.say(SADHU,true); merit(Math.max(1,Math.round(n/500)),`You add ${ks(n)} to ${g.who}’s offering.`); });
+  }
+  g.topics.forEach(t=>optBtn(c,t.q,()=>{ if(busy) return; c.say(t.q,true); reply(t.a); }));
+  optBtn(c,BYE_ME,()=>{ if(busy) return; c.say(BYE_ME,true); reply(pick(BYE_THEM),()=>setTimeout(closeModal,900)); },'bye');
+  openModal(`${g.who} · ${g.whoMy}`,c.wrap);
+}
+
+// the padaythabin: a tree of kathina offerings that fills with notes through the night
+const MT={notes:42,t:4};
+function hangNote(): void {
+  if(!pay(1000)) return; MT.notes++;
+  merit(2,'You fold a 1,000 kyat note into a little fan and tie it to the padaythabin. It will be offered to the monastery with the robes.');
+}
+// the matho thingan robe: the weaving teams work all night, and you can help with a few strips
+const ROBE={mine:0,strips:0,myUntil:0,said:false};
+function nightMins(): number { return S.clock<6*60?S.clock+1440:S.clock; }
+function robePct(): number { return Math.round(ROBE.strips/ROBE_STRIPS*100); }
+function updateTazaung(dt: number): void {
+  MT.t-=dt; if(MT.t<=0){ MT.t=rand(6,12); if(MT.notes<160) MT.notes++; }
+  const base=clamp((nightMins()-18*60)/(10*60),0,1)*(ROBE_STRIPS-4);
+  ROBE.strips=Math.min(ROBE_STRIPS,base+ROBE.mine);
+  if(ROBE.strips>=ROBE_STRIPS&&!ROBE.said&&S.mode==='walk'&&Math.hypot(P.x-LOOMS.x,P.y-LOOMS.y)<600){ ROBE.said=true; toast('<span class="z">မသိုးသင်္ကန်း ပြီးပြီ</span>The robe is finished! The weavers fold it to offer at dawn. Sadhu!',true); }
+}
+function openWeave(): void {
+  if(ROBE.strips>=ROBE_STRIPS){ toast('The robe is finished and folded for the dawn offering. Sadhu!'); return; }
+  const w=document.createElement('div'); w.className='talk weave';
+  w.innerHTML=`<p class="muted" style="margin:0 0 8px">The matho thingan robe must be woven in one night and offered to the monks at dawn. Throw the shuttle when it reaches the gold mark. Six rows make a strip.</p>
+    <div class="loom"><div class="cloth"></div><div class="track"><i class="mark"></i><b class="shuttle"></b></div></div>
+    <div class="wstat"></div><div class="tl wsay"></div><button type="button" class="cta wthrow">Throw the shuttle · လွန်းပစ်မယ် <kbd>E</kbd></button>`;
+  const cloth=w.querySelector('.cloth') as HTMLElement, sh=w.querySelector('.shuttle') as HTMLElement, mark=w.querySelector('.mark') as HTMLElement;
+  const stat=w.querySelector('.wstat') as HTMLElement, sayEl=w.querySelector('.wsay') as HTMLElement;
+  let u=0, dir=1, rows=0, last=performance.now(), speed=.55, tries=0;
+  const say=(l: Line)=>{ sayEl.innerHTML=`<span class="mm">${esc(l[0])}</span><small>${esc(l[1])}</small>`; };
+  const show=()=>{ stat.innerHTML=`Your rows <b>${rows}/6</b> · strips you wove <b>${ROBE.mine}</b> · the robe is <b>${robePct()}%</b> woven`; mark.style.left=(dir>0?88:12)+'%'; };
+  say(pick(WEAVE_LINES.slice(0,3))); show();
+  const loop=(now: number)=>{ if(!w.isConnected) return; const dt=Math.min(.05,(now-last)/1000); last=now;
+    u+=dir*speed*dt; if(u>1){ u=1; dir=-1; show(); } if(u<0){ u=0; dir=1; show(); }
+    sh.style.left=(u*100)+'%'; requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+  const thr=()=>{ const target=dir>0?.88:.12; tries++;
+    if(Math.abs(u-target)<.08){ rows++; sfx('clack'); const r=document.createElement('i'); r.style.background=rows%2?'#c8641e':'#a8461a'; cloth.appendChild(r);
+      ROBE.myUntil=T+3; dir=-dir; speed=Math.min(.95,speed+.04);
+      if(rows>=6){ rows=0; ROBE.mine++; cloth.innerHTML=''; say(WEAVE_LINES[3]); merit(1,'You wove a strip of the monk’s robe with the weavers.'); }
+    } else { sfx('miss'); say(pick(WEAVE_LINES.slice(0,3))); }
+    show(); };
+  (w.querySelector('.wthrow') as HTMLElement).onclick=thr;
+  const key=(e: KeyboardEvent)=>{ if(!w.isConnected){ window.removeEventListener('keydown',key,true); return; }
+    if(e.code==='KeyE'||e.code==='Space'||e.code==='Enter'){ e.preventDefault(); e.stopImmediatePropagation(); if(!e.repeat) thr(); } };
+  window.addEventListener('keydown',key,true);
+  openModal('Weave the robe · မသိုးသင်္ကန်း',w,()=>window.removeEventListener('keydown',key,true));
+}
+
+// chinlone (ခြင်းလုံး): a ring of players keeps a cane ball up, passing it round with their feet. Join and kick it when it drops to you.
+const CHIN={on:false,shown:'',ph:'keep' as 'pass'|'keep'|'drop',from:1,to:1,u:0,dur:1,t:0,keep:2,drop:0,hit:false,streak:0,best:0,
+  ball:[CHINLONE.x,CHINLONE.y,.5] as [number,number,number],kicker:-1};
+function chinSlot(i: number): [number, number] { const a=i/CHINLONE.n*TAU; return [CHINLONE.x+Math.sin(a)*CHINLONE.R,CHINLONE.y+Math.cos(a)*CHINLONE.R]; }
+function chinPass(): void {
+  const h=CHIN.to; let to=h; while(to===h) to=CHIN.on&&Math.random()<.4?0:Math.floor(rand(0,CHINLONE.n));
+  CHIN.ph='pass'; CHIN.from=h; CHIN.to=to; CHIN.u=0; CHIN.dur=rand(.95,1.25); CHIN.hit=false;
+}
+function updateChin(dt: number): void {
+  const C=CHIN;
+  if(C.ph==='drop'){ C.drop-=dt; C.kicker=-1; C.ball[2]=Math.max(.08,C.ball[2]-dt*4); if(C.drop<=0){ C.to=1+Math.floor(rand(0,CHINLONE.n-1)); C.ph='keep'; C.keep=2; C.t=0; } return; }
+  if(C.ph==='pass'){
+    C.u+=dt/C.dur; const [ax,ay]=chinSlot(C.from), [bx,by]=chinSlot(C.to), u=C.u;
+    C.ball=[lerp(ax,bx,u),lerp(ay,by,u),.45+2.6*Math.sin(Math.PI*Math.min(u,1))-(u>1?(u-1)*6:0)];
+    C.kicker=u<.2?C.from:-1;
+    const mine=C.to===0&&C.on;
+    if(mine&&!C.hit&&u>1.3){ C.ph='drop'; C.drop=1.6; C.streak=0; sfx('miss'); toast('ဟာ… The ball drops past your foot. Someone scoops it up and the circle starts again.'); return; }
+    if((!mine&&u>=1)||(mine&&C.hit)){ C.ph='keep'; C.keep=mine?1:1+Math.floor(rand(0,3)); C.t=0; }
+    return;
+  }
+  // keep: the holder taps it up a few times before passing
+  C.t+=dt/.55; const [hx,hy]=chinSlot(C.to), k=.18;
+  C.ball=[lerp(hx,CHINLONE.x,k),lerp(hy,CHINLONE.y,k),.4+1.3*Math.sin(Math.PI*Math.min(C.t,1))];
+  C.kicker=C.t<.3?C.to:-1;
+  if(C.t>=1){ C.keep--; C.t=0; if(C.keep<=0) chinPass(); }
+}
+function chinKick(): void {
+  const C=CHIN; if(C.ph!=='pass'||C.to!==0||C.hit) return;
+  if(C.u<.7) return; // too early: wait for it
+  C.hit=true; C.streak++; C.best=Math.max(C.best,C.streak); sfx('clack');
+  if(C.streak%5===0){ toast(`<span class="z">ခြင်း ${C.streak} ချက်!</span>${C.streak} kicks in a row! The circle cheers.`,true); }
+}
+function chinPrompt(): string {
+  const C=CHIN, k=touchMode?'GO':'E';
+  if(C.ph==='pass'&&C.to===0&&!C.hit&&C.u>.5) return `<span class="key">${k}</span><b>Kick! · ခတ်!</b>`;
+  return `<span class="key">🏐</span>Chinlone · ${C.streak} kick${C.streak===1?'':'s'} in a row (best ${C.best}) · press ${k} when the ball drops to you · move to leave`;
+}
+function joinChin(): void {
+  CHIN.on=true; CHIN.streak=0; CHIN.shown=''; P.dance=false; if(P.sit) standUp();
+  toast('<span class="z">ခြင်းလုံး</span>You step into the circle. When the ball comes to you, press E (or GO) as it drops to your foot.',true);
+}
+function chinStand(dt: number, mag: number): boolean {
+  if(!CHIN.on) return false;
+  if(mag>.15){ CHIN.on=false; $('prompt').hidden=true; lastIT=null; toast(`You leave the chinlone circle. Best run: ${CHIN.best} kick${CHIN.best===1?'':'s'}.`); return false; }
+  const [x,y]=chinSlot(0), dx=x-P.x, dy=y-P.y, d=Math.hypot(dx,dy); P.vx=P.vy=P.kx=P.ky=0;
+  if(d>2){ const k=Math.min(d,120*dt); P.x+=dx/d*k; P.y+=dy/d*k; P.hd=Math.atan2(dx,dy); P.moving=true; P.spd=1; }
+  else { P.moving=false; P.spd=0; P.hd=Math.atan2(CHINLONE.x-P.x,CHINLONE.y-P.y); }
+  return true;
 }
 
 // ---------- the teashop waiter: comes to your table, takes your order, brings it, and brings the bill ----------
@@ -1252,7 +1401,7 @@ function answerFireworks(yes: boolean): void {
   if(!yes){ if(!S.showStarted) MINI.declined++; toast('Okay! You can watch any time from the Finale View deck.'); return; }
   if(S.mode==='scene'&&SC.kind==='train') leaveTrain(); else if(S.mode==='scene'&&SC.kind==='bumper') endScene();
   if(S.mode!=='walk') return;
-  P.dance=false; standUp(); leaveQueue(true); closeModal(); closeMap();
+  P.dance=false; standUp(); leaveQueue(true); CHIN.on=false; closeModal(); closeMap();
   startScene('finale');
 }
 $('fwYes').onclick=()=>answerFireworks(true);
@@ -1461,7 +1610,7 @@ window.addEventListener('keyup',e=>{ keys[e.code]=false; });
 window.addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
 function press(): void {
   if(S.paused) return;
-  if(S.mode==='walk'){ const it=nearIT(); if(it) it.act(); }
+  if(S.mode==='walk'){ if(CHIN.on){ chinKick(); return; } if(PQ.qi>=0) return; const it=nearIT(); if(it) it.act(); }
   else if(S.mode==='mg') mgPress();
 }
 cv.addEventListener('pointerdown',e=>{
@@ -1546,6 +1695,7 @@ function checkWorld(): void {
   for(const s of SECRETS){ if(!S.secrets.includes(s.id)&&Math.hypot(P.x-s.x,P.y-s.y)<50){ S.secrets.push(s.id); S.kyat+=300; sfx('ding'); toast(`Secret found: <b>${s.name}</b><br>${s.d} <span class="muted">(+300 Ks)</span>`); updateHUD(); } }
   if(DODGE.on){ const t=`<span class="key">⏱</span>${Math.ceil(DODGE.t)} s left · ${DODGE.hits} bump${DODGE.hits===1?'':'s'} · keep running!`;
     if(t!==DODGE.shown){ $('prompt').innerHTML=t; $('prompt').hidden=false; DODGE.shown=t; } lastIT=null; return; }
+  if(CHIN.on){ const t=chinPrompt(); if(t!==CHIN.shown){ $('prompt').innerHTML=t; $('prompt').hidden=false; CHIN.shown=t; } lastIT=null; return; }
   if(PQ.qi>=0){ const a=PQ.k, t=a===0?`<span class="key">🎟</span>You're next for ${PQ.name}! Get ready…`:`<span class="key">🎟</span>In line for ${PQ.name} · ${a} ${a===1?'person':'people'} ahead of you · move to leave the line`;
     if(t!==PQ.shown){ $('prompt').innerHTML=t; $('prompt').hidden=false; PQ.shown=t; } lastIT=null; return; }
   const it=(S.mode==='walk'&&!S.photo)?nearIT():null;
@@ -1555,7 +1705,7 @@ function maybeSummary(): void {
   if(!S.showDone||S.summaryShown||S.mode!=='walk') return;
   S.summaryShown=true; S.finaleSeen=true; updateHUD();
   openModal('What a night!',`<p>The last sparks drift over the skyline. Here is your Yay Kyaw night:</p>
-  <div class="statgrid"><div><b>${S.zones.length}/${ZONES.length}</b>Postcards</div><div><b>${S.secrets.length}/6</b>Secrets</div><div><b>${S.snacks.length}/${ALL_DISHES.length}</b>Dishes tasted</div><div><b>${S.rides}</b>Rides</div><div><b>${S.ticketsWon}</b>Tickets won</div><div><b>${S.prizes.length+S.toys.length}</b>Souvenirs</div><div><b>${S.photos.length}</b>Photos</div></div>
+  <div class="statgrid"><div><b>${S.zones.length}/${ZONES.length}</b>Postcards</div><div><b>${S.secrets.length}/6</b>Secrets</div><div><b>${S.snacks.length}/${ALL_DISHES.length}</b>Dishes tasted</div><div><b>${S.rides}</b>Rides</div><div><b>${S.ticketsWon}</b>Tickets won</div><div><b>${S.prizes.length+S.toys.length}</b>Souvenirs</div><div><b>${S.photos.length}</b>Photos</div><div><b>${S.merit}</b>Merit · <span class="mm">ကုသိုလ်</span></div></div>
   <p class="muted">The fair stays open. Keep exploring, find the rest of the secrets, or watch the finale again from the Finale View deck.</p>`);
 }
 
@@ -1569,7 +1719,7 @@ function movePlayer(dt: number): void {
   const mag=Math.hypot(ix,iy);
   if(mag>.15){ if(P.sit) standUp(); if(P.dance){ P.dance=false; } }
   if(P.sit){ P.vx=P.vy=0; P.moving=false; P.spd=0; return; }
-  if(queueWalk(dt,mag)) return;
+  if(queueWalk(dt,mag)||chinStand(dt,mag)) return;
   let tvx=0, tvy=0;
   if(mag>.15){
     // camera-relative: up on the stick walks away from the camera
@@ -1612,12 +1762,14 @@ function frameData(dt: number): Frame {
     me:{x:title?900:P.x,y:title?2000:P.y,hd:P.hd,moving:P.moving,spd:P.spd,wave:T<P.waveUntil,dance:P.dance,sit:P.sit,look:myLook(),balloon:S.balloon,hidden:P.hidden||title},
     crowd:crowdBuf, bikes:BIKES, others, ride, rideT:SC.t, train:TRN, cam,
     sparkle:SECRETS.map(s=>S.secrets.includes(s.id)?0:clamp(1-Math.hypot(P.x-s.x,P.y-s.y)/320,0,1)),
-    steamFrom:CARTS, look:LOOK, bumpers:BUMPS, shake:RM?0:shake,
+    steamFrom:STEAM_AT, look:LOOK, bumpers:BUMPS, shake:RM?0:shake,
     candles:{lamps:CAND.lamps,mine:CAND.mine,flowers:CAND.flowers},
     bumperPov:DRIVE.pov,
+    taz:{notes:Math.min(160,MT.notes),robe:ROBE.strips/ROBE_STRIPS,weaving:T<ROBE.myUntil,ball:CHIN.ball,kicker:CHIN.kicker,me:CHIN.on},
     tea:P.table>=0?{table:P.table,seat:teaFree(P.table),items:TEAO.served}:undefined,
   };
 }
+const STEAM_AT: Array<[number, number]> = [...CARTS, ...[0, 1, 3].map(i=>{ const st=NIB_STALLS[i]; return [st.x-st.side*12, st.y+48] as [number, number]; })];
 function renderNow(dt: number): { atTop: boolean } { return render3d(frameData(dt)); }
 function frame(now: number): void {
   const dt=Math.min(.05,(now-last)/1000); last=now; T+=dt;
@@ -1631,7 +1783,7 @@ function frame(now: number): void {
   CAM.dist+=(CAM.zoom-CAM.dist)*(1-Math.exp(-dt*8));
   updateTrain(dt);
   for(const n of NPC) updateNPC(n,dt);
-  updateBikes(dt); updateBumpers(dt); updateCandles(dt); updateQueues(dt);
+  updateBikes(dt); updateBumpers(dt); updateCandles(dt); updateQueues(dt); updateChin(dt); updateTazaung(dt);
   const glide=(room as { slow?: boolean } | null)?.slow?2.6:8; // relayed positions come about once a second: glide between them
   for(const r of REMOTE.values()){ const k=Math.min(1,dt*glide); r.moving=Math.hypot(r.tx-r.x,r.ty-r.y)>1.5; r.x=lerp(r.x,r.tx,k); r.y=lerp(r.y,r.ty,k); }
   updateNpcSay(dt); updateCrowdTalk(dt);
@@ -1661,6 +1813,10 @@ const MAP_MARKS: Array<{ x: number; y: number; icon: string; en: string; my: str
   ...PWE_FOOD.map(f=>({x:f.x,y:f.y,icon:'🍌',en:f.name,my:f.my,small:true,tiny:true})),
   ...BOOTHS.map(b=>({x:b.x,y:b.y,icon:b.kind==='prize'?'🎁':'🎯',en:b.kind==='ring'?'Ring toss':b.kind==='darts'?'Darts':'Prizes',my:b.my,small:true})),
   ...CARTS.map(([x,y],i)=>({x,y,icon:'🍜',en:SNACKS[i].name,my:SNACKS[i].my,small:true,tiny:true})),
+  {x:NIB_GATE.x,y:820,icon:'🤲',en:'Nibbana Market',my:'နိဗ္ဗာန်ဈေး'},
+  {x:LOOMS.x,y:LOOMS.y,icon:'🧵',en:'Robe weaving',my:'မသိုးသင်္ကန်း',small:true},
+  {x:MONEY_TREE.x,y:MONEY_TREE.y,icon:'🎋',en:'Money tree',my:'ပဒေသာပင်',small:true},
+  {x:CHINLONE.x,y:CHINLONE.y,icon:'🏐',en:'Chinlone',my:'ခြင်းလုံး',small:true},
 ];
 interface MapView { cx: number; cy: number; s: number; w: number; h: number; big: boolean; k?: number }
 function drawMap(g: CanvasRenderingContext2D, v: MapView): void {
@@ -1829,4 +1985,4 @@ const hot=window.claude&&window.claude.hot;
 if(hot&&hot.ready) hot.ready(boot); else boot(hot&&hot.data||{});
 // audio needs a gesture; also unlock on first tap after a reload
 window.addEventListener('pointerdown',()=>{ if(S.mode!=='title'){ audioInit(S.settings.sound); loadVoices(VOICE_CLIPS); if(A.c&&A.c.state==='suspended') A.c.resume(); } });
-window.__ykn={PQ,joinQueue,QUEUES,openShop,SHOPS,callWaiter,TEAO,useRestroom,launchFirework,checkUpdate,S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};
+window.__ykn={CHIN,ROBE,MT,openGiving,openWeave,joinChin,hangNote,PQ,joinQueue,QUEUES,openShop,SHOPS,callWaiter,TEAO,useRestroom,launchFirework,checkUpdate,S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};

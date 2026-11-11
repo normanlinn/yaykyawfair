@@ -4,9 +4,10 @@ import * as THREE from 'three';
 import { TAU, srng, rand, pick, clamp, lerp, MMF, BODY, DISP } from './util';
 import { PersonOpts, bodyProfile } from './people';
 import { SHOPS, PWE_SHOPS, Shop, mmNum } from './shops';
+import { GIVINGS } from './nibbana';
 import {
   M, WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, KIDS, TRAIN, STATION, TRAIN_OFF, TRACK_LEN, ST, FV, PHOTO, TOYS_AT, ARCH_Y, SNACKS, CARTS, TEA_TABLES, BOOTHS, SECRETS,
-  STRINGS, TREES, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, RESTROOMS, PARKED, QUEUES, QUEUE_GAP, trackPos,
+  STRINGS, TREES, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, RESTROOMS, PARKED, QUEUES, NIB_STALLS, NIB_GATE, LOOMS, MONEY_TREE, CHINLONE, QUEUE_GAP, trackPos,
 } from './layout';
 
 // ---------------------------------------------------------------- basics
@@ -1734,7 +1735,7 @@ function updateFountains(dt: number): void {
 
 export function build3d(): void {
   buildSkyAndCity(); buildGround(); buildTrees(); buildLanterns(); buildFerris(); buildCarousel(); buildPirate();
-  buildFood(); buildBooths(); buildKids(); buildStage(); buildFinaleAndGate(); buildSecrets(); buildWishPlace(); buildMidway(); buildCandles(); buildTeashop(); buildRestrooms(); buildQueueRopes();
+  buildFood(); buildBooths(); buildKids(); buildStage(); buildFinaleAndGate(); buildSecrets(); buildWishPlace(); buildMidway(); buildCandles(); buildTeashop(); buildRestrooms(); buildQueueRopes(); buildNibbana(); buildTazaung();
   glowPts = makeGlows(GLOWS, 1.1); scene.add(glowPts);
   buildDust(); buildSkyLanterns();
   crowd = new Crowd(400);
@@ -1772,6 +1773,153 @@ export interface Frame {
   shake: number;
   steamFrom: Array<[number, number]>;
   tea?: { table: number; seat: number; items: string[] };
+  taz?: { notes: number; robe: number; weaving: boolean; ball: [number, number, number]; kicker: number; me: boolean };
+}
+
+// ---------------------------------------------------------------- the Nibbana market (နိဗ္ဗာန်ဈေး) and the Tazaungdaing grounds
+const tz = { notes: null as THREE.InstancedMesh, robe: null as THREE.Mesh, weavers: [] as Rig[], shuttles: [] as THREE.Mesh[], ring: [] as Rig[], ball: null as THREE.Mesh, lanterns: [] as THREE.Object3D[] };
+/** A Tazaungdaing paper lantern: a little glowing star-cut drum, the kind hung on every street that month. */
+function paperLantern(parent: THREE.Object3D, x: number, y: number, z: number, col: string): THREE.Object3D {
+  const g = add(new THREE.Group(), parent, x, y, z);
+  add(new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.9 })), g, 0, 0, 0).scale.set(1, 1.25, 1);
+  cyl(0.012, 0.012, 0.5, lam('#3a3030'), g, 0, 0.5, 0, 4); cyl(0.04, 0.0, 0.25, lam('#f4b63f'), g, 0, -0.42, 0, 6);
+  return g;
+}
+function stallProps(g: THREE.Group, kind: string): void {
+  const Y = 0.86, Zt = 0.6;
+  if (kind === 'pot' || kind === 'rice') {
+    cyl(0.42, 0.38, 0.55, lam('#c8ccd8'), g, -1.5, Y + 0.28, Zt, 18); disc(0.38, lam(kind === 'pot' ? '#c98a3a' : '#e6c46a'), g, -1.5, Y + 0.54, Zt);
+    for (let k = 0; k < 8; k++) add(new THREE.Mesh(kind === 'pot' ? bowlGeo : plateGeo, lam('#ffffff')), g, 0.2 + (k % 4) * 0.42, Y, Zt - 0.18 + Math.floor(k / 4) * 0.36);
+    if (kind === 'rice') for (let k = 0; k < 4; k++) disc(0.13, lam('#e8b24a'), g, 0.2 + k * 0.42, Y + 0.04, Zt - 0.18);
+  } else if (kind === 'tea') {
+    cyl(0.18, 0.22, 0.4, lam('#c8ccd8'), g, -1.6, Y + 0.2, Zt, 12); cyl(0.2, 0.2, 0.08, lam('#2a2238'), g, -1.6, Y + 0.44, Zt, 12);
+    for (let k = 0; k < 12; k++) cyl(0.05, 0.04, 0.09, lam('#fff6e6'), g, -0.6 + (k % 6) * 0.3, Y + 0.05, Zt - 0.15 + Math.floor(k / 6) * 0.3, 8);
+    cyl(0.16, 0.16, 0.36, lam('#2f5d50'), g, 1.9, Y + 0.18, Zt, 10);
+  } else if (kind === 'salad') {
+    for (let k = 0; k < 3; k++) { add(new THREE.Mesh(bowlGeo, lam('#e8dfcf')), g, -1.4 + k * 0.6, Y, Zt).scale.setScalar(1.8); bits(g, 26, 0.03, ['#5f8a2d', '#7aa63a', '#e8d9a0'], -1.4 + k * 0.6, Y + 0.16, Zt, 0.22, 70 + k); }
+    for (let k = 0; k < 6; k++) add(new THREE.Mesh(plateGeo, lam('#ffffff')), g, 0.6 + (k % 3) * 0.42, Y, Zt - 0.18 + Math.floor(k / 3) * 0.36);
+  } else if (kind === 'fruit') {
+    for (let k = 0; k < 6; k++) { const b = add(new THREE.Group(), g, -2 + k * 0.7, Y + 0.08, Zt); for (let j = 0; j < 5; j++) { const f = add(new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.18, 3, 6), lam('#f2c23a')), b, -0.12 + j * 0.06, 0.02, 0); f.rotation.z = 1.2; } }
+    for (let k = 0; k < 4; k++) sphere(0.16, lam('#9fbf4a'), g, -1.6 + k * 1.1, Y + 0.16, Zt - 0.3, 10);
+  } else if (kind === 'water') {
+    for (const x of [-1.6, 1.4]) { box(0.8, 0.55, 0.5, lam('#2d6bb6'), g, x, Y + 0.28, Zt); box(0.82, 0.08, 0.52, lam('#ffffff'), g, x, Y + 0.58, Zt); }
+    for (let k = 0; k < 10; k++) cyl(0.045, 0.035, 0.12, lam('#cfe8ff', { transparent: true, opacity: 0.8 }), g, -0.6 + (k % 5) * 0.3, Y + 0.06, Zt - 0.12 + Math.floor(k / 5) * 0.26, 8);
+  } else if (kind === 'thanaka') {
+    cyl(0.4, 0.44, 0.1, lam('#9a9488'), g, -1, Y + 0.05, Zt, 16); disc(0.2, lam('#efdca6'), g, -1, Y + 0.11, Zt); // the kyauk pyin stone, wet with paste
+    for (let k = 0; k < 5; k++) { const l = cyl(0.05, 0.05, 0.55, lam('#b8925a'), g, 0.4 + k * 0.14, Y + 0.05, Zt - 0.1 + (k % 2) * 0.12, 6); l.rotation.z = Math.PI / 2; }
+    for (let k = 0; k < 4; k++) add(new THREE.Mesh(bowlGeo, lam('#efdca6')), g, 1.4 + (k % 2) * 0.4, Y, Zt - 0.15 + Math.floor(k / 2) * 0.3).scale.setScalar(0.6);
+  } else if (kind === 'flowers') {
+    for (let k = 0; k < 8; k++) { const st = add(new THREE.Group(), g, -2 + k * 0.5, Y + 0.02, Zt); for (let j = 0; j < 7; j++) sphere(0.035, lam('#fffdf4'), st, Math.sin(j) * 0.08, 0.02, -0.15 + j * 0.05, 5); }
+    for (let k = 0; k < 10; k++) { cyl(0.025, 0.025, 0.16, lam('#fff3d6'), g, -1.9 + k * 0.42, Y + 0.08, Zt - 0.3, 6); sphere(0.03, glowMat('#ffcf6a'), g, -1.9 + k * 0.42, Y + 0.2, Zt - 0.3, 5); }
+  }
+}
+function buildNibbana(): void {
+  const wp = new THREE.Vector3();
+  NIB_STALLS.forEach((st, i) => {
+    const gv = GIVINGS[i], g = add(new THREE.Group(), scene, X(st.x), 0, Z(st.y)); g.rotation.y = -st.side * Math.PI / 2;
+    const bamboo = lam('#c9a86a');
+    for (const sx of [-2.9, 2.9]) for (const sz of [-1.4, 1.1]) cyl(0.06, 0.06, 2.9, bamboo, g, sx, 1.45, sz, 6);
+    const roof = box(6.4, 0.08, 2.9, new THREE.MeshLambertMaterial({ map: stripes('#fff8ec', gv.col, 9) }), g, 0, 2.95, -0.15); roof.rotation.x = 0.1;
+    box(5.6, 0.76, 0.9, lam('#f6f1e6'), g, 0, 0.42, 0.6); box(5.62, 0.06, 0.92, lam('#e9d9b8'), g, 0, 0.83, 0.6);
+    box(5.64, 0.18, 0.02, lam(gv.col), g, 0, 0.62, 1.06);
+    board(signTex(gv.banner[0], gv.banner[1] + ' · free', gv.col, 512, 150), 4.4, 1.3, g, 0, 3.75, 1.0);
+    board(signTex('အခမဲ့', 'Free · take one', '#2f5d50', 256, 110), 1.1, 0.48, g, 2.2, 1.25, 1.08);
+    box(6.0, 2.0, 0.05, lam('#f3efe6'), g, 0, 1.6, -1.45); // the back cloth
+    stallProps(g, gv.kind);
+    g.updateMatrixWorld();
+    for (let k = 0; k < 9; k++) { wp.set(-2.9 + k * 0.725, 2.78 - Math.sin(k / 8 * Math.PI) * 0.16, 1.25).applyMatrix4(g.matrixWorld); GLOWS.push([wp.x, wp.y, wp.z, k % 3 ? '#ffe7a3' : '#ffb35a', 0.85]); }
+  });
+  // the welcome arch at the south end of the aisle, and paper lanterns all the way up it
+  const ax = X(NIB_GATE.x), az = Z(NIB_GATE.y), gold = lam('#d9a63a');
+  for (const dx of [-7.5, 7.5]) { cyl(0.22, 0.26, 5.4, lam('#7a1f2b'), scene, ax + dx, 2.7, az, 10); sphere(0.3, gold, scene, ax + dx, 5.5, az, 10); }
+  box(15.6, 0.4, 0.4, lam('#7a1f2b'), scene, ax, 5.2, az);
+  board(signTex('နိဗ္ဗာန်ဈေး', 'Nibbana market · everything is free', '#7a1f2b', 640, 180), 8, 2.25, scene, ax, 6.4, az + 0.02);
+  for (let k = 0; k < 16; k++) GLOWS.push([ax - 7.4 + k * (14.8 / 15), 5.0, az + 0.25, LANTERN_COLS[k % 5], 1]);
+  const cols = ['#ffcf6a', '#ff8a5a', '#ffe7a3', '#ff6f91', '#f4b63f'];
+  for (const lx of [4200, 4340]) {
+    const wire: number[] = [];
+    for (let y = 460; y <= 1300; y += 70) { const k = (y - 460) / 70; tz.lanterns.push(paperLantern(scene, X(lx), 4.0 - (k % 2) * 0.2, Z(y), cols[(k + (lx > 4300 ? 2 : 0)) % 5])); }
+    wire.push(X(lx), 4.6, Z(450), X(lx), 4.6, Z(1310));
+    scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(wire, 3)), new THREE.LineBasicMaterial({ color: '#3a3030' })));
+    for (const y of [450, 1310]) cyl(0.08, 0.08, 4.7, lam('#5a3a24'), scene, X(lx), 2.35, Z(y), 6);
+  }
+}
+function buildTazaung(): void {
+  // the robe-weaving tent: four looms of saffron thread, weavers at every one, and the robe on a rack at the back growing through the night
+  const lx = X(LOOMS.x), lz = Z(LOOMS.y), wood = lam('#7a5232'), saffron = lam('#c8641e');
+  const tent = add(new THREE.Group(), scene, lx, 0, lz);
+  for (const sx of [-6.4, 6.4]) for (const sz of [-3, 3]) cyl(0.1, 0.1, 3.6, wood, tent, sx, 1.8, sz, 6);
+  const roof = add(new THREE.Mesh(new THREE.ConeGeometry(8.5, 1.6, 4, 1, true), lam('#f3efe6', { side: DS, k: 'tentroof' })), tent, 0, 4.3, 0); roof.rotation.y = Math.PI / 4; roof.scale.set(1.05, 1, 0.55);
+  box(12.8, 2.6, 0.06, lam('#e6d3b0'), tent, 0, 1.6, -3.0);
+  board(signTex('မသိုးသင်္ကန်း ရက်လုပ်ပွဲ', 'Robe weaving · finished by dawn', '#7a1f2b', 640, 170), 6.4, 1.7, tent, 0, 4.0, 3.1);
+  for (let k = 0; k < 4; k++) {
+    const x = -4.5 + k * 3, L = add(new THREE.Group(), tent, x, 0, -0.6);
+    for (const sx of [-0.9, 0.9]) { box(0.1, 1.5, 0.1, wood, L, sx, 0.75, -0.6); box(0.1, 1.0, 0.1, wood, L, sx, 0.5, 0.6); }
+    box(1.9, 0.08, 0.08, wood, L, 0, 1.45, -0.6); box(1.9, 0.08, 0.08, wood, L, 0, 0.9, 0.6);
+    const warp = add(new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.3), new THREE.MeshLambertMaterial({ color: '#d8822e', side: DS })), L, 0, 1.15, 0); warp.rotation.x = -Math.PI / 2 + 0.4;
+    const shut = add(new THREE.Mesh(new THREE.CapsuleGeometry(0.04, 0.22, 3, 6), lam('#e8c98a')), L, 0, 1.12, 0.05); shut.rotation.z = Math.PI / 2; tz.shuttles.push(shut);
+    box(0.7, 0.35, 0.4, wood, L, 0, 0.18, 1.15);
+    const w = buildPerson({ shirt: pick(['#fff3d6', '#f7b7c3', '#ffffff']), lon: pick(['#6b2335', '#2f5d50', '#4b2c63']), skin: pick(['#d9a77a', '#c58c5c', '#e4b98f']), outfit: 'htamein', hair: 'bun', bun: true, head: k % 2 ? 'flower' : 'none', flower: k % 2 === 1, thanaka: true });
+    w.g.position.set(x, -0.1, 0.55); w.g.rotation.y = Math.PI; tent.add(w.g); animatePerson(w, k, false, false, true); tz.weavers.push(w);
+    GLOWS.push([lx + x, 3.2, lz - 0.6, '#ffe7a3', 1]);
+  }
+  const rack = add(new THREE.Group(), tent, 0, 0, -2.6);
+  for (const sx of [-5, 5]) box(0.12, 3, 0.12, wood, rack, sx, 1.5, 0);
+  box(10.2, 0.12, 0.12, wood, rack, 0, 2.9, 0);
+  tz.robe = add(new THREE.Mesh(new THREE.PlaneGeometry(9.6, 2.3), saffron), rack, -4.8, 1.7, 0.08);
+  tz.robe.geometry.translate(4.8, 0, 0);
+  const pl = new THREE.PointLight('#ffd9a0', 30, 14, 2); pl.position.set(0, 3, 0); tent.add(pl);
+
+  // the padaythabin: a bamboo money tree hung with folded notes, a golden umbrella on top, robes and alms bowls at its foot
+  const mx = X(MONEY_TREE.x), mz = Z(MONEY_TREE.y), tree = add(new THREE.Group(), scene, mx, 0, mz);
+  cyl(0.6, 0.7, 0.5, lam('#7a1f2b'), tree, 0, 0.25, 0, 16);
+  cyl(0.08, 0.12, 4.4, lam('#8a6a3a'), tree, 0, 2.6, 0, 8);
+  const umb = add(new THREE.Mesh(new THREE.ConeGeometry(0.8, 0.5, 16), lam('#ffcf5a', { emissive: '#7a4a0a' })), tree, 0, 5.0, 0); umb.castShadow = false;
+  cyl(0.02, 0.02, 0.7, lam('#ffcf5a'), tree, 0, 5.5, 0, 4);
+  for (let tier = 0; tier < 5; tier++) { const y = 1.2 + tier * 0.75, R = 1.5 - tier * 0.26;
+    for (let k = 0; k < 8; k++) { const a = k / 8 * TAU + tier * 0.4; beam(new THREE.Vector3(0, y + 0.3, 0), new THREE.Vector3(Math.sin(a) * R, y, Math.cos(a) * R), 0.018, lam('#c9a86a'), tree); } }
+  const NOTES = 160, notes = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.2, 0.1), new THREE.MeshLambertMaterial({ side: DS, vertexColors: false }), NOTES);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1), nc = ['#8fc3a0', '#e7b6c8', '#a8c6e8', '#e8d9a0'];
+  const rn = srng(77);
+  for (let k = 0; k < NOTES; k++) {
+    const tier = k % 5, y = 1.0 + tier * 0.75 + rn() * 0.3, R = (1.5 - tier * 0.26) * (0.5 + rn() * 0.5), a = rn() * TAU;
+    v.set(Math.sin(a) * R, y, Math.cos(a) * R); e.set(rn() * 0.6 - 0.3, a, rn() * 0.8 - 0.4); q.setFromEuler(e);
+    notes.setMatrixAt(k, m4.compose(v, q, sc)); notes.setColorAt(k, new THREE.Color(nc[k % 4]));
+  }
+  notes.count = 40; tree.add(notes); tz.notes = notes;
+  for (let k = 0; k < 4; k++) { const a = k / 4 * TAU + 0.4; box(0.45, 0.2, 0.32, lam('#c8641e'), tree, Math.sin(a) * 1.0, 0.6, Math.cos(a) * 1.0).rotation.y = a; cyl(0.15, 0.1, 0.18, lam('#1b1420'), tree, Math.sin(a + 0.8) * 1.05, 0.6, Math.cos(a + 0.8) * 1.05, 10); }
+  board(signTex('ပဒေသာပင်', 'Money tree · kathina offerings', '#7a1f2b', 512, 150), 2.6, 0.76, tree, 0, 0.9, 1.6);
+  GLOWS.push([mx, 5.6, mz, '#ffe7a3', 1.4]);
+  const tl = new THREE.PointLight('#ffe1a6', 26, 9, 2); tl.position.set(0, 4.2, 1.6); tree.add(tl);
+
+  // the chinlone ring: players in taikpon and tucked-up longyi, and the cane ball
+  for (let i = 0; i < CHINLONE.n; i++) {
+    const a = i / CHINLONE.n * TAU, px = CHINLONE.x + Math.sin(a) * CHINLONE.R, py = CHINLONE.y + Math.cos(a) * CHINLONE.R;
+    const p = buildPerson({ shirt: pick(['#ffffff', '#f3efe6', '#9fd3f0', '#f2d49b']), lon: pick(['#283a6b', '#2f5d50', '#5a3a24', '#6b2335']), skin: pick(['#c58c5c', '#a8714a', '#d9a77a']), outfit: 'longyi', hair: 'short', head: i === 2 ? 'gaungbaung' : 'none' });
+    p.g.position.set(X(px), 0, Z(py)); p.g.rotation.y = Math.atan2(CHINLONE.x - px, CHINLONE.y - py); scene.add(p.g); tz.ring.push(p);
+  }
+  const ballTex = canvasTex(64, 64, c => { c.fillStyle = '#c9a46a'; c.fillRect(0, 0, 64, 64); c.strokeStyle = '#7a5232'; c.lineWidth = 3;
+    for (let k = -64; k < 128; k += 12) { c.beginPath(); c.moveTo(k, 0); c.lineTo(k + 64, 64); c.stroke(); c.beginPath(); c.moveTo(k + 64, 0); c.lineTo(k, 64); c.stroke(); } });
+  tz.ball = add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), new THREE.MeshLambertMaterial({ map: ballTex })), scene, X(CHINLONE.x), 0.5, Z(CHINLONE.y));
+  GLOWS.push([X(CHINLONE.x) - 4, 4.2, Z(CHINLONE.y), '#ffe7a3', 1.2], [X(CHINLONE.x) + 4, 4.2, Z(CHINLONE.y), '#ffe7a3', 1.2]);
+  for (const dx of [-4, 4]) cyl(0.07, 0.07, 4.2, lam('#5a3a24'), scene, X(CHINLONE.x) + dx, 2.1, Z(CHINLONE.y) - 4.5, 6);
+  const cl = new THREE.PointLight('#ffe1a6', 34, 12, 2); cl.position.set(X(CHINLONE.x), 4.5, Z(CHINLONE.y)); scene.add(cl);
+}
+function updateTazaung(f: Frame, t: number): void {
+  if (!tz.notes || !f.taz) return;
+  const T = f.taz;
+  tz.notes.count = Math.max(0, Math.min(160, T.notes));
+  tz.robe.scale.x = Math.max(0.02, Math.min(1, T.robe));
+  tz.weavers.forEach((w, k) => { const p = t * (2.2 + k * 0.3) + k; w.armL.rotation.x = -1.1 + Math.sin(p) * 0.35; w.armR.rotation.x = -1.1 - Math.sin(p) * 0.35; tz.shuttles[k].position.x = Math.sin(p) * 0.75; });
+  if (T.weaving) tz.shuttles.forEach((s, k) => { s.position.x = Math.sin(t * 6 + k) * 0.8; });
+  for (const l of tz.lanterns) l.rotation.y = Math.sin(t * 0.7 + l.position.z) * 0.4;
+  tz.ring.forEach((p, i) => {
+    p.g.visible = !(i === 0 && T.me);
+    const kick = T.kicker === i;
+    p.footR.position.set(0.1, kick ? 0.32 : 0.04, kick ? 0.22 : 0.02); p.body.rotation.x = kick ? -0.12 : Math.sin(t * 2 + i) * 0.03;
+    p.body.position.y = kick ? 0.06 : 0;
+  });
+  tz.ball.position.set(X(T.ball[0]), T.ball[2], Z(T.ball[1])); tz.ball.rotation.x += 0.15; tz.ball.rotation.z += 0.08;
 }
 
 // ---------------------------------------------------------------- public restrooms (အိမ်သာ) and queue ropes
@@ -2042,7 +2190,7 @@ export function render3d(f: Frame): { atTop: boolean } {
   if (fpArm.visible) fpArm.rotation.z = 0.5 + Math.sin(t * 12) * 0.35;
   const fov = (mode === 'finale' ? 66 : 55) + (mode === 'walk' ? clamp(((f.me.spd ?? 0) - 1.05) * 12, 0, 6) : 0);
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-dt * 4)); camera.updateProjectionMatrix(); }
-  updateDust(dt); updateSkyLanterns(t, dt, f.night); updateWishes(t, f.night); updatePond(t, dt); updateMidway(f, t, dt); updateFountains(dt); updateCandles(f, t); updateTeashop(t); updateTeaDishes(f);
+  updateDust(dt); updateSkyLanterns(t, dt, f.night); updateWishes(t, f.night); updatePond(t, dt); updateMidway(f, t, dt); updateFountains(dt); updateCandles(f, t); updateTeashop(t); updateTeaDishes(f); updateTazaung(f, t);
   for (const e of embers) e.emissiveIntensity = 0.8 + Math.sin(t * 5 + Math.sin(t * 13)) * 0.25;
   glowPts.material.size = 1.1 * (1 + 0.05 * Math.sin(t * 2.3));
   renderer.render(scene, camera);

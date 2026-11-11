@@ -3,7 +3,7 @@
 import { srng } from './util';
 
 export const M = 1 / 20;
-export const WW = 3900, WH = 2600, NORTH = 340;
+export const WW = 4700, WH = 2600, NORTH = 340;
 export const ROAD = { x: 760, w: 280 };
 
 export interface Zone { id: string; n: number; name: string; my: string; x: number; y: number; w: number; h: number; g: string; card: string }
@@ -32,6 +32,10 @@ export const ZONES: Zone[] = [
     card: 'Tiny stools, low tables, strong sweet tea and a plate of palata. Friends talk for hours while the football plays on the TV.' },
   { id: 'lake', n: 12, name: 'Wishing Lake', my: 'ဆုတောင်းကန်', x: 3200, y: 350, w: 640, h: 2090, g: '#1d2236',
     card: 'A long, quiet lake where everyone’s candle lanterns drift slowly through the night, under a sky full of paper fire balloons.' },
+  { id: 'nibbana', n: 13, name: 'Nibbana Market', my: 'နိဗ္ဗာန်ဈေး', x: 3920, y: 350, w: 700, h: 1040, g: '#2a2418',
+    card: 'A market where nothing is sold. Families give away mohinga, tea, mezali salad and thanaka for merit, and everyone says sadhu.' },
+  { id: 'tazaung', n: 14, name: 'Tazaungdaing', my: 'တန်ဆောင်တိုင်ပွဲ', x: 3920, y: 1440, w: 700, h: 1000, g: '#2b1f30',
+    card: 'Weavers race to finish a monk’s robe before dawn, notes flutter on the money tree, and a chinlone circle keeps the cane ball in the air.' },
 ];
 
 // rides and landmarks
@@ -63,15 +67,28 @@ export const QUEUES: Array<{ x: number; y: number; dx: number; dy: number; n: nu
   { x: 560, y: 864, dx: -1, dy: 0, n: 11, ride: 'ferris' },
   { x: 1330, y: 1222, dx: -1, dy: 0, n: 8, ride: 'pirate' },
   { x: 2150, y: 896, dx: 1, dy: 0, n: 9, ride: 'bumper' },
+  { x: 4170, y: 500, dx: 0, dy: -1, n: 7, ride: 'nib_mohinga' },   // the free mohinga: the line runs up the aisle
 ];
 export const QUEUE_GAP = 21;
+
+// ---- the Tazaungdaing side, east of the Wishing Lake
+/** The Nibbana market's eight giving stalls in two rows facing a north-south aisle; side -1 faces east, +1 faces west. */
+export const NIB_STALLS: Array<{ x: number; y: number; side: number }> = [520, 730, 940, 1150].flatMap(y => [{ x: 4090, y, side: -1 }, { x: 4450, y, side: 1 }]);
+/** Where you stand to be served: on the aisle side of the table. */
+export const nibFront = (i: number): [number, number] => { const s = NIB_STALLS[i]; return [s.x - s.side * 80, s.y]; };
+export const NIB_GATE = { x: 4270, y: 1330 };                  // the welcome arch at the south end of the aisle
+export const LOOMS = { x: 4110, y: 1660 };                      // the robe-weaving tent (မသိုးသင်္ကန်း), open to the south
+export const MONEY_TREE = { x: 4440, y: 1660 };                 // the padaythabin (ပဒေသာပင်) of kathina offerings
+export const CHINLONE = { x: 4270, y: 2120, R: 64, n: 6 };       // a ring of chinlone players; you take the south place
+/** The robe has to be woven in one night: a few strips each person helps with. */
+export const ROBE_STRIPS = 24;
 /** People who stop to watch: a loose crowd in front of the hand-turned wheel and around the carousel. */
 export const WATCHERS: Array<{ x: number; y: number; w: number; h: number; n: number; fx: number; fy: number }> = [
   { x: 1985, y: 1225, w: 230, h: 40, n: 9, fx: 2100, fy: 1130 },
   { x: 1240, y: 815, w: 280, h: 34, n: 6, fx: 1380, fy: 640 },
 ];
 /** Public restrooms (အိမ်သာ): one near each corner of the fair and one behind the teashop. Doors face south. */
-export const RESTROOMS: Array<{ x: number; y: number }> = [{ x: 180, y: 405 }, { x: 3755, y: 420 }, { x: 420, y: 2528 }, { x: 3700, y: 2528 }, { x: 3060, y: 2385 }];
+export const RESTROOMS: Array<{ x: number; y: number }> = [{ x: 180, y: 405 }, { x: 3755, y: 420 }, { x: 420, y: 2528 }, { x: 3700, y: 2528 }, { x: 3060, y: 2385 }, { x: 4560, y: 2528 }];
 export const POND = { x: 3520, y: 1340, rx: 250, ry: 840 };  // the wishing lake (water lanterns drift slowly across it)
 export const WISH_STALL = { x: 3520, y: 2330 };              // where wishes are written, at the lake's south end
 // the oil-lamp festival (ဆီမီးထွန်းပွဲ): lamps and flowers in rings around a little stupa
@@ -126,11 +143,13 @@ export const VENDOR_POSTS: Post[] = [
   ...CARTS.map(([x, y], i) => ({ x, y: y - 52, hat: i % 2 === 0, seed: i })),
   ...BOOTHS.map((b, i) => ({ x: b.x, y: b.y - 46, seed: 10 + i })),
   { x: 1590, y: 1860, hat: true, seed: 20 },
+  ...NIB_STALLS.map((s, i) => ({ x: s.x + s.side * 10, y: s.y + (i % 2 ? 18 : -18), hat: i % 3 === 0, seed: 30 + i })),
 ];
 
 // where the crowd likes to stop
 export const STALLFRONTS: Array<{ x: number; y: number }> = [
   ...CARTS.map(([x, y]) => ({ x, y: y + 20 })), ...BOOTHS.map(b => ({ x: b.x, y: b.y + 24 })), { x: 1590, y: 1945 },
+  ...NIB_STALLS.map((s, i) => { const [x, y] = nibFront(i); return { x: x + s.side * 20, y: y + 30 }; }),
 ];
 
 // solid things you cannot walk through
@@ -161,6 +180,10 @@ PWE_FOOD.forEach(f => addCol(f.x - 70, f.y - 34, 140, 40));
 addCol(TEA.x - 230, TEA.y - 70, 460, 100);      // the teashop's counter and kitchen
 TEA_TABS.forEach(([x, y]) => addCol(x - 30, y - 30, 60, 60));
 RESTROOMS.forEach(r => addCol(r.x - 52, r.y - 32, 104, 60));
+NIB_STALLS.forEach(s => addCol(s.x - 46, s.y - 66, 92, 132));
+addCol(LOOMS.x - 130, LOOMS.y - 90, 260, 110);   // the looms and the weavers at the back of the tent
+addCol(MONEY_TREE.x - 26, MONEY_TREE.y - 26, 52, 52);
+for (const dx of [-150, 150]) addCol(NIB_GATE.x + dx - 10, NIB_GATE.y - 10, 20, 20); // the arch's two posts
 
 export function blocked(x: number, y: number, r: number): boolean {
   if (x < 40 + r || x > WW - 40 - r || y < NORTH + 8 + r || y > WH - 14 - r) return true;

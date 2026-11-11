@@ -181,6 +181,8 @@ export const WAITER = {
 
 // ---- what people say depends on where they are: overheard in the crowd near each zone (text bubbles, no voice)
 export const LOCAL_LINES: Record<string, Line[]> = {
+  nibbana: [['သာဓု သာဓု သာဓု', 'Sadhu, sadhu, sadhu!'], ['ဟိုဘက်မှာ မုန့်ဟင်းခါး အလကား ကျွေးနေတယ်', 'They’re giving away mohinga over there'], ['ဗိုက်ပြည့်ပြီ၊ ဒါပေမဲ့ မယ်ဇလီဖူးသုပ်တော့ စားရဦးမယ်', 'I’m full, but I still have to eat the mezali salad'], ['ငါတို့ရပ်ကွက်လည်း နောက်နှစ် လှူကြမယ်', 'Our ward should give next year too'], ['အဘွား သနပ်ခါး လိမ်းပေးလိုက်တာ မွှေးလိုက်တာ', 'Grandma’s thanaka smells so good']],
+  tazaung: [['မနက်မိုးလင်းရင် သင်္ကန်း ကပ်ရမယ်', 'At dawn they offer the robe'], ['ခြင်းလုံး ခတ်တာ ကြည့်ရတာ ကောင်းလိုက်တာ', 'I love watching them play chinlone'], ['ပဒေသာပင်မှာ ငွေစက္ကူ ချိတ်ကြမယ်', 'Let’s hang a note on the money tree'], ['လပြည့်ဝန်း လှလိုက်တာ', 'What a beautiful full moon'], ['ဒီနှစ် ဘယ်အဖွဲ့ အရင်ပြီးမလဲ မသိဘူး', 'I wonder which team will finish first this year']],
   ferris: [['အပေါ်ဆုံးရောက်ရင် ရွှေတိဂုံ မြင်ရတယ်', 'From the top you can see Shwedagon'], ['ငါ ကြောက်တယ်၊ နင် အရင်စီး', 'I’m scared, you go first'], ['လက်မှတ် ဘယ်လောက်လဲ', 'How much is a ticket?']],
   carousel: [['သမီးလေး၊ မြင်းဖြူလေး စီးမလား', 'Want to ride the white horse, sweetie?'], ['နောက်တစ်ပတ် ထပ်စီးချင်တယ်', 'I want another go!']],
   food: [['မုန့်ဟင်းခါး တစ်ပွဲ ထပ်စားမယ်', 'I’ll have another bowl of mohinga'], ['ဒီဆိုင် ငရုတ်သီး စပ်တယ်ဟေ့', 'This stall’s chilli is hot!'], ['ကြံရည် ခွက်ကြီး ယူမလား', 'Shall we get a big sugarcane juice?'], ['ထိုင်ခုံ လွတ်တာ ရှိလား', 'Is there a free stool?']],
