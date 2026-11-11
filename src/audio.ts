@@ -177,6 +177,19 @@ export function horn(vol: number): void {
   setTimeout(() => { try { lp.disconnect(); } catch { /* gone */ } }, 900);
 }
 
+/** The merit-sharing gong (ကြေးစည်) struck three times after an offering, each strike left to ring out. */
+export function meritGong(): void {
+  if (!A.c || !A.m) return;
+  const t = A.c.currentTime;
+  for (let k = 0; k < 3; k++) { const w = t + k * 0.9; [220, 220 * 2.4, 220 * 4.1].forEach((f, i) => tone(f, 1.6 - i * 0.4, 'sine', [0.12, 0.05, 0.025][i], w, A.m, f * 0.995)); noiseHit(0.03, 0.06, 1800, w); }
+}
+/** One beat of a kathina procession's do-bat drum band: a deep open stroke, or a slapped high one, quieter with distance. */
+export function drumBeat(vol: number, deep: boolean): void {
+  if (!A.c || vol <= 0.01) return;
+  const t = A.c.currentTime;
+  if (deep) { tone(95, 0.3, 'sine', vol * 0.5, t, null, 60); noiseHit(0.06, vol * 0.2, 400, t); }
+  else { tone(240, 0.12, 'triangle', vol * 0.22, t, null, 190); noiseHit(0.04, vol * 0.25, 2200, t, 'bandpass'); }
+}
 export type Sfx = 'coin' | 'ding' | 'pop' | 'throw' | 'miss' | 'toot' | 'launch' | 'boom' | 'crackle' | 'shutter' | 'whee' | 'chat' | 'bump' | 'zap' | 'fizz' | 'clank' | 'scream' | 'chuff' | 'clack' | 'whistle';
 export function sfx(k: Sfx): void {
   if (!A.c) return;

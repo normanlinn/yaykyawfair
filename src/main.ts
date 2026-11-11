@@ -2,19 +2,20 @@
 // Game logic works in map units (see layout.ts); world3d.ts draws it with Three.js.
 import { Ctx, TAU, rand, pick, clamp, lerp, srng, rr, el, circ, ln, ks, MMF, DISP, BODY, $ } from './util';
 import { SHIRTS, LONS, SKINS, BALLOONS, AV_SHIRTS, AV_LONS, person, PersonOpts, Avatar, Gender, DEFAULT_AVATAR, avatarOpts, cleanAvatar, randomAvatar, genderStartingLook } from './people';
+import { meritGong, drumBeat } from './audio';
 import { A, audioInit, sfx, bell, horn, setChatter, setMaster, loadVoices, speak } from './audio';
 import { CROWD_LINES, VENDOR_CALLS, REPLIES, VOICE_CLIPS } from './voices';
 import {
   WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, STATION, TRAIN_STOP, TRAIN_OFF, TRACK_LEN, ST, FV, PHOTO, TOYS_AT, UNCLE, ARCH_Y, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
   STALLFRONTS, VENDOR_POSTS, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, RESTROOMS, QUEUES, QUEUE_GAP, WATCHERS, M, blocked, trackPos,
-  NIB_STALLS, nibFront, NIB_GATE, LOOMS, MONEY_TREE, CHINLONE, ROBE_STRIPS,
+  NIB_STALLS, nibFront, NIB_GATE, LOOMS, MONEY_TREE, CHINLONE, ROBE_STRIPS, TRUSTEE, WATER_POTS, PROC_PATH, MONK_PATH, pathLen, pathAt,
 } from './layout';
 import { friends } from './friends';
 import CHANGES from './changelog.json';
-import { GIVINGS, Giving, DONATE_SAY, SADHU, THANKS, BYE_ME, BYE_THEM, WEAVE_LINES } from './nibbana';
+import { GIVINGS, Giving, DONATE_SAY, SADHU, THANKS, BYE_ME, BYE_THEM, WEAVE_LINES, NIB_CALLS, AHMYA, YAY_SET, YAY_SAID, TRUSTEE_WHO, TRUSTEE_HELLO, TREE_GIFTS, TreeGift, TRUSTEE_TOPICS, DONORS0, ALMS_SAY, ALMS_MONK, PROC_LINES } from './nibbana';
 import { SHOPS, PWE_SHOPS, TEA_MENU, WAITER, LOCAL_LINES, Shop, Line, MenuItem, kyatMy, countMy } from './shops';
 import { openWishes, Wish, WishKind, WISH_PRICE, WISH_IDEAS, WISH_MAX_LEN, cleanWish } from './wishes';
-import { init3d, build3d, resize3d, render3d, launchFirework, fountain, renderPreview, capture, project, rigKey, setWishes, wishSpot, BUMPER_N, CANDLE_MINE, CrowdItem, Frame, Look, RideKind } from './world3d';
+import { init3d, build3d, resize3d, render3d, launchFirework, fountain, renderPreview, capture, project, rigKey, setWishes, wishSpot, setDonors, BUMPER_N, CANDLE_MINE, CrowdItem, Frame, Look, RideKind } from './world3d';
 
 // ---------- canvases ----------
 const world = $<HTMLCanvasElement>('world');
@@ -95,7 +96,9 @@ IT.push({x:CANDLE.x-CANDLE.R-30,y:CANDLE.y,r:70,label:()=>S.flowersFree>0?'Offer
 IT.push({x:TEA.x-120,y:TEA.y+60,r:60,label:()=>'Tea to take away at the counter · လက်ဖက်ရည် အိတ်နဲ့',act:()=>openShop(TEA_COUNTER)});
 RESTROOMS.forEach(r=>IT.push({x:r.x,y:r.y+52,r:50,label:()=>`Use the restroom · အိမ်သာ · ${ks(100)}`,act:useRestroom}));
 GIVINGS.forEach((g,i)=>{ const [x,y]=nibFront(i); IT.push({x,y,r:55,label:()=>`${g.banner[1]} from ${g.who} · ${g.banner[0]} · free`,act:()=>i===0?joinQueue('nib_mohinga',0,()=>openGiving(0)):openGiving(i)}); });
-IT.push({x:MONEY_TREE.x,y:MONEY_TREE.y+60,r:55,label:()=>`Hang a note on the money tree · ပဒေသာပင် · ${ks(1000)}`,act:hangNote});
+IT.push({x:MONEY_TREE.x,y:MONEY_TREE.y+60,r:60,label:()=>'Make an offering at the money tree · ပဒေသာပင်မှာ အလှူချိတ်မယ်',act:openTree});
+IT.push({x:WATER_POTS.x,y:WATER_POTS.y+40,r:45,label:()=>'Drink from the water pots · ရေအိုးစင်',act:drinkPots});
+const almsIT: Interactable={x:-9999,y:-9999,r:75,label:()=>MONK.pause>0?'The monks bless you · ကျန်းမာ ချမ်းသာကြပါစေ':'Kneel and offer rice to the monks · ဆွမ်းလောင်းမယ်',act:offerAlms}; IT.push(almsIT);
 IT.push({x:LOOMS.x,y:LOOMS.y+70,r:70,label:()=>`Help weave the monk’s robe · မသိုးသင်္ကန်း ရက်ကူမယ် (${robePct()}% woven)`,act:openWeave});
 IT.push({x:CHINLONE.x,y:CHINLONE.y+CHINLONE.R+34,r:50,label:()=>'Join the chinlone circle · ခြင်းလုံး ခတ်မယ်',act:joinChin});
 TEA_TABS.forEach((_,i)=>{ const [x,y]=teaStools(i)[teaFree(i)];
@@ -1038,7 +1041,7 @@ function openGiving(i: number): void {
   function donate(n: number): void {
     if(busy) return; if(S.kyat<n){ toast(`Not enough kyat. You have ${ks(S.kyat)}.`); sfx('miss'); return; }
     c.say(DONATE_SAY[0],true); pay(n);
-    reply(THANKS,()=>{ c.say(SADHU,true); merit(Math.max(1,Math.round(n/500)),`You add ${ks(n)} to ${g.who}’s offering.`); });
+    reply(THANKS,()=>{ meritGong(); reply(AHMYA,()=>{ c.say(SADHU,true); merit(Math.max(1,Math.round(n/500)),`You add ${ks(n)} to ${g.who}’s offering. The gong rings three times to share the merit.`); },1400); });
   }
   g.topics.forEach(t=>optBtn(c,t.q,()=>{ if(busy) return; c.say(t.q,true); reply(t.a); }));
   optBtn(c,BYE_ME,()=>{ if(busy) return; c.say(BYE_ME,true); reply(pick(BYE_THEM),()=>setTimeout(closeModal,900)); },'bye');
@@ -1046,17 +1049,89 @@ function openGiving(i: number): void {
 }
 
 // the padaythabin: a tree of kathina offerings that fills with notes through the night
-const MT={notes:42,t:4};
-function hangNote(): void {
-  if(!pay(1000)) return; MT.notes++;
-  merit(2,'You fold a 1,000 kyat note into a little fan and tie it to the padaythabin. It will be offered to the monastery with the robes.');
+const MT={notes:42,t:4,bird:6,flower:6,fan:6,reqs:2,mine:0,donors:[...DONORS0] as Array<[string, number]>};
+function showDonors(): void {
+  const list=[...MT.donors]; if(MT.mine) list.unshift([S.settings.name||'You',MT.mine]);
+  setDonors(list.slice(0,9).map(([n,a])=>[n,kyatMy(a)]));
 }
+function openTree(): void {
+  const keeper=NPC.find(n=>n.post&&Math.hypot(n.x-TRUSTEE.x,n.y-TRUSTEE.y)<8);
+  if(keeper){ keeper.hd=Math.atan2(P.x-keeper.x,P.y-keeper.y); P.hd=Math.atan2(MONEY_TREE.x-P.x,MONEY_TREE.y-P.y); }
+  const c=chatBox('Offer or ask:'); let busy=false;
+  const reply=(l: Line, then?: () => void, ms=750)=>{ busy=true; setTimeout(()=>{ c.say(l,false); sfx('chat'); if(keeper) NPC_SAY.push({n:keeper,t:l,until:T+4}); busy=false; then?.(); },ms); };
+  TRUSTEE_HELLO.forEach((l,k)=>setTimeout(()=>c.say(l,false),k*500));
+  const menu=document.createElement('div'); menu.className='menu';
+  TREE_GIFTS.forEach(gf=>{ const r=document.createElement('button'); r.type='button'; r.className='mi';
+    r.innerHTML=`<span class="mn"><b>${esc(gf.name)}</b><span class="mm">${gf.my}</span><small>${esc(gf.d)}</small></span><span class="mp">${ks(gf.p)}<small class="mm">${kyatMy(gf.p)}</small></span>`;
+    r.onclick=()=>offer(gf); menu.appendChild(r); });
+  c.mid.appendChild(menu);
+  function offer(gf: TreeGift): void {
+    if(busy) return; if(S.kyat<gf.p){ toast(`Not enough kyat. You have ${ks(S.kyat)}.`); sfx('miss'); return; }
+    c.say(gf.say,true); pay(gf.p); MT[gf.id]++; MT.notes+=gf.id==='reqs'?0:1; MT.mine+=gf.p; showDonors();
+    reply(gf.reply,()=>{ meritGong(); reply(AHMYA,()=>{
+      c.say(SADHU,true); merit(gf.id==='reqs'?6:2,gf.id==='reqs'?'Your set of the eight requisites is tied to the padaythabin, and your name goes up on the donors’ board.':`Your ${gf.name.toLowerCase().replace(/^a /,'')} hangs on the padaythabin, and your name goes up on the donors’ board.`);
+      if(!c.q.querySelector('.yay')){ const b=optBtn(c,YAY_SET,()=>{ if(busy) return; b.remove(); pour(); },'yay'); c.q.prepend(b); }
+    },1400); });
+  }
+  function pour(): void {
+    c.say(YAY_SET,true); busy=true;
+    const bar=document.createElement('div'); bar.className='pour'; bar.innerHTML='<span>💧</span><i></i><small class="mm">ရေစက်ချနေသည်…</small>'; c.mid.prepend(bar);
+    const fill=bar.querySelector('i') as HTMLElement; let u=0;
+    const tick=()=>{ if(!bar.isConnected) return; u+=.012; fill.style.width=Math.min(60,u*60)+'%'; if(u<1) requestAnimationFrame(tick); else { bar.remove(); busy=false; c.say(YAY_SAID,true); reply(SADHU,()=>merit(1,'You pour the water of dedication slowly onto the earth, sharing your merit with all beings.')); } };
+    requestAnimationFrame(tick);
+  }
+  TRUSTEE_TOPICS.forEach(t=>optBtn(c,t.q,()=>{ if(busy) return; c.say(t.q,true); reply(t.a); }));
+  optBtn(c,BYE_ME,()=>{ if(busy) return; c.say(BYE_ME,true); reply(['ကုသိုလ်တွေ တိုးပွားပါစေ','May your merit grow.'],()=>setTimeout(closeModal,900)); },'bye');
+  openModal(`${TRUSTEE_WHO[0]} · ${TRUSTEE_WHO[1]}`,c.wrap);
+}
+let drankPots=false, donorsShown=false;
+function drinkPots(): void {
+  sfx('pop');
+  toast(drankPots?'Cool water from the clay pot. The coconut-shell ladle goes back on its hook.':'<span class="z">ရေအိုးစင်</span>You drink cool water from a clay pot with the coconut-shell ladle. Families keep these pots filled by the roadside so any passer-by can drink, as merit.',!drankPots);
+  drankPots=true;
+}
+
+// the kathina procession: a do-bat drum band, dancers and people carrying money trees and robes, round the grounds to the padaythabin
+const PROC={d:-1,next:25,stop:0,beat:0,k:0,talk:0}, PROC_N=12, PROC_GAP=30, PROC_LEN=pathLen(PROC_PATH);
+const PROC_BEAT=[1,0,0,1,0,1,0,0];
+function updateProc(dt: number): void {
+  const on=nightMins()>=18*60&&nightMins()<26*60;
+  if(PROC.d<0){ PROC.next-=dt; if(PROC.next<=0&&on){ PROC.d=0; PROC.stop=0;
+      if(S.mode==='walk'&&P.x>3880) toast('<span class="z">ကထိန် လှည့်လည်ပြီ</span>The kathina procession is coming! Drums, dancers and money trees, all the way to the padaythabin.',true); }
+    return; }
+  if(PROC.d>=PROC_LEN){ PROC.stop+=dt; if(PROC.stop>9){ PROC.d=-1; PROC.next=rand(140,210); MT.notes=Math.min(160,MT.notes+6); MT.reqs++; } }
+  else PROC.d+=26*dt;
+  const [lx,ly]=pathAt(PROC_PATH,Math.min(PROC.d,PROC_LEN)), dist=Math.hypot(P.x-lx,P.y-ly);
+  PROC.beat-=dt; if(PROC.beat<=0&&PROC.stop<6){ PROC.beat=.24; if(S.mode==='walk'&&dist<900) drumBeat(clamp(1-dist/900,0,1)*.9,PROC_BEAT[PROC.k++%8]===1); }
+  PROC.talk-=dt; if(PROC.talk<=0){ PROC.talk=rand(4,8); const n=NPC.find(q=>!q.post&&!q.sit&&q.q==null&&Math.hypot(q.x-lx,q.y-ly)<260); if(n&&dist<700) NPC_SAY.push({n,t:pick(PROC_LINES),until:T+3.5}); }
+}
+// dawn: the monks' alms round down the market aisle
+const MONK={d:-1,pause:0,cool:4,blessed:0}, MONK_N=7, MONK_GAP=34, MONK_LEN=pathLen(MONK_PATH);
+function updateMonks(dt: number): void {
+  const on=S.clock>=5*60+30&&S.clock<9*60;
+  if(MONK.d<0){ MONK.cool-=dt; if(MONK.cool<=0&&on){ MONK.d=0; if(S.mode==='walk'&&P.x>3880) toast('<span class="z">ဆွမ်းခံ ကြွလာပြီ</span>The monks are walking down the market aisle on their alms round. Kneel and offer rice as they pass.',true); } almsIT.x=-9999; return; }
+  if(MONK.pause>0) MONK.pause-=dt; else MONK.d+=17*dt;
+  if(MONK.d>MONK_LEN+MONK_N*MONK_GAP){ MONK.d=-1; MONK.cool=rand(60,90); almsIT.x=-9999; return; }
+  // the interaction follows whichever monk is nearest you
+  let bd=1e9; for(let k=0;k<MONK_N;k++){ const dd=MONK.d-k*MONK_GAP; if(dd<0||dd>MONK_LEN-80) continue; const [x,y]=pathAt(MONK_PATH,dd), d=Math.hypot(P.x-x,P.y-y); if(d<bd){ bd=d; almsIT.x=x+40; almsIT.y=y; } }
+  if(bd===1e9) almsIT.x=-9999;
+}
+function offerAlms(): void {
+  if(MONK.pause>0) return;
+  MONK.pause=5; P.hd=-Math.PI/2; sfx('ding');
+  NPC_SAY.push({n:{x:almsIT.x-40,y:almsIT.y,s:1} as Npc,t:ALMS_MONK,until:T+4});
+  meritGong();
+  merit(3,`<span class="mm">${ALMS_SAY[0]}</span><br>You kneel, palms together, and spoon warm rice into each black lacquer bowl. The monks recite a blessing as they pass.`);
+}
+let callT2=8;
 // the matho thingan robe: the weaving teams work all night, and you can help with a few strips
 const ROBE={mine:0,strips:0,myUntil:0,said:false};
 function nightMins(): number { return S.clock<6*60?S.clock+1440:S.clock; }
 function robePct(): number { return Math.round(ROBE.strips/ROBE_STRIPS*100); }
 function updateTazaung(dt: number): void {
-  MT.t-=dt; if(MT.t<=0){ MT.t=rand(6,12); if(MT.notes<160) MT.notes++; }
+  MT.t-=dt; if(MT.t<=0){ MT.t=rand(6,12); if(MT.notes<160) MT.notes++; if(Math.random()<.3) MT[pick(['bird','flower','fan'] as const)]++; }
+  updateProc(dt); updateMonks(dt); if(!donorsShown){ donorsShown=true; showDonors(); }
+  callT2-=dt; if(callT2<=0){ callT2=rand(12,20); if(S.mode==='walk'&&zoneAt(P.x,P.y)==='nibbana'){ let best: Npc | undefined, bd=1e9; for(const n of NPC) if(n.post&&n.x>3900){ const d=Math.hypot(n.x-P.x,n.y-P.y); if(d<bd){ bd=d; best=n; } } if(best&&bd<500) NPC_SAY.push({n:best,t:pick(NIB_CALLS),until:T+4.5}); } }
   const base=clamp((nightMins()-18*60)/(10*60),0,1)*(ROBE_STRIPS-4);
   ROBE.strips=Math.min(ROBE_STRIPS,base+ROBE.mine);
   if(ROBE.strips>=ROBE_STRIPS&&!ROBE.said&&S.mode==='walk'&&Math.hypot(P.x-LOOMS.x,P.y-LOOMS.y)<600){ ROBE.said=true; toast('<span class="z">မသိုးသင်္ကန်း ပြီးပြီ</span>The robe is finished! The weavers fold it to offer at dawn. Sadhu!',true); }
@@ -1765,7 +1840,7 @@ function frameData(dt: number): Frame {
     steamFrom:STEAM_AT, look:LOOK, bumpers:BUMPS, shake:RM?0:shake,
     candles:{lamps:CAND.lamps,mine:CAND.mine,flowers:CAND.flowers},
     bumperPov:DRIVE.pov,
-    taz:{notes:Math.min(160,MT.notes),robe:ROBE.strips/ROBE_STRIPS,weaving:T<ROBE.myUntil,ball:CHIN.ball,kicker:CHIN.kicker,me:CHIN.on},
+    taz:{bird:MT.bird,flower:MT.flower,fan:MT.fan,reqs:MT.reqs,proc:PROC.d,monk:MONK.d,monkStop:MONK.pause>0,notes:Math.min(160,MT.notes),robe:ROBE.strips/ROBE_STRIPS,weaving:T<ROBE.myUntil,ball:CHIN.ball,kicker:CHIN.kicker,me:CHIN.on},
     tea:P.table>=0?{table:P.table,seat:teaFree(P.table),items:TEAO.served}:undefined,
   };
 }
@@ -1985,4 +2060,4 @@ const hot=window.claude&&window.claude.hot;
 if(hot&&hot.ready) hot.ready(boot); else boot(hot&&hot.data||{});
 // audio needs a gesture; also unlock on first tap after a reload
 window.addEventListener('pointerdown',()=>{ if(S.mode!=='title'){ audioInit(S.settings.sound); loadVoices(VOICE_CLIPS); if(A.c&&A.c.state==='suspended') A.c.resume(); } });
-window.__ykn={CHIN,ROBE,MT,openGiving,openWeave,joinChin,hangNote,PQ,joinQueue,QUEUES,openShop,SHOPS,callWaiter,TEAO,useRestroom,launchFirework,checkUpdate,S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};
+window.__ykn={CHIN,ROBE,MT,PROC,MONK,openTree,offerAlms,openGiving,openWeave,joinChin,PQ,joinQueue,QUEUES,openShop,SHOPS,callWaiter,TEAO,useRestroom,launchFirework,checkUpdate,S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};

@@ -82,6 +82,23 @@ export const MONEY_TREE = { x: 4440, y: 1660 };                 // the padaythab
 export const CHINLONE = { x: 4270, y: 2120, R: 64, n: 6 };       // a ring of chinlone players; you take the south place
 /** The robe has to be woven in one night: a few strips each person helps with. */
 export const ROBE_STRIPS = 24;
+export const TRUSTEE = { x: MONEY_TREE.x - 70, y: MONEY_TREE.y + 10 };   // the kathina trustee who looks after the money tree
+export const DONOR_BOARD = { x: MONEY_TREE.x + 95, y: MONEY_TREE.y + 20 };  // the list of donors, painted up as they give
+export const WATER_POTS = { x: 4385, y: 400 };                          // a ရေအိုးစင်: clay water pots anyone may drink from
+/** The kathina procession's route: in under the market arch, round the Tazaungdaing grounds, and up to the money tree. */
+export const PROC_PATH: Array<[number, number]> = [[4270, 1250], [4270, 1790], [4570, 1790], [4570, 2370], [3990, 2370], [3990, 1790], [4370, 1770]];
+/** The monks' dawn alms round: in from the north end of the market aisle and down it, single file. */
+export const MONK_PATH: Array<[number, number]> = [[4270, 360], [4270, 1420], [4270, 1520]];
+export function pathLen(path: Array<[number, number]>): number { let L = 0; for (let k = 1; k < path.length; k++) L += Math.hypot(path[k][0] - path[k - 1][0], path[k][1] - path[k - 1][1]); return L; }
+/** The point `d` map units along a path, and the heading there (radians, as atan2 of dx and dy). Before the start it waits at the start. */
+export function pathAt(path: Array<[number, number]>, d: number): [number, number, number] {
+  for (let k = 1; k < path.length; k++) {
+    const [ax, ay] = path[k - 1], [bx, by] = path[k], L = Math.hypot(bx - ax, by - ay);
+    if (d <= L || k === path.length - 1) { const u = Math.max(0, Math.min(1, d / L)); return [ax + (bx - ax) * u, ay + (by - ay) * u, Math.atan2(bx - ax, by - ay)]; }
+    d -= L;
+  }
+  return [path[0][0], path[0][1], 0];
+}
 /** People who stop to watch: a loose crowd in front of the hand-turned wheel and around the carousel. */
 export const WATCHERS: Array<{ x: number; y: number; w: number; h: number; n: number; fx: number; fy: number }> = [
   { x: 1985, y: 1225, w: 230, h: 40, n: 9, fx: 2100, fy: 1130 },
@@ -143,6 +160,7 @@ export const VENDOR_POSTS: Post[] = [
   ...CARTS.map(([x, y], i) => ({ x, y: y - 52, hat: i % 2 === 0, seed: i })),
   ...BOOTHS.map((b, i) => ({ x: b.x, y: b.y - 46, seed: 10 + i })),
   { x: 1590, y: 1860, hat: true, seed: 20 },
+  { x: TRUSTEE.x, y: TRUSTEE.y, seed: 50 },
   ...NIB_STALLS.map((s, i) => ({ x: s.x + s.side * 10, y: s.y + (i % 2 ? 18 : -18), hat: i % 3 === 0, seed: 30 + i })),
 ];
 
@@ -183,6 +201,8 @@ RESTROOMS.forEach(r => addCol(r.x - 52, r.y - 32, 104, 60));
 NIB_STALLS.forEach(s => addCol(s.x - 46, s.y - 66, 92, 132));
 addCol(LOOMS.x - 130, LOOMS.y - 90, 260, 110);   // the looms and the weavers at the back of the tent
 addCol(MONEY_TREE.x - 26, MONEY_TREE.y - 26, 52, 52);
+addCol(DONOR_BOARD.x - 40, DONOR_BOARD.y - 8, 80, 16);
+addCol(WATER_POTS.x - 40, WATER_POTS.y - 22, 80, 40);
 for (const dx of [-150, 150]) addCol(NIB_GATE.x + dx - 10, NIB_GATE.y - 10, 20, 20); // the arch's two posts
 
 export function blocked(x: number, y: number, r: number): boolean {

@@ -20,6 +20,7 @@ export interface PersonOpts {
   pat?: Pattern; hair?: Hair; bun?: boolean; capc?: string; outfit?: Outfit; head?: Headwear; gbc?: string;
   thanaka?: boolean; hat?: boolean; fan?: boolean; flower?: boolean; glasses?: boolean; bag?: boolean;
   balloon?: string | null; armsUp?: boolean; hl?: boolean;
+  monk?: boolean; // a shaved head, a maroon robe over one shoulder and a black lacquer alms bowl
 }
 
 /** The player's chosen look. */

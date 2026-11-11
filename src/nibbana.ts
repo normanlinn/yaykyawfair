@@ -19,7 +19,7 @@ export const GIVINGS: Giving[] = [
   { id: 'nib_mohinga', kind: 'pot', col: '#c2543a', who: 'Daw San San’s family', whoMy: 'ဒေါ်စန်းစန်း မိသားစု', banner: ['မုန့်ဟင်းခါး အလှူ', 'Free mohinga'],
     hello: [['ဝင်ခဲ့ကြပါ ဝင်ခဲ့ကြပါ၊ မုန့်ဟင်းခါး အခမဲ့ပါ', 'Come in, come in! The mohinga is free.'], ['တန်းစီပြီး တစ်ယောက် တစ်ပွဲနော်', 'Queue up, one bowl each.']],
     gifts: [gift('mohinga', 'Mohinga', 'မုန့်ဟင်းခါး', 'Fish noodle soup cooked since four in the afternoon in the family’s biggest pot.', ['တစ်ပွဲ ရနိုင်မလား', 'May I have a bowl?'], ['ယူပါ ယူပါ၊ ပူတယ်နော်၊ ဖြည်းဖြည်းစား', 'Here, take it. It’s hot, eat slowly.'])],
-    topics: [WHY, { q: ['ဘယ်နှစ်ပွဲလောက် ချက်ထားလဲ', 'How many bowls did you cook?'], a: ['အိုး သုံးလုံး ချက်ထားတယ်။ ကုန်ရင် ထပ်ချက်မယ်', 'Three big pots. If it runs out we’ll cook more.'] }] },
+    topics: [WHY, { q: ['ဘုန်းကြီးတွေ ဆွမ်းခံ ကြွလာလား', 'Do the monks come by here?'], a: ['မနက် ခြောက်နာရီလောက် ဒီလမ်းအတိုင်း ဆွမ်းခံ ကြွတယ်။ စောစောလာရင် ဆွမ်းလောင်းလို့ရတယ်', 'Around six in the morning they walk down this aisle on their alms round. Come early and you can offer rice.'] }, { q: ['ဘယ်နှစ်ပွဲလောက် ချက်ထားလဲ', 'How many bowls did you cook?'], a: ['အိုး သုံးလုံး ချက်ထားတယ်။ ကုန်ရင် ထပ်ချက်မယ်', 'Three big pots. If it runs out we’ll cook more.'] }] },
   { id: 'nib_tea', kind: 'tea', col: '#7a4a2a', who: 'The ward youth group', whoMy: 'ရပ်ကွက် လူငယ်အဖွဲ့', banner: ['လက်ဖက်ရည် အလှူ', 'Free tea'],
     hello: [['အစ်ကို အစ်မ၊ လက်ဖက်ရည် သောက်သွားပါဦး', 'Brother, sister, have some tea before you go!']],
     gifts: [gift('nib_tea', 'Sweet milk tea', 'လက်ဖက်ရည်ချို', 'Strong tea and condensed milk, poured from high so it froths.', ['လက်ဖက်ရည် တစ်ခွက်လောက်', 'A cup of tea, please.'], ['ရော့၊ ချိုချိုလေး ဖျော်ပေးထားတယ်', 'Here you go, nice and sweet.']),
@@ -63,4 +63,50 @@ export const WEAVE_LINES: Line[] = [
   ['ချည်မပြတ်အောင် သေချာလုပ်', 'Careful, don’t break the thread.'],
   ['လွန်းကို ညီညီ ပစ်', 'Throw the shuttle evenly.'],
   ['သာဓု၊ တစ်ကြောင်း ပြီးပြီ', 'Sadhu, one more row done!'],
+];
+
+/** Announcements from the market's loudspeaker and the donors calling people in, heard as you walk the aisle. */
+export const NIB_CALLS: Line[] = [
+  ['ဝင်ခဲ့ကြပါ ဝင်ခဲ့ကြပါ၊ နိဗ္ဗာန်ဈေးပါ၊ ပိုက်ဆံ မလိုပါ', 'Come in, come in! It’s the Nibbana market, no money needed.'],
+  ['မုန့်ဟင်းခါး ဒုတိယအိုး ကျက်ပါပြီ', 'The second pot of mohinga is ready!'],
+  ['အလှူရှင် ဦးစန်းမောင် ဒေါ်စန်းစန်း မိသားစု လှူဒါန်းပါသည်', 'Offered by the family of U San Maung and Daw San San.'],
+  ['ကလေးတွေ လမ်းမပိတ်ကြနဲ့နော်', 'Kids, don’t block the aisle, please.'],
+  ['မယ်ဇလီဖူးသုပ် ညသန်းခေါင် မတိုင်ခင် စားကြပါ', 'Eat your mezali salad before midnight!'],
+  ['ယူတဲ့သူ ဝမ်းသာ၊ ပေးတဲ့သူ ကုသိုလ်ရ', 'The taker is happy, the giver gains merit.'],
+];
+/** Sharing the merit: the trustee or donor calls it out three times and everyone answers sadhu. */
+export const AHMYA: Line = ['အမျှ အမျှ အမျှ ယူတော်မူကြပါ', 'Ahmya, ahmya, ahmya! Please share in this merit.'];
+export const YAY_SET: Line = ['ရေစက်ချမယ်', 'I’ll pour the water of dedication.'];
+export const YAY_SAID: Line = ['ငါပြုရသော ကုသိုလ်ကို သတ္တဝါအားလုံး အမျှ ရကြပါစေ', 'May all beings share in the merit I have made.'];
+
+/** The money tree's trustee (ကထိန် ဂေါပက) and what you can offer and ask. */
+export const TRUSTEE_WHO: [string, string] = ['U Ba Shwe, kathina trustee', 'ကထိန်ဂေါပက ဦးဘရွှေ'];
+export const TRUSTEE_HELLO: Line[] = [
+  ['လာပါ ကလေး၊ ကထိန်ပဒေသာပင်မှာ အလှူ ချိတ်မလား', 'Come, child. Would you like to hang an offering on the kathina money tree?'],
+  ['မနက်ဖြန် နံနက် ဆိုင်းဝိုင်းနဲ့ ကျောင်းကို ပင့်ဆောင်မယ်', 'Tomorrow morning we carry it to the monastery with the drum band.'],
+];
+export interface TreeGift { id: 'bird' | 'flower' | 'fan' | 'reqs'; name: string; my: string; p: number; d: string; say: Line; reply: Line }
+export const TREE_GIFTS: TreeGift[] = [
+  { id: 'bird', name: 'A note folded into a bird', my: 'ငွေစက္ကူ ငှက်ပုံ', p: 1000, d: 'A 1,000 kyat note folded into a little bird, wings spread, tied to a branch.', say: ['ငွေစက္ကူကို ငှက်ပုံ ခေါက်ပြီး ချိတ်ပါရစေ', 'Let me fold a note into a bird and hang it.'], reply: ['ငှက်လေးက ပျံသွားမလိုပဲ၊ လှလိုက်တာ', 'It looks ready to fly off. Beautiful.'] },
+  { id: 'flower', name: 'A note folded into a lotus', my: 'ငွေစက္ကူ ကြာပန်းပုံ', p: 1000, d: 'Petals of folded kyat notes making a lotus, the flower of the Buddha.', say: ['ကြာပန်းပုံ ခေါက်ပြီး ချိတ်ပါရစေ', 'Let me fold a lotus and hang it.'], reply: ['ကြာပန်းလေးနဲ့ ပိုလှသွားပြီ', 'The lotus makes the tree even prettier.'] },
+  { id: 'fan', name: 'A note folded into a fan', my: 'ငွေစက္ကူ ယပ်တောင်ပုံ', p: 1000, d: 'A note pleated into a little fan, like the monks’ palm-leaf fans.', say: ['ယပ်တောင်ပုံ ခေါက်ပြီး ချိတ်ပါရစေ', 'Let me pleat it into a fan and hang it.'], reply: ['ယပ်တောင်လေး တန်းနေတာပဲ', 'Your little fan is hanging neatly.'] },
+  { id: 'reqs', name: 'The eight requisites', my: 'ပရိက္ခရာ ရှစ်ပါး', p: 5000, d: 'Robes, an alms bowl, a belt, a razor, a needle, a water strainer, an umbrella and slippers: everything a monk may own.', say: ['ပရိက္ခရာ ရှစ်ပါး တစ်စုံ လှူပါရစေ', 'Let me offer a set of the eight requisites.'], reply: ['သာဓု၊ ကြီးကြီးမားမား လှူတာပဲ', 'Sadhu! That’s a generous offering.'] },
+];
+export const TRUSTEE_TOPICS: Topic[] = [
+  { q: ['ကထိန်ဆိုတာ ဘာလဲ', 'What is kathina?'], a: ['ဝါကျွတ်ပြီးနောက် သီတင်းကျွတ်လပြည့်ကနေ တန်ဆောင်မုန်းလပြည့်ထိ တစ်လအတွင်း ဘုန်းကြီးတွေကို သင်္ကန်းနဲ့ ပရိက္ခရာ လှူတာပါ။ ကျောင်းတစ်ကျောင်းကို တစ်နှစ် တစ်ခါပဲ ခံယူနိုင်တယ်', 'After the rains retreat ends, from Thadingyut full moon to Tazaungmon full moon, we offer robes and requisites to the monks. Each monastery can receive it only once a year.'] },
+  { q: ['ဘာလို့ ပဒေသာပင်လို့ ခေါ်တာလဲ', 'Why is it called a padaythabin?'], a: ['ပဒေသာပင်က ဆုတောင်းသမျှ ပေးတဲ့ နတ်သစ်ပင်လေ။ အဲဒီ သစ်ပင်လိုပဲ လိုတာမှန်သမျှ ချိတ်ပြီး လှူတာ', 'The padaytha is the wish-granting tree of the old stories, which gives whatever you wish for. Like that tree, we hang everything the monks might need.'] },
+  { q: ['ပရိက္ခရာ ရှစ်ပါးက ဘာတွေလဲ', 'What are the eight requisites?'], a: ['သင်္ကန်း သုံးထည်၊ သပိတ်၊ ခါးပန်း၊ သင်တုန်းဓား၊ အပ်၊ ရေစစ်။ ဒီနေ့ခေတ် ထီးနဲ့ ဖိနပ်လည်း ထည့်လှူကြတယ်', 'The three robes, the alms bowl, a belt, a razor, a needle and a water strainer. These days people add an umbrella and slippers too.'] },
+  { q: ['ရေစက်ချတာ ဘာအဓိပ္ပာယ်လဲ', 'Why do people pour water after giving?'], a: ['ရေကို ဖြည်းဖြည်း သွန်းရင်း ကိုယ်ရတဲ့ ကုသိုလ်ကို လူတိုင်း သတ္တဝါတိုင်းနဲ့ မျှဝေတာပါ။ ပြီးရင် မြေကြီးပေါ် သွန်းတယ်', 'As you pour the water slowly, you share the merit you made with all beings. Afterwards you pour it onto the earth.'] },
+];
+export const DONORS0: Array<[string, number]> = [['ဦးဘရွှေ ဒေါ်မြင့်မြင့် မိသားစု', 100000], ['ဒေါ်တင်တင်ရီ', 50000], ['ရပ်ကွက် လူငယ်အဖွဲ့', 30000], ['ကိုမင်းထက် မသက်သက်', 20000], ['တက္ကစီဆရာများ', 15000]];
+
+/** Dawn: monks walk the aisle on their alms round, and you can kneel and offer rice. */
+export const ALMS_SAY: Line = ['ဆွမ်းလောင်းပါရစေ ဘုရား', 'Venerable sirs, may I offer rice.'];
+export const ALMS_MONK: Line = ['ကျန်းမာ ချမ်းသာကြပါစေ', 'May you be well and happy.'];
+/** The kathina procession: what people call out as it passes. */
+export const PROC_LINES: Line[] = [
+  ['ကထိန် ကြွလာပြီ၊ ဘေးဖယ်ပေးကြ', 'Here comes the kathina, make way!'],
+  ['ဒိုးပတ်သံ ကြားရတာ ပျော်စရာကောင်းလိုက်တာ', 'The do-bat drums always make me happy.'],
+  ['သာဓု သာဓု သာဓု', 'Sadhu, sadhu, sadhu!'],
+  ['ပဒေသာပင်တွေ လှလိုက်တာ', 'Look how beautiful the money trees are!'],
 ];

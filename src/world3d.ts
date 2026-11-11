@@ -7,7 +7,7 @@ import { SHOPS, PWE_SHOPS, Shop, mmNum } from './shops';
 import { GIVINGS } from './nibbana';
 import {
   M, WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, KIDS, TRAIN, STATION, TRAIN_OFF, TRACK_LEN, ST, FV, PHOTO, TOYS_AT, ARCH_Y, SNACKS, CARTS, TEA_TABLES, BOOTHS, SECRETS,
-  STRINGS, TREES, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, RESTROOMS, PARKED, QUEUES, NIB_STALLS, NIB_GATE, LOOMS, MONEY_TREE, CHINLONE, QUEUE_GAP, trackPos,
+  STRINGS, TREES, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, RESTROOMS, PARKED, QUEUES, NIB_STALLS, NIB_GATE, LOOMS, MONEY_TREE, CHINLONE, DONOR_BOARD, WATER_POTS, PROC_PATH, MONK_PATH, pathAt, QUEUE_GAP, trackPos,
 } from './layout';
 
 // ---------------------------------------------------------------- basics
@@ -149,7 +149,7 @@ function longyiMat(col: string, pat: string | undefined): THREE.Material {
 }
 
 export function rigKey(o: PersonOpts): string {
-  return [o.gender, o.shirt, o.lon, o.skin, o.pat, o.hair, o.bun, o.outfit, o.head, o.thanaka, o.glasses, o.bag, o.hat, o.flower, o.capc, o.gbc, o.s].join('|');
+  return [o.gender, o.shirt, o.lon, o.skin, o.pat, o.hair, o.bun, o.outfit, o.head, o.thanaka, o.glasses, o.bag, o.hat, o.flower, o.capc, o.gbc, o.s, o.monk].join('|');
 }
 export function buildPerson(o: PersonOpts): Rig {
   const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
@@ -175,6 +175,12 @@ export function buildPerson(o: PersonOpts): Rig {
   const armL = arm(-1), armR = arm(1);
   add(new THREE.Mesh(GEO.head, skin), body, 0, 1.52, 0);
   const hair = add(new THREE.Mesh(GEO.hair, dark), body, 0, 1.54, -0.02); hair.rotation.x = -0.45;
+  if (o.monk) { // shaved head, the robe's upper cloth across the chest and over the left shoulder, the thabeik held in front
+    hair.visible = false;
+    const robe = lam(o.shirt), sash = box(0.62, 0.16, 0.5, robe, body, 0, 1.08, 0.02); sash.rotation.z = 0.55;
+    const bowl = add(new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8, 0, TAU, 0, Math.PI / 2), lam('#15101c')), body, 0, 0.82, 0.3); bowl.rotation.x = Math.PI;
+    sphere(0.16, lam('#15101c'), body, 0, 0.92, 0.3, 10).scale.y = 0.25;
+  }
   if (o.hair === 'long') box(0.42, 0.42, 0.1, dark, body, 0, 1.36, -0.17);
   if (o.bun) sphere(0.1, dark, body, 0, 1.74, -0.14, 10);
   for (const s of [-1, 1]) add(new THREE.Mesh(GEO.eye, lam('#120c14')), body, s * 0.08, 1.55, 0.215);
@@ -1773,11 +1779,12 @@ export interface Frame {
   shake: number;
   steamFrom: Array<[number, number]>;
   tea?: { table: number; seat: number; items: string[] };
-  taz?: { notes: number; robe: number; weaving: boolean; ball: [number, number, number]; kicker: number; me: boolean };
+  taz?: { notes: number; robe: number; weaving: boolean; ball: [number, number, number]; kicker: number; me: boolean;
+    bird: number; flower: number; fan: number; reqs: number; proc: number; monk: number; monkStop: boolean };
 }
 
 // ---------------------------------------------------------------- the Nibbana market (နိဗ္ဗာန်ဈေး) and the Tazaungdaing grounds
-const tz = { notes: null as THREE.InstancedMesh, robe: null as THREE.Mesh, weavers: [] as Rig[], shuttles: [] as THREE.Mesh[], ring: [] as Rig[], ball: null as THREE.Mesh, lanterns: [] as THREE.Object3D[] };
+const tz = { folds: [] as THREE.InstancedMesh[], reqs: [] as THREE.Object3D[], board: null as THREE.Mesh, proc: [] as Array<{ r: Rig; kind: string }>, monks: [] as Rig[], notes: null as THREE.InstancedMesh, robe: null as THREE.Mesh, weavers: [] as Rig[], shuttles: [] as THREE.Mesh[], ring: [] as Rig[], ball: null as THREE.Mesh, lanterns: [] as THREE.Object3D[] };
 /** A Tazaungdaing paper lantern: a little glowing star-cut drum, the kind hung on every street that month. */
 function paperLantern(parent: THREE.Object3D, x: number, y: number, z: number, col: string): THREE.Object3D {
   const g = add(new THREE.Group(), parent, x, y, z);
@@ -1813,6 +1820,19 @@ function stallProps(g: THREE.Group, kind: string): void {
     for (let k = 0; k < 10; k++) { cyl(0.025, 0.025, 0.16, lam('#fff3d6'), g, -1.9 + k * 0.42, Y + 0.08, Zt - 0.3, 6); sphere(0.03, glowMat('#ffcf6a'), g, -1.9 + k * 0.42, Y + 0.2, Zt - 0.3, 5); }
   }
 }
+function donorTex(list: Array<[string, string]>): THREE.CanvasTexture {
+  return canvasTex(512, 400, c => {
+    c.fillStyle = '#f6efdc'; c.fillRect(0, 0, 512, 400); c.strokeStyle = '#7a1f2b'; c.lineWidth = 12; c.strokeRect(6, 6, 500, 388);
+    c.fillStyle = '#7a1f2b'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `700 34px ${MMF}`; c.fillText('ကထိန် အလှူရှင်များ', 256, 44);
+    c.font = `600 15px ${BODY}`; c.fillText('KATHINA DONORS · SADHU', 256, 78);
+    list.forEach(([n, a], k) => { const y = 112 + k * 31; c.textAlign = 'left'; c.fillStyle = '#2a1606'; c.font = `22px ${MMF}`; c.fillText(n, 26, y, 300); c.textAlign = 'right'; c.fillStyle = '#7a1f2b'; c.font = `700 21px ${MMF}`; c.fillText(a, 486, y); });
+  });
+}
+/** Repaints the donors' board with the latest list (name, amount already in Myanmar numerals). */
+export function setDonors(list: Array<[string, string]>): void {
+  if (!tz.board) return;
+  const m = tz.board.material as THREE.MeshBasicMaterial, old = m.map; m.map = donorTex(list); m.needsUpdate = true; old?.dispose();
+}
 function buildNibbana(): void {
   const wp = new THREE.Vector3();
   NIB_STALLS.forEach((st, i) => {
@@ -1825,6 +1845,7 @@ function buildNibbana(): void {
     board(signTex(gv.banner[0], gv.banner[1] + ' · free', gv.col, 512, 150), 4.4, 1.3, g, 0, 3.75, 1.0);
     board(signTex('အခမဲ့', 'Free · take one', '#2f5d50', 256, 110), 1.1, 0.48, g, 2.2, 1.25, 1.08);
     box(6.0, 2.0, 0.05, lam('#f3efe6'), g, 0, 1.6, -1.45); // the back cloth
+    board(signTex(gv.whoMy, 'လှူဒါန်းသည် · given by ' + gv.who, '#3a2414', 512, 120), 3.4, 0.8, g, 0, 2.2, -1.4); // whose offering this is
     stallProps(g, gv.kind);
     g.updateMatrixWorld();
     for (let k = 0; k < 9; k++) { wp.set(-2.9 + k * 0.725, 2.78 - Math.sin(k / 8 * Math.PI) * 0.16, 1.25).applyMatrix4(g.matrixWorld); GLOWS.push([wp.x, wp.y, wp.z, k % 3 ? '#ffe7a3' : '#ffb35a', 0.85]); }
@@ -1887,8 +1908,57 @@ function buildTazaung(): void {
     notes.setMatrixAt(k, m4.compose(v, q, sc)); notes.setColorAt(k, new THREE.Color(nc[k % 4]));
   }
   notes.count = 40; tree.add(notes); tz.notes = notes;
+  // notes folded into birds, lotuses and fans, each on its own branch tip
+  const foldGeo = [new THREE.ConeGeometry(0.09, 0.2, 3), new THREE.OctahedronGeometry(0.08, 0), new THREE.CircleGeometry(0.12, 8, 0, Math.PI)];
+  foldGeo.forEach((geo, gi) => {
+    const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: ['#a8d8b8', '#f2b8cc', '#e8d9a0'][gi], side: DS }), 60);
+    for (let k = 0; k < 60; k++) { const tier = (k + gi) % 5, y = 1.15 + tier * 0.75, R = 1.5 - tier * 0.26, a = (k * 2.399 + gi * 0.8) % TAU;
+      v.set(Math.sin(a) * R * 0.95, y - 0.05, Math.cos(a) * R * 0.95); e.set(gi === 0 ? Math.PI / 2 : 0, a, 0); q.setFromEuler(e); im.setMatrixAt(k, m4.compose(v, q, sc)); }
+    im.count = 6; tree.add(im); tz.folds.push(im);
+  });
+  // the requisites: umbrellas, palm fans, folded robes, alms bowls, slippers and towels tied on round the trunk
+  for (let k = 0; k < 18; k++) {
+    const a = k * 1.13, y = 0.9 + (k % 6) * 0.62, R = 0.55 - (k % 6) * 0.05, o = add(new THREE.Group(), tree, Math.sin(a) * R, y, Math.cos(a) * R); o.rotation.y = a;
+    const kind = k % 6;
+    if (kind === 0) { add(new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.16, 12), lam('#7a1f2b')), o, 0, 0.15, 0); cyl(0.01, 0.01, 0.4, lam('#3a3030'), o, 0, -0.02, 0, 4); }
+    else if (kind === 1) { add(new THREE.Mesh(new THREE.CircleGeometry(0.2, 10, 0, Math.PI), lam('#d8b878', { side: DS })), o, 0, 0, 0.05); }
+    else if (kind === 2) box(0.34, 0.12, 0.24, lam('#c8641e'), o, 0, 0, 0.06);
+    else if (kind === 3) { sphere(0.12, lam('#15101c'), o, 0, 0, 0.08, 10).scale.y = 0.8; }
+    else if (kind === 4) { for (const sx of [-0.06, 0.06]) box(0.08, 0.02, 0.22, lam('#2a2238'), o, sx, 0, 0.08); }
+    else box(0.22, 0.08, 0.16, lam(['#ffffff', '#9fd3f0', '#f7b7c3'][k % 3]), o, 0, 0, 0.06);
+    o.visible = k < 6; tz.reqs.push(o);
+  }
   for (let k = 0; k < 4; k++) { const a = k / 4 * TAU + 0.4; box(0.45, 0.2, 0.32, lam('#c8641e'), tree, Math.sin(a) * 1.0, 0.6, Math.cos(a) * 1.0).rotation.y = a; cyl(0.15, 0.1, 0.18, lam('#1b1420'), tree, Math.sin(a + 0.8) * 1.05, 0.6, Math.cos(a + 0.8) * 1.05, 10); }
-  board(signTex('ပဒေသာပင်', 'Money tree · kathina offerings', '#7a1f2b', 512, 150), 2.6, 0.76, tree, 0, 0.9, 1.6);
+  board(signTex('ကထိန် ပဒေသာပင်', 'Kathina money tree', '#7a1f2b', 512, 150), 2.6, 0.76, tree, 0, 0.9, 1.6);
+  // the donors' board: names and amounts painted up in Myanmar numerals as people give
+  const bx = X(DONOR_BOARD.x), bz = Z(DONOR_BOARD.y);
+  for (const dx of [-1.3, 1.3]) cyl(0.06, 0.06, 2.6, lam('#5a3a24'), scene, bx + dx, 1.3, bz, 6);
+  tz.board = board(donorTex([]), 2.6, 2.0, scene, bx, 1.75, bz + 0.05);
+  // a ရေအိုးစင်: a little roofed stand of clay water pots with a coconut-shell ladle, for anyone passing by
+  const wpx = X(WATER_POTS.x), wpz = Z(WATER_POTS.y), stand = add(new THREE.Group(), scene, wpx, 0, wpz), teak = lam('#6b4a2e');
+  for (const sx of [-1.6, 1.6]) for (const sz of [-0.6, 0.6]) cyl(0.05, 0.05, 2.0, teak, stand, sx, 1.0, sz, 6);
+  const sr = add(new THREE.Mesh(new THREE.ConeGeometry(2.4, 0.7, 4, 1, true), lam('#8a5a32', { side: DS, k: 'potroof' })), stand, 0, 2.3, 0); sr.rotation.y = Math.PI / 4; sr.scale.z = 0.45;
+  box(3.4, 0.08, 1.1, teak, stand, 0, 0.75, 0);
+  for (let k = 0; k < 3; k++) { const pot = sphere(0.36, lam('#a8582e'), stand, -1.05 + k * 1.05, 1.1, 0, 14); pot.scale.y = 0.95; cyl(0.17, 0.2, 0.12, lam('#a8582e'), stand, -1.05 + k * 1.05, 1.47, 0, 12); cyl(0.2, 0.2, 0.03, teak, stand, -1.05 + k * 1.05, 1.54, 0, 12); }
+  const ladle = sphere(0.09, lam('#5a3a24'), stand, 1.45, 1.4, 0.45, 8); ladle.scale.y = 0.5; cyl(0.012, 0.012, 0.4, teak, stand, 1.45, 1.6, 0.45, 4);
+  board(signTex('ရေအိုးစင်', 'Free drinking water', '#2f5d50', 400, 120), 1.8, 0.54, stand, 0, 2.05, 0.62);
+  // the kathina procession: do-bat drummers, dancers, money trees carried high on poles, robes on trays, an umbrella over the leader
+  const P_KIND = ['lead', 'drum', 'drum', 'dance', 'dance', 'tree', 'tree', 'robe', 'tree', 'robe', 'tree', 'drum'];
+  P_KIND.forEach((kind, k) => {
+    const fem = kind === 'dance' || kind === 'robe' || k % 3 === 0;
+    const r = buildPerson({ shirt: kind === 'drum' ? '#ffffff' : pick(['#fff3d6', '#f7b7c3', '#ffffff', '#f2d49b']), lon: pick(['#6b2335', '#2f5d50', '#283a6b', '#7a2e5c']), skin: pick(['#c58c5c', '#d9a77a', '#a8714a']),
+      outfit: fem ? 'htamein' : kind === 'drum' ? 'taikpon' : 'longyi', hair: fem ? 'bun' : 'short', bun: fem, head: fem ? 'flower' : 'gaungbaung', flower: fem, thanaka: fem, pat: fem ? 'acheik' : 'check' });
+    if (kind === 'drum') { const d = cyl(0.2, 0.2, 0.55, lam('#7a1f2b'), r.body, 0, 0.95, 0.28, 12); d.rotation.z = Math.PI / 2; for (const sx of [-0.28, 0.28]) cyl(0.21, 0.21, 0.03, lam('#e8d9b0'), r.body, sx, 0.95, 0.28, 12).rotation.z = Math.PI / 2; }
+    if (kind === 'tree') { cyl(0.025, 0.025, 1.6, lam('#c9a86a'), r.g, 0.3, 1.6, 0.15, 5); const c = add(new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.1, 8), lam('#d8b878', { wireframe: true })), r.g, 0.3, 2.75, 0.15);
+      for (let j = 0; j < 14; j++) { const a = j * 2.4, h = (j % 5) / 5; box(0.12, 0.06, 0.01, lam(['#a8d8b8', '#f2b8cc', '#e8d9a0', '#a8c6e8'][j % 4]), c, Math.sin(a) * 0.4 * (1 - h), -0.4 + h * 0.9, Math.cos(a) * 0.4 * (1 - h)).rotation.y = a; }
+      sphere(0.08, lam('#ffcf5a'), c, 0, 0.6, 0, 8); }
+    if (kind === 'robe') { box(0.5, 0.05, 0.35, lam('#d9a63a'), r.g, 0, 1.92, 0.05); box(0.4, 0.14, 0.26, lam('#c8641e'), r.g, 0, 2.02, 0.05); }
+    if (kind === 'lead') { cyl(0.02, 0.02, 2.2, lam('#3a3030'), r.g, 0.25, 1.4, 0, 4); add(new THREE.Mesh(new THREE.ConeGeometry(0.8, 0.35, 16), lam('#f4f0e6')), r.g, 0.25, 2.55, 0); }
+    r.g.visible = false; scene.add(r.g); tz.proc.push({ r, kind });
+  });
+  // the monks of the alms round, in maroon robes with their black lacquer bowls, oldest first
+  for (let k = 0; k < 7; k++) { const m = buildPerson({ shirt: k % 3 === 2 ? '#9a3a1a' : '#7a1f1a', lon: '#7a1f1a', skin: pick(['#c58c5c', '#d9a77a', '#b7835a']), outfit: 'longyi', hair: 'short', monk: true, s: k < 5 ? 1 : 0.82 });
+    m.g.visible = false; scene.add(m.g); tz.monks.push(m); }
   GLOWS.push([mx, 5.6, mz, '#ffe7a3', 1.4]);
   const tl = new THREE.PointLight('#ffe1a6', 26, 9, 2); tl.position.set(0, 4.2, 1.6); tree.add(tl);
 
@@ -1909,6 +1979,24 @@ function updateTazaung(f: Frame, t: number): void {
   if (!tz.notes || !f.taz) return;
   const T = f.taz;
   tz.notes.count = Math.max(0, Math.min(160, T.notes));
+  [T.bird, T.flower, T.fan].forEach((n, i) => { tz.folds[i].count = Math.max(0, Math.min(60, n)); });
+  tz.reqs.forEach((o, k) => { o.visible = k < 4 + T.reqs * 2; });
+  const PL = PROC_PATH;
+  tz.proc.forEach(({ r, kind }, k) => {
+    const d = T.proc - k * 30; r.g.visible = T.proc >= 0 && d >= 0;
+    if (!r.g.visible) return;
+    const [x, y, hd] = pathAt(PL, d), [nx, ny] = pathAt(PL, d + 1), moving = Math.hypot(nx - x, ny - y) > 0.01;
+    r.g.position.set(X(x), 0, Z(y)); r.g.rotation.y = hd;
+    if (kind === 'dance') animateDancer(r, t + k, k); else animatePerson(r, t + k * 0.3, moving, false);
+    if (kind === 'drum') { r.armL.rotation.x = -1.2 + Math.sin(t * 13 + k) * 0.35; r.armR.rotation.x = -1.2 - Math.sin(t * 13 + k) * 0.35; }
+    if (kind === 'tree' || kind === 'robe') { r.armL.rotation.x = r.armR.rotation.x = -2.9; }
+  });
+  tz.monks.forEach((m, k) => {
+    const d = T.monk - k * 34; m.g.visible = T.monk >= 0 && d >= 0 && d < 1150;
+    if (!m.g.visible) return;
+    const [x, y, hd] = pathAt(MONK_PATH, d); m.g.position.set(X(x), 0, Z(y)); m.g.rotation.y = hd;
+    animatePerson(m, t * 0.7 + k, !T.monkStop, false); m.armL.rotation.x = m.armR.rotation.x = -0.75; m.armL.rotation.z = -0.25; m.armR.rotation.z = 0.25;
+  });
   tz.robe.scale.x = Math.max(0.02, Math.min(1, T.robe));
   tz.weavers.forEach((w, k) => { const p = t * (2.2 + k * 0.3) + k; w.armL.rotation.x = -1.1 + Math.sin(p) * 0.35; w.armR.rotation.x = -1.1 - Math.sin(p) * 0.35; tz.shuttles[k].position.x = Math.sin(p) * 0.75; });
   if (T.weaving) tz.shuttles.forEach((s, k) => { s.position.x = Math.sin(t * 6 + k) * 0.8; });
