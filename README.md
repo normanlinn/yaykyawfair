@@ -2,7 +2,7 @@
 
 A walkable 3D street-fair game inspired by Yangon's Yay Kyaw, written in TypeScript with Three.js.
 
-You dress up as a small icon person and walk through a crowd of families, vendors, bicycles and motorbikes. The fair has fourteen zones: Ferris wheel, carousel, Food Street, pirate ship, game booths, Kids Corner, the music stage and photo booth, the Finale View, the Pwe Rides (ပွဲစီးစရာကွင်း), the Candle Festival (ဆီမီးထွန်းပွဲ), the Teashop (လက်ဖက်ရည်ဆိုင်), the Wishing Lake (ဆုတောင်းကန်), the Nibbana Market (နိဗ္ဗာန်ဈေး) and the Tazaungdaing grounds (တန်ဆောင်တိုင်ပွဲ). Along the way you can:
+You dress up as a small icon person and walk through a crowd of families, vendors, bicycles and motorbikes. The fair has fifteen zones: Ferris wheel, carousel, Food Street, pirate ship, game booths, Kids Corner, the music stage and photo booth, the Finale View, the Pwe Rides (ပွဲစီးစရာကွင်း), the Candle Festival (ဆီမီးထွန်းပွဲ), the Teashop (လက်ဖက်ရည်ဆိုင်), the Wishing Lake (ဆုတောင်းကန်), the Nibbana Market (နိဗ္ဗာန်ဈေး), the Tazaungdaing grounds (တန်ဆောင်တိုင်ပွဲ) and the Fire Balloon field (မီးပုံးပျံပွဲ). Along the way you can:
 
 - ride the Ferris wheel, carousel, pirate ship, the hand-turned wooden wheel (လူအားချားရဟတ်) that young men spin by climbing its spokes, and the flying swing (ဒန်းလွှဲ), seen first person from your seat (drag to look around, Q to wave)
 - take the mini train (ရထားလေး), a little steam engine with open carriages, on a loop of the whole fair: board at the station by the Kids Corner, sit on the front bench behind the engine and roll past the pwe rides, the candle festival, the teashop and the Wishing Lake, with smoke, chuffs, rail clacks and the whistle. If the train is away when you buy a ticket, it hurries round to pick you up. Walk on the track and it toots and nudges you off
@@ -25,6 +25,7 @@ You dress up as a small icon person and walk through a crowd of families, vendor
 - make a kathina offering at the padaythabin (ပဒေသာပင်) with trustee U Ba Shwe: fold a note into a bird, lotus or fan, or offer the eight requisites. The gong rings three times, everyone calls အမျှ အမျှ အမျှ, you can pour the water of dedication (ရေစက်ချ), and your name goes up on the donors' board
 - watch the evening kathina procession with do-bat drums, dancers and money trees, and at dawn kneel and offer rice (ဆွမ်းလောင်း) as the monks walk down the market aisle on their alms round
 - on the Tazaungdaing grounds, help the weavers finish the matho thingan (မသိုးသင်္ကန်း) robe before dawn with a shuttle-timing game, hang a note on the padaythabin (ပဒေသာပင်) money tree, and join a chinlone (ခြင်းလုံး) circle: press E or GO as the cane ball drops to your foot
+- fly a fire balloon (မီးပုံးပျံ) with Sai Htun’s crew at the balloon field, the way Taunggyi does at Tazaungdaing: hold Feed the fire to keep the heat in the gold band until the paper balloon is full, light the little lanterns on a night sein na pan (စိန်နားပန်), then let go. By day the teams fly elephant, hintha, owl and ox balloons. The judges post every team's score in Myanmar numerals, and your launch earns tickets and merit
 - make a Thadingyut wish (ဆုတောင်း) at the wish stall at the south end of the Wishing Lake: send it up on a paper fire balloon (1,000 Ks) or float it on the lake as a candle lantern (500 Ks)
 
 ## Thadingyut wishes

@@ -3,7 +3,7 @@
 import { srng } from './util';
 
 export const M = 1 / 20;
-export const WW = 4700, WH = 2600, NORTH = 340;
+export const WW = 5480, WH = 2600, NORTH = 340;
 export const ROAD = { x: 760, w: 280 };
 
 export interface Zone { id: string; n: number; name: string; my: string; x: number; y: number; w: number; h: number; g: string; card: string }
@@ -36,6 +36,8 @@ export const ZONES: Zone[] = [
     card: 'A market where nothing is sold. Families give away mohinga, tea, mezali salad and thanaka for merit, and everyone says sadhu.' },
   { id: 'tazaung', n: 14, name: 'Tazaungdaing', my: 'တန်ဆောင်တိုင်ပွဲ', x: 3920, y: 1440, w: 700, h: 1000, g: '#2b1f30',
     card: 'Weavers race to finish a monk’s robe before dawn, notes flutter on the money tree, and a chinlone circle keeps the cane ball in the air.' },
+  { id: 'balloons', n: 15, name: 'Fire Balloons', my: 'မီးပုံးပျံပွဲ', x: 4700, y: 350, w: 700, h: 2090, g: '#1f2238',
+    card: 'Ward teams fill giant paper balloons over a smoky fire. Elephants and hinthas float up by day, and at night the balloons rise hung with hundreds of little lanterns.' },
 ];
 
 // rides and landmarks
@@ -99,10 +101,21 @@ export function pathAt(path: Array<[number, number]>, d: number): [number, numbe
   }
   return [path[0][0], path[0][1], 0];
 }
+// ---- the fire balloon field (မီးပုံးပျံကွင်း), east of the Tazaungdaing grounds
+/** The launch frame: two bamboo masts and a crossbar over the fire pit, where each balloon is filled. */
+export const BAL_PAD = { x: 5050, y: 1180 };
+/** The judges' tent and the scoreboard, south of the pad, facing north. */
+export const BAL_JUDGE = { x: 5050, y: 1700 };
+/** The team leader who lets you join the crew, standing west of the fire. */
+export const BAL_LEAD = { x: BAL_PAD.x - 120, y: BAL_PAD.y + 40 };
+/** Paper-workshop tents along the east side where the next balloons are glued together. */
+export const BAL_SHEDS: Array<{ x: number; y: number }> = [{ x: 5300, y: 700 }, { x: 5300, y: 1000 }, { x: 5300, y: 1400 }];
 /** People who stop to watch: a loose crowd in front of the hand-turned wheel and around the carousel. */
 export const WATCHERS: Array<{ x: number; y: number; w: number; h: number; n: number; fx: number; fy: number }> = [
   { x: 1985, y: 1225, w: 230, h: 40, n: 9, fx: 2100, fy: 1130 },
   { x: 1240, y: 815, w: 280, h: 34, n: 6, fx: 1380, fy: 640 },
+  { x: BAL_PAD.x - 220, y: BAL_PAD.y + 230, w: 440, h: 70, n: 16, fx: BAL_PAD.x, fy: BAL_PAD.y },   // the crowd behind the rope at the launch field
+  { x: BAL_PAD.x - 330, y: BAL_PAD.y - 140, w: 60, h: 260, n: 5, fx: BAL_PAD.x, fy: BAL_PAD.y },
 ];
 /** Public restrooms (အိမ်သာ): one near each corner of the fair and one behind the teashop. Doors face south. */
 export const RESTROOMS: Array<{ x: number; y: number }> = [{ x: 180, y: 405 }, { x: 3755, y: 420 }, { x: 420, y: 2528 }, { x: 3700, y: 2528 }, { x: 3060, y: 2385 }, { x: 4560, y: 2528 }];
@@ -161,6 +174,8 @@ export const VENDOR_POSTS: Post[] = [
   ...BOOTHS.map((b, i) => ({ x: b.x, y: b.y - 46, seed: 10 + i })),
   { x: 1590, y: 1860, hat: true, seed: 20 },
   { x: TRUSTEE.x, y: TRUSTEE.y, seed: 50 },
+  { x: BAL_LEAD.x, y: BAL_LEAD.y, hat: true, seed: 60 },
+  { x: BAL_JUDGE.x - 60, y: BAL_JUDGE.y + 20, seed: 61 }, { x: BAL_JUDGE.x + 60, y: BAL_JUDGE.y + 20, seed: 62 },
   ...NIB_STALLS.map((s, i) => ({ x: s.x + s.side * 10, y: s.y + (i % 2 ? 18 : -18), hat: i % 3 === 0, seed: 30 + i })),
 ];
 
@@ -203,6 +218,10 @@ addCol(LOOMS.x - 130, LOOMS.y - 90, 260, 110);   // the looms and the weavers at
 addCol(MONEY_TREE.x - 26, MONEY_TREE.y - 26, 52, 52);
 addCol(DONOR_BOARD.x - 40, DONOR_BOARD.y - 8, 80, 16);
 addCol(WATER_POTS.x - 40, WATER_POTS.y - 22, 80, 40);
+addCol(BAL_PAD.x - 70, BAL_PAD.y - 50, 140, 100);   // the fire pit and the crew holding the balloon
+for (const dx of [-140, 140]) addCol(BAL_PAD.x + dx - 10, BAL_PAD.y - 10, 20, 20); // the bamboo masts
+addCol(BAL_JUDGE.x - 130, BAL_JUDGE.y - 20, 260, 60);
+BAL_SHEDS.forEach(b => addCol(b.x - 90, b.y - 60, 180, 120));
 for (const dx of [-150, 150]) addCol(NIB_GATE.x + dx - 10, NIB_GATE.y - 10, 20, 20); // the arch's two posts
 
 export function blocked(x: number, y: number, r: number): boolean {
