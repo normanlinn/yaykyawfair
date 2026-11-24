@@ -1935,7 +1935,7 @@ function updateBalloons3d(f: Frame, t: number): void {
   } else bl.rope.visible = false;
   for (const fl of B.flights) {
     const o = take(fl.kind); if (!o) continue;
-    o.g.position.set(X(fl.x), (o.kind === 'lantern' ? 1.6 : 0.8) + fl.h, Z(fl.y)); o.g.scale.setScalar(1);
+    o.g.position.set(X(fl.x), (o.kind === 'lantern' ? 1.6 : 0.8) + fl.h + Math.sin(t * 0.5 + fl.tx) * 0.5 * clamp(fl.t / 20, 0, 1), Z(fl.y)); o.g.scale.setScalar(1);
     o.g.rotation.set(Math.sin(t * 0.7 + fl.t) * 0.06, fl.t * 0.08, Math.sin(t * 0.9 + fl.t) * 0.05);
     o.flame.visible = true; o.flame.scale.setScalar(0.8 + Math.sin(t * 15 + fl.t) * 0.2); lit(o, fl.lit);
   }
@@ -1960,7 +1960,7 @@ export interface Frame {
   taz?: { notes: number; robe: number; weaving: boolean; ball: [number, number, number]; kicker: number; me: boolean;
     bird: number; flower: number; fan: number; reqs: number; proc: number; monk: number; monkStop: boolean };
   /** The balloon field: the one being filled at the pad (u < 0 when the pad is empty), and those already flying. */
-  bal?: { u: number; kind: BalKind; lit: number; heat: number; flights: Array<{ kind: BalKind; x: number; y: number; h: number; t: number; lit: number }> };
+  bal?: { u: number; kind: BalKind; lit: number; heat: number; flights: Array<{ kind: BalKind; x: number; y: number; h: number; t: number; tx: number; lit: number }> };
 }
 
 // ---------------------------------------------------------------- the Nibbana market (နိဗ္ဗာန်ဈေး) and the Tazaungdaing grounds
