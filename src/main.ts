@@ -9,7 +9,7 @@ import {
   WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, STATION, TRAIN_STOP, TRAIN_OFF, TRACK_LEN, ST, FV, PHOTO, TOYS_AT, UNCLE, ARCH_Y, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
   STALLFRONTS, VENDOR_POSTS, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, RESTROOMS, QUEUES, QUEUE_GAP, WATCHERS, M, blocked, trackPos,
   NIB_STALLS, nibFront, NIB_GATE, LOOMS, MONEY_TREE, CHINLONE, ROBE_STRIPS, TRUSTEE, WATER_POTS, PROC_PATH, MONK_PATH, pathLen, pathAt,
-  BAL_PAD, BAL_LEAD, BAL_JUDGE,
+  BAL_PAD, BAL_LEAD, BAL_JUDGE, BAL_SHEDS,
 } from './layout';
 import { friends } from './friends';
 import CHANGES from './changelog.json';
@@ -1987,72 +1987,148 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 // ---------- maps: a close-up mini map that follows you, and a full map of the fair (tap the mini map or press M) ----------
-const MAP_MARKS: Array<{ x: number; y: number; icon: string; en: string; my: string; small?: boolean; tiny?: boolean }> = [
-  {x:FW.cx,y:FW.cy+150,icon:'🎡',en:'Ferris wheel',my:'ချားရဟတ်'}, {x:CR.cx,y:CR.cy,icon:'🎠',en:'Carousel',my:'မြင်းစီးချားရဟတ်'},
-  {x:PS.px,y:PS.py,icon:'⛵',en:'Pirate ship',my:'သင်္ဘောလွှဲ'}, {x:STATION.x,y:STATION.y,icon:'🚂',en:'Train station',my:'ရထားဘူတာ'},
-  {x:ST.x,y:ST.y,icon:'🎤',en:'Stage',my:'ဇာတ်စင်'}, {x:FV.x,y:FV.y,icon:'🎆',en:'Finale View',my:'မီးပန်းကြည့်ရာ'},
-  {x:PHOTO.x,y:PHOTO.y,icon:'📸',en:'Photo booth',my:'ဓာတ်ပုံ',small:true}, {x:TOYS_AT.x,y:TOYS_AT.y,icon:'🧸',en:'Toys',my:'အရုပ်',small:true},
-  {x:WISH_STALL.x,y:WISH_STALL.y,icon:'🏮',en:'Wish stall',my:'ဆုတောင်း'}, {x:POND.x,y:POND.y,icon:'🪷',en:'Wishing Lake',my:'ဆုတောင်းကန်'},
-  {x:UNCLE.x,y:UNCLE.y,icon:'👴',en:'Uncle',my:'ဦးလေး',small:true,tiny:true},
-  ...RESTROOMS.map(r=>({x:r.x,y:r.y,icon:'🚻',en:'Restroom',my:'အိမ်သာ',small:true})),
-  {x:BUMPER.x+BUMPER.w/2,y:BUMPER.y+BUMPER.h/2,icon:'🚗',en:'Bumper cars',my:'ကားတိုက်'}, {x:HAND_WHEEL.x,y:HAND_WHEEL.y,icon:'🎡',en:'Hand-turned wheel',my:'လူအားချားရဟတ်'},
-  {x:SWINGER.x,y:SWINGER.y,icon:'🎢',en:'Flying swing',my:'ဒန်းလွှဲ'},
-  {x:CANDLE.x,y:CANDLE.y,icon:'🪔',en:'Oil lamps',my:'ဆီမီးထွန်းပွဲ'}, {x:TEA.x,y:TEA.y+60,icon:'☕',en:'Teashop',my:'လက်ဖက်ရည်ဆိုင်'},
-  ...PWE_FOOD.map(f=>({x:f.x,y:f.y,icon:'🍌',en:f.name,my:f.my,small:true,tiny:true})),
-  ...BOOTHS.map(b=>({x:b.x,y:b.y,icon:b.kind==='prize'?'🎁':'🎯',en:b.kind==='ring'?'Ring toss':b.kind==='darts'?'Darts':'Prizes',my:b.my,small:true})),
-  ...CARTS.map(([x,y],i)=>({x,y,icon:'🍜',en:SNACKS[i].name,my:SNACKS[i].my,small:true,tiny:true})),
-  {x:NIB_GATE.x,y:820,icon:'🤲',en:'Nibbana Market',my:'နိဗ္ဗာန်ဈေး'},
-  {x:LOOMS.x,y:LOOMS.y,icon:'🧵',en:'Robe weaving',my:'မသိုးသင်္ကန်း',small:true},
-  {x:MONEY_TREE.x,y:MONEY_TREE.y,icon:'🎋',en:'Money tree',my:'ပဒေသာပင်',small:true},
-  {x:CHINLONE.x,y:CHINLONE.y,icon:'🏐',en:'Chinlone',my:'ခြင်းလုံး',small:true},
+// tier 0 = a landmark (always labelled), 1 = a smaller spot (labelled when there is room), 2 = tiny (labelled only up close).
+// far marks stand in for a group when zoomed out; near marks are the group's members, shown once you zoom in.
+// quiet marks (restrooms) show just their icon until you zoom right in; the legend explains them.
+interface MapMark { x: number; y: number; icon: string; en: string; my: string; tier: 0 | 1 | 2; far?: boolean; near?: boolean; quiet?: boolean }
+const MAP_MARKS: MapMark[] = [
+  {x:FW.cx,y:FW.cy+150,icon:'🎡',en:'Ferris wheel',my:'ချားရဟတ်',tier:0}, {x:CR.cx,y:CR.cy,icon:'🎠',en:'Carousel',my:'မြင်းစီးချားရဟတ်',tier:0},
+  {x:PS.px,y:PS.py,icon:'⛵',en:'Pirate ship',my:'သင်္ဘောလွှဲ',tier:0}, {x:STATION.x,y:STATION.y,icon:'🚂',en:'Train station',my:'ရထားဘူတာ',tier:0},
+  {x:ST.x,y:ST.y,icon:'🎤',en:'Stage',my:'ဇာတ်စင်',tier:0}, {x:FV.x,y:FV.y,icon:'🎆',en:'Finale View',my:'မီးပန်းကြည့်ရာ',tier:0},
+  {x:PHOTO.x,y:PHOTO.y,icon:'📸',en:'Photo booth',my:'ဓာတ်ပုံ',tier:1}, {x:TOYS_AT.x,y:TOYS_AT.y,icon:'🧸',en:'Toys',my:'အရုပ်',tier:1},
+  {x:WISH_STALL.x,y:WISH_STALL.y,icon:'🏮',en:'Wish stall',my:'ဆုတောင်းစာ',tier:0}, {x:POND.x,y:POND.y,icon:'🪷',en:'Wishing Lake',my:'ဆုတောင်းကန်',tier:0},
+  {x:UNCLE.x,y:UNCLE.y,icon:'👴',en:'Uncle',my:'ဦးလေး',tier:2},
+  {x:900,y:ARCH_Y,icon:'',en:'Main gate',my:'ဝင်ပေါက်',tier:1},
+  ...RESTROOMS.map(r=>({x:r.x,y:r.y,icon:'🚻',en:'Restroom',my:'အိမ်သာ',tier:2 as const,quiet:true})),
+  {x:BUMPER.x+BUMPER.w/2,y:BUMPER.y+BUMPER.h/2,icon:'🚗',en:'Bumper cars',my:'ကားတိုက်',tier:0}, {x:HAND_WHEEL.x,y:HAND_WHEEL.y,icon:'🎡',en:'Hand-turned wheel',my:'လူအားချားရဟတ်',tier:0},
+  {x:SWINGER.x,y:SWINGER.y,icon:'🎢',en:'Flying swing',my:'ဒန်းလွှဲ',tier:0},
+  {x:CANDLE.x,y:CANDLE.y,icon:'🪔',en:'Oil lamps',my:'ဆီမီးထွန်းပွဲ',tier:0}, {x:TEA.x,y:TEA.y+60,icon:'☕',en:'Teashop',my:'လက်ဖက်ရည်ဆိုင်',tier:0},
+  {x:2100,y:2030,icon:'🍌',en:'Fritters',my:'အကြော်စုံ',tier:1,far:true},
+  ...PWE_FOOD.map(f=>({x:f.x,y:f.y,icon:'🍌',en:f.name,my:f.my,tier:2 as const,near:true})),
+  ...BOOTHS.map(b=>({x:b.x,y:b.y,icon:b.kind==='prize'?'🎁':'🎯',en:b.kind==='ring'?'Ring toss':b.kind==='darts'?'Darts':'Prizes',my:b.my,tier:1 as const})),
+  {x:420,y:1160,icon:'🍜',en:'Food stalls',my:'စားသောက်ဆိုင်များ',tier:0,far:true},
+  ...CARTS.map(([x,y],i)=>({x,y,icon:'🍜',en:SNACKS[i].name,my:SNACKS[i].my,tier:2 as const,near:true})),
+  {x:NIB_GATE.x,y:820,icon:'🤲',en:'Nibbana Market',my:'နိဗ္ဗာန်ဈေး',tier:0},
+  {x:LOOMS.x,y:LOOMS.y,icon:'🧵',en:'Robe weaving',my:'မသိုးသင်္ကန်း',tier:1},
+  {x:MONEY_TREE.x,y:MONEY_TREE.y,icon:'🎋',en:'Money tree',my:'ပဒေသာပင်',tier:1},
+  {x:CHINLONE.x,y:CHINLONE.y,icon:'🏐',en:'Chinlone',my:'ခြင်းလုံး',tier:1},
+  // the fire balloon field
+  {x:BAL_PAD.x,y:BAL_PAD.y,icon:'🔥',en:'Balloon launch',my:'မီးပုံးပျံလွှတ်ကွင်း',tier:0},
+  {x:BAL_JUDGE.x,y:BAL_JUDGE.y,icon:'🏆',en:'Judges',my:'ဒိုင်',tier:1},
+  {x:BAL_LEAD.x,y:BAL_LEAD.y,icon:'🙋',en:'Crew leader',my:'အဖွဲ့ခေါင်း',tier:2},
+  ...BAL_SHEDS.map((b,i)=>({x:b.x,y:b.y,icon:'🎈',en:'Paper workshop',my:'စက္ကူကပ်တဲ',tier:(i===1?1:2) as 1|2,quiet:i!==1})),
 ];
-interface MapView { cx: number; cy: number; s: number; w: number; h: number; big: boolean; k?: number }
+// a colour for each zone on the map, so neighbours are easy to tell apart
+const ZONE_HUE: Record<string, string> = {
+  ferris:'#ff7a59', carousel:'#ff8ad8', food:'#f4b63f', pirate:'#5fb8ff', games:'#ff5a4e', kids:'#7fe0a8', music:'#c58bff', finale:'#ffd27a',
+  midway:'#ff9f43', candles:'#ffcf5a', teashop:'#d9a066', lake:'#6fa8ff', nibbana:'#f0c96a', tazaung:'#ff7eb0', balloons:'#ff8c42',
+};
+const MAP_TOP=NORTH-150, MAP_H=WH-MAP_TOP, NEAR_S=.3;
+type MBox = [number, number, number, number];
+const boxHit=(a: MBox, b: MBox)=>a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1];
+interface MapView { cx: number; cy: number; s: number; w: number; h: number; big: boolean; k?: number; focus?: string }
 function drawMap(g: CanvasRenderingContext2D, v: MapView): void {
   const { w, h, s, big } = v, X=(x: number)=>w/2+(x-v.cx)*s, Y=(y: number)=>h/2+(y-v.cy)*s, k=v.k??(big?1:1.25);
-  g.clearRect(0,0,w,h); g.fillStyle='#1b1533'; g.fillRect(0,0,w,h);
-  // the lake and city to the north
-  g.fillStyle='#0e1a44'; g.fillRect(0,0,w,Math.max(0,Y(NORTH)));
-  g.fillStyle='rgba(244,182,63,.35)'; for(let x=-200;x<WW+200;x+=90) g.fillRect(X(x),Y(NORTH-140-(x*7%60)),8*s*5,(60+x*13%90)*s);
-  g.fillStyle='#3a3060'; g.fillRect(X(40),Y(NORTH),(WW-80)*s,(WH-NORTH-14)*s);
-  // zones
-  for(const z of ZONES){ const has=S.zones.includes(z.id);
-    g.fillStyle=z.g; rr(g,X(z.x),Y(z.y),z.w*s,z.h*s,10*k); g.fill();
-    g.strokeStyle=has?'rgba(244,182,63,.85)':'rgba(255,255,255,.12)'; g.lineWidth=has?2*k:1; g.stroke(); }
-  // main street
-  g.fillStyle='#4a4166'; g.fillRect(X(ROAD.x),Y(NORTH),ROAD.w*s,(WH-NORTH)*s);
-  g.strokeStyle='rgba(244,214,138,.55)'; g.setLineDash([10*k,10*k]); g.lineWidth=2*k; g.beginPath(); g.moveTo(X(ROAD.x+ROAD.w/2),Y(NORTH)); g.lineTo(X(ROAD.x+ROAD.w/2),Y(WH)); g.stroke(); g.setLineDash([]);
+  g.clearRect(0,0,w,h); g.fillStyle='#120d28'; g.fillRect(0,0,w,h);
+  // the city to the north: a strip of night sky, rooftops and a golden stupa on the skyline
+  { const top=Y(MAP_TOP-400), bot=Y(NORTH);
+    if(bot>0){ const sky=g.createLinearGradient(0,Math.max(0,top),0,bot); sky.addColorStop(0,'#0b1236'); sky.addColorStop(1,'#1c2152'); g.fillStyle=sky; g.fillRect(0,0,w,bot);
+      g.fillStyle='#0c0a22'; for(let x=0;x<WW;x+=110){ const bh=30+((x*37)%55); g.fillRect(X(x),Y(NORTH-bh),96*s,bh*s); }
+      g.fillStyle='rgba(255,214,120,.55)'; for(let x=20;x<WW;x+=110) for(let j=0;j<3;j++) if(((x>>3)+j)%3) g.fillRect(X(x+j*26),Y(NORTH-18-((x+j)%2)*14),Math.max(1,6*s),Math.max(1,5*s));
+      // the stupa: a bell on a stepped base with a tall spire, glowing gold
+      const sx=X(WW/2), sb=Y(NORTH), u=s*1.1; g.save(); g.shadowColor='rgba(255,200,90,.8)'; g.shadowBlur=12*k; g.fillStyle='#f4b63f';
+      g.beginPath(); g.moveTo(sx-60*u,sb); g.lineTo(sx-46*u,sb-14*u); g.lineTo(sx+46*u,sb-14*u); g.lineTo(sx+60*u,sb); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(sx-40*u,sb-14*u); g.quadraticCurveTo(sx-36*u,sb-62*u,sx,sb-70*u); g.quadraticCurveTo(sx+36*u,sb-62*u,sx+40*u,sb-14*u); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(sx-9*u,sb-66*u); g.lineTo(sx,sb-104*u); g.lineTo(sx+9*u,sb-66*u); g.closePath(); g.fill(); g.restore(); } }
+  // the fairground and its walkways
+  g.fillStyle='#3b3264'; rr(g,X(40),Y(NORTH),(WW-80)*s,(WH-NORTH-14)*s,14*k); g.fill();
+  // zones: a soft card in the zone's own colour, with a gold rim once you have found it
+  for(const z of ZONES){ const has=S.zones.includes(z.id), hue=ZONE_HUE[z.id]||'#f4b63f', x=X(z.x), y=Y(z.y), zw=z.w*s, zh=z.h*s;
+    const zg=g.createLinearGradient(0,y,0,y+zh); zg.addColorStop(0,z.g); zg.addColorStop(1,'#1a1430'); g.fillStyle=zg; rr(g,x,y,zw,zh,10*k); g.fill();
+    g.save(); rr(g,x,y,zw,zh,10*k); g.clip(); g.globalAlpha=.16; g.fillStyle=hue; g.fillRect(x,y,zw,zh); g.globalAlpha=1; g.fillStyle=hue; g.fillRect(x,y,zw,3*k); g.restore();
+    rr(g,x,y,zw,zh,10*k); g.strokeStyle=v.focus===z.id?'#fff3d6':has?'rgba(244,182,63,.9)':'rgba(255,255,255,.14)'; g.lineWidth=v.focus===z.id?2.5*k:has?2*k:1; g.stroke(); }
+  // main street, with string lights along both edges
+  g.fillStyle='#4d4470'; g.fillRect(X(ROAD.x),Y(NORTH),ROAD.w*s,(WH-NORTH-14)*s);
+  g.strokeStyle='rgba(244,214,138,.5)'; g.setLineDash([10*k,10*k]); g.lineWidth=2*k; g.beginPath(); g.moveTo(X(ROAD.x+ROAD.w/2),Y(NORTH)); g.lineTo(X(ROAD.x+ROAD.w/2),Y(WH-14)); g.stroke(); g.setLineDash([]);
+  if(s>.08){ const lc=['#ff5a4e','#f4b63f','#3fc7a5','#ff8ad8']; let i=0; for(let y=NORTH+30;y<WH-30;y+=70,i++) for(const ex of [ROAD.x+14,ROAD.x+ROAD.w-14]){ g.fillStyle=lc[i%4]; g.beginPath(); g.arc(X(ex),Y(y),1.6*k,0,TAU); g.fill(); } }
   // train track, pond, gate
   g.strokeStyle='#8a7a64'; g.lineWidth=3*k; g.beginPath(); for(let d=0;d<=TRACK_LEN;d+=20){ const [x,y]=trackPos(d); if(d) g.lineTo(X(x),Y(y)); else g.moveTo(X(x),Y(y)); } g.closePath(); g.stroke();
   g.strokeStyle='rgba(30,22,40,.9)'; g.lineWidth=1*k; g.setLineDash([2*k,5*k]); g.stroke(); g.setLineDash([]);
-  { const [x,y]=trackPos(TRN.d); g.fillStyle='#e0b040'; g.strokeStyle='#2a1606'; g.lineWidth=1.5; g.beginPath(); g.arc(X(x),Y(y),4.5*k,0,TAU); g.fill(); g.stroke();
-    if(big&&s>.1){ g.font=`600 ${10*Math.min(1.3,k)}px ${BODY}`; g.fillStyle='#ffe7a3'; g.strokeStyle='rgba(13,10,36,.85)'; g.lineWidth=3; g.strokeText('🚂 train',X(x),Y(y)-10*k); g.fillText('🚂 train',X(x),Y(y)-10*k); } }
   const pg=g.createRadialGradient(X(POND.x),Y(POND.y),0,X(POND.x),Y(POND.y),POND.rx*s);
   pg.addColorStop(0,'#3b6fd0'); pg.addColorStop(1,'#152a6a'); g.fillStyle=pg;
   g.beginPath(); g.ellipse(X(POND.x),Y(POND.y),POND.rx*s,POND.ry*s,0,0,TAU); g.fill(); g.strokeStyle='#b8a888'; g.lineWidth=2*k; g.stroke();
   g.fillStyle='#ffb347'; for(const w of WISHES) if(w.k==='water'){ const p=wishSpot(w.id); if(p){ g.beginPath(); g.arc(X(p[0]),Y(p[1]),1.6*k,0,TAU); g.fill(); } }
   g.fillStyle='#7a1f2b'; g.fillRect(X(900-150),Y(ARCH_Y)-4*k,300*s,8*k); g.fillStyle='#f4b63f'; g.fillRect(X(900-150),Y(ARCH_Y)-1*k,300*s,2*k);
-  // landmarks
+  { const [x,y]=trackPos(TRN.d); g.fillStyle='#e0b040'; g.strokeStyle='#2a1606'; g.lineWidth=1.5; g.beginPath(); g.arc(X(x),Y(y),4.5*k,0,TAU); g.fill(); g.stroke(); }
+
+  // ---- everything with words: laid out so nothing sits on top of anything else
+  const used: MBox[] = [], free=(b: MBox)=>!used.some(u=>boxHit(u,b));
+  const pill=(b: MBox)=>{ g.fillStyle='rgba(13,10,36,.72)'; rr(g,b[0],b[1],b[2]-b[0],b[3]-b[1],Math.min(6,(b[3]-b[1])/2)); g.fill(); };
+  const px=X(P.x), py=Y(P.y);
+  used.push([px-14*k,py-14*k,px+14*k,py+14*k]); if(big) used.push([px-48,py-24*k-11,px+48,py-24*k+11]); // you, and the 'You are here' tag
+  // the icons we will draw
+  const near=s>=NEAR_S, icons: Array<{ m: MapMark; x: number; y: number; r: number }> = [];
+  for(const m of MAP_MARKS){ if(m.far&&near||m.near&&!near) continue; if(!big&&m.tier===2&&!m.quiet&&s<.2) continue;
+    const x=X(m.x), y=Y(m.y), r=m.icon?(m.tier===0?13:m.tier===1?10:8)*k:3; if(x<-40||y<-40||x>w+40||y>h+40) continue;
+    icons.push({m,x,y,r}); used.push([x-r,y-r,x+r,y+r]); }
+  // zone names: a numbered badge and the name, in a corner of the zone that no icon covers
+  const heads: Array<{ z: typeof ZONES[number]; has: boolean; hue: string; hx: number; hy: number; bw: number; bh: number; fs: number; mfs: number; withMy: boolean }> = [];
+  // the lake is not a place for words
+  const pondBox: MBox = [X(POND.x-POND.rx),Y(POND.y-POND.ry),X(POND.x+POND.rx),Y(POND.y+POND.ry)]; used.push(pondBox);
+  if(big){ for(const z of ZONES){ const has=S.zones.includes(z.id), hue=ZONE_HUE[z.id]||'#f4b63f', zx=X(z.x), zy=Y(z.y), zw=z.w*s, zh=z.h*s; if(zx>w||zy>h||zx+zw<0||zy+zh<0) continue;
+      let fs=clamp(s*62,10,14); const pad=6*clamp(k,.8,1.2); g.font=`700 ${fs}px ${BODY}`; let tw=g.measureText(z.name).width;
+      const maxW=zw-pad*2-fs*1.6; if(tw>maxW){ fs=Math.max(8,fs*maxW/tw); g.font=`700 ${fs}px ${BODY}`; tw=g.measureText(z.name).width; }
+      const fs0=fs, tw0=tw; let mfs=fs*.86, withMy=false, at: [number, number, number, number] | undefined;
+      // try the name with its Myanmar line, then without, then a size smaller, in each corner of the zone
+      for(const [sc,two] of [[1,true],[1,false],[.84,false]] as Array<[number, boolean]>){
+        fs=fs0*sc; tw=tw0*sc; mfs=fs*.86; g.font=`500 ${mfs}px ${MMF}`; const mw=g.measureText(z.my).width;
+        if(two&&!(zh>fs*6&&mw<=zw-pad*2-fs*1.6&&s>.12)) continue;
+        const bw=fs*1.6+Math.max(tw,two?mw:0)+4, bh=two?fs*1.3+mfs*2:fs*1.5;
+        const spots: Array<[number, number]> = [[zx+pad,zy+pad+2],[zx+zw-pad-bw,zy+pad+2],[zx+(zw-bw)/2,zy+pad+2],[zx+pad,zy+zh-pad-bh],[zx+zw-pad-bw,zy+zh-pad-bh]];
+        const f=spots.find(([a,b])=>free([a,b,a+bw,b+bh])); if(f){ at=[f[0],f[1],bw,bh]; withMy=two; break; } }
+      if(!at){ fs=fs0; tw=tw0; at=[zx+pad,zy+pad+2,fs*1.6+tw+4,fs*1.5]; }
+      const [hx,hy,bw,bh]=at; used.push([hx,hy,hx+bw,hy+bh]); heads.push({z,has,hue,hx,hy,bw,bh,fs,mfs,withMy}); } }
+  // icons
   g.textAlign='center'; g.textBaseline='middle';
-  for(const m of MAP_MARKS){ if(!big&&m.small&&s<.2) continue;
-    const x=X(m.x), y=Y(m.y), r=(m.small?9:13)*k; if(x<-30||y<-30||x>w+30||y>h+30) continue;
-    g.fillStyle='rgba(13,10,36,.78)'; g.beginPath(); g.arc(x,y,r,0,TAU); g.fill(); g.strokeStyle='rgba(244,182,63,.7)'; g.lineWidth=1.2*k; g.stroke();
-    g.font=`${(m.small?11:15)*k}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; g.fillText(m.icon,x,y+1);
-    const roomy=big?s>.14||!m.small:!m.small&&k>=1;
-    if(roomy&&!m.tiny||big&&s>.3){ const fs=(big?(m.small?10:12):11)*Math.min(1.3,k); g.font=`700 ${fs}px ${BODY}`; g.fillStyle='#fff3d6';
-      g.strokeStyle='rgba(13,10,36,.85)'; g.lineWidth=3; g.strokeText(m.en,x,y+r+fs*.75); g.fillText(m.en,x,y+r+fs*.75);
-      if(big&&s>.16){ g.font=`500 ${fs}px ${MMF}`; g.fillStyle='#f4d58a'; g.strokeText(m.my,x,y+r+fs*2); g.fillText(m.my,x,y+r+fs*2); } } }
-  if(big){ g.textAlign='left'; const zf=Math.max(9,Math.min(14,s*60)); for(const z of ZONES){ g.font=`400 ${zf}px ${DISP}`; g.fillStyle=S.zones.includes(z.id)?'#f4b63f':'rgba(255,255,255,.45)'; g.fillText(`${z.n} ${z.name.toUpperCase()}`,X(z.x)+6,Y(z.y)+zf); } g.textAlign='center'; }
+  for(const {m,x,y,r} of icons){ if(!m.icon){ g.fillStyle='#f4b63f'; g.beginPath(); g.arc(x,y,r,0,TAU); g.fill(); continue; }
+    g.fillStyle='rgba(13,10,36,.85)'; g.beginPath(); g.arc(x,y,r,0,TAU); g.fill(); g.strokeStyle=m.tier===0?'rgba(244,182,63,.9)':'rgba(244,182,63,.55)'; g.lineWidth=1.2*k; g.stroke();
+    g.font=`${r*1.15}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; g.fillText(m.icon,x,y+1); }
+  // zone name tags, drawn over the icons in case one could not find a clear corner
+  for(const {z,has,hue,hx,hy,bw,bh,fs,mfs,withMy} of heads){
+    g.fillStyle='rgba(13,10,36,.5)'; rr(g,hx-3,hy-2,bw+6,bh+3,Math.min(9,fs*.8)); g.fill();
+    const br=fs*.62, bcx=hx+br, bcy=hy+fs*.68;
+    g.fillStyle=has?'#f4b63f':hue; g.globalAlpha=has?1:.85; g.beginPath(); g.arc(bcx,bcy,br,0,TAU); g.fill(); g.globalAlpha=1;
+    g.fillStyle='#1a1230'; g.font=`700 ${fs*.78}px ${BODY}`; g.textAlign='center'; g.textBaseline='middle'; g.fillText(String(z.n),bcx,bcy+.5);
+    g.textAlign='left'; g.font=`700 ${fs}px ${BODY}`; g.fillStyle=has?'#ffe7a3':'rgba(255,243,214,.85)'; g.fillText(z.name,hx+fs*1.6,bcy+.5);
+    if(withMy){ g.font=`500 ${mfs}px ${MMF}`; g.fillStyle=has?'rgba(244,213,138,.95)':'rgba(244,213,138,.66)'; g.fillText(z.my,hx+fs*1.6,bcy+fs*.62+mfs*.95); } }
+  // labels: English with the Myanmar name under it, beside the icon where there is room; smaller spots go unlabelled until you zoom in
+  const fs0=(big?12.5:10.5)*clamp(k,.85,1.2), fs1=(big?11:9.5)*clamp(k,.85,1.2);
+  used.splice(used.indexOf(pondBox),1); g.textAlign='center'; g.textBaseline='middle';
+  const order=[...icons].sort((a,b)=>a.m.tier-b.m.tier);
+  for(const {m,x,y,r} of order){
+    if(m.quiet&&s<.45) continue; if(m.tier===2&&s<(big?.32:.5)) continue; if(!big&&m.tier>0) continue;
+    const fs=m.tier===0?fs0:fs1, mm=big&&s>.11; g.font=`700 ${fs}px ${BODY}`; const ew=g.measureText(m.en).width; g.font=`500 ${fs}px ${MMF}`; const mw=mm?g.measureText(m.my).width:0;
+    const tryAt=(two: boolean)=>{ const bw=Math.max(ew,two?mw:0)+8, bh=two?fs*2.75:fs*1.45, gap=3;
+      const c: MBox[] = [[x-bw/2,y+r+gap,x+bw/2,y+r+gap+bh],[x-bw/2,y-r-gap-bh,x+bw/2,y-r-gap],[x+r+gap,y-bh/2,x+r+gap+bw,y+bh/2],[x-r-gap-bw,y-bh/2,x-r-gap,y+bh/2]];
+      return c.find(b=>free(b)&&b[0]>=0&&b[2]<=w&&b[1]>=0&&b[3]<=h); };
+    let two=mm, b=tryAt(two); if(!b&&two){ two=false; b=tryAt(false); }
+    if(!b){ if(m.tier>0) continue; two=false; const bw=ew+8; b=[x-bw/2,y+r+3,x+bw/2,y+r+3+fs*1.45]; }
+    used.push(b); pill(b); const cx=(b[0]+b[2])/2;
+    g.font=`700 ${fs}px ${BODY}`; g.fillStyle='#fff3d6'; g.fillText(m.en,cx,b[1]+fs*.78);
+    if(two){ g.font=`500 ${fs}px ${MMF}`; g.fillStyle='#f4d58a'; g.fillText(m.my,cx,b[1]+fs*1.98); } }
   // other players
   for(const r of REMOTE.values()){ if(r.where!=='walk') continue; const x=X(r.x), y=Y(r.y);
     g.fillStyle='#3fc7a5'; g.beginPath(); g.arc(x,y,5*k,0,TAU); g.fill(); g.strokeStyle='#fff'; g.lineWidth=1.5; g.stroke();
     if(big||s>.2){ g.font=`700 11px ${BODY}`; g.fillStyle='#bff5e6'; g.fillText(r.name||'Player',x,y-11*k); } }
   // you: which way the camera looks, and an arrow for the way you face
-  const px=X(P.x), py=Y(P.y), fx=-Math.sin(CAM.yaw), fz=-Math.cos(CAM.yaw), ca=Math.atan2(fz,fx);
+  const fx=-Math.sin(CAM.yaw), fz=-Math.cos(CAM.yaw), ca=Math.atan2(fz,fx);
   g.fillStyle='rgba(255,231,163,.22)'; g.beginPath(); g.moveTo(px,py); g.arc(px,py,34*k,ca-.5,ca+.5); g.closePath(); g.fill();
   const hx=Math.sin(P.hd), hy=Math.cos(P.hd), a=9*k;
   g.fillStyle='#ff5a4e'; g.strokeStyle='#fff'; g.lineWidth=2;
   g.beginPath(); g.moveTo(px+hx*a*1.3,py+hy*a*1.3); g.lineTo(px-hx*a*.8+hy*a*.8,py-hy*a*.8-hx*a*.8); g.lineTo(px-hx*a*.35,py-hy*a*.35); g.lineTo(px-hx*a*.8-hy*a*.8,py-hy*a*.8+hx*a*.8); g.closePath(); g.fill(); g.stroke();
-  if(big){ g.font=`700 12px ${BODY}`; g.fillStyle='#ffe7a3'; g.strokeStyle='rgba(13,10,36,.9)'; g.lineWidth=3; g.strokeText('You are here',px,py-20); g.fillText('You are here',px,py-20); }
+  if(big){ g.font=`700 12px ${BODY}`; const tw=g.measureText('You are here').width+12, ty=py-24*k; g.fillStyle='#ff5a4e'; rr(g,px-tw/2,ty-9,tw,18,9); g.fill(); g.fillStyle='#fff'; g.fillText('You are here',px,ty+.5); }
+  // north
+  if(big){ const nr=12, nx=w-nr-8, ny=h-nr-8; g.fillStyle='rgba(13,10,36,.8)'; g.beginPath(); g.arc(nx,ny,nr,0,TAU); g.fill(); g.strokeStyle='rgba(244,182,63,.6)'; g.lineWidth=1; g.stroke(); g.fillStyle='#f4b63f'; g.font=`700 12px ${BODY}`; g.fillText('N',nx,ny+1); }
 }
 let miniCss=0;
 function drawMini(): void {
@@ -2065,37 +2141,60 @@ function drawMini(): void {
   const nr=9*k+3; mx.fillStyle='rgba(13,10,36,.75)'; mx.beginPath(); mx.arc(w-nr-4,nr+4,nr,0,TAU); mx.fill(); mx.fillStyle='#f4b63f'; mx.font=`700 ${10*k+2}px ${BODY}`; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('N',w-nr-4,nr+5);
 }
 let bigMap=false;
-// the full map: fits the whole fair, and you can drag to move around and pinch, scroll or use + / − to zoom
-const MAPV={s:0,fit:0,cx:WW/2,cy:0,w:0,h:0};
-const MAP_TOP=NORTH-180, MAP_H=WH-MAP_TOP;
+// the full map: sized to the shape of the fair, so it fills the card on a wide screen; on an upright phone it fills the
+// screen's height and starts around you. Drag to move, pinch, scroll or use + / − to zoom, or tap a zone to fly there.
+const MAPV={s:0,fit:0,cx:WW/2,cy:0,w:0,h:0,focus:''};
+function layoutBigMap(): void {
+  const c=$<HTMLCanvasElement>('bigmapC'), wrap=c.parentElement!, card=wrap.parentElement!, dpr=Math.min(2,devicePixelRatio||1);
+  card.style.height='';
+  const box=wrap.getBoundingClientRect(); let w=Math.floor(box.width), h=Math.floor(box.height); if(w<10||h<10) return;
+  if(h<w*.8){ // a wide screen: the canvas takes the fair's shape, and the card shrinks to fit it
+    const mh=Math.round(w*MAP_H/WW);
+    if(mh<h){ card.style.height=Math.round(card.getBoundingClientRect().height-(h-mh))+'px'; h=mh; }
+    else w=Math.min(w,Math.round(h*WW/MAP_H));
+  }
+  const was=MAPV.fit, atFit=MAPV.s>0&&MAPV.s<=was*1.001;
+  MAPV.w=w; MAPV.h=h; MAPV.fit=Math.min(w/WW,h/MAP_H);
+  if(atFit) MAPV.s=MAPV.fit;
+  c.style.width=w+'px'; c.style.height=h+'px'; c.width=Math.round(w*dpr); c.height=Math.round(h*dpr);
+}
 function openMap(): void {
   if(S.mode!=='walk'||bigMap) return;
-  bigMap=true; S.paused=true; $('bigmap').hidden=false; MAPV.s=0; drawBigMap();
+  bigMap=true; S.paused=true; $('bigmap').hidden=false; MAPV.s=0; MAPV.focus='';
+  renderZoneChips(); layoutBigMap();
+  // first look: the whole fair, or on an upright screen its full height, centred on you
+  MAPV.s=MAPV.fit; MAPV.cx=WW/2; MAPV.cy=MAP_TOP+MAP_H/2;
+  if(MAPV.h>MAPV.w*.8){ MAPV.s=clamp(MAPV.h/MAP_H,MAPV.fit,.45); MAPV.cx=P.x; MAPV.cy=P.y; }
+  drawBigMap();
 }
 function closeMap(): void { if(!bigMap) return; bigMap=false; S.paused=false; $('bigmap').hidden=true; }
 function clampMapView(): void {
-  MAPV.s=clamp(MAPV.s,MAPV.fit,Math.max(MAPV.fit*5,.5));
+  MAPV.s=clamp(MAPV.s,MAPV.fit,Math.max(MAPV.fit*5,.6));
   const hw=MAPV.w/2/MAPV.s, hh=MAPV.h/2/MAPV.s;
   MAPV.cx=hw*2>=WW?WW/2:clamp(MAPV.cx,hw,WW-hw); MAPV.cy=hh*2>=MAP_H?MAP_TOP+MAP_H/2:clamp(MAPV.cy,MAP_TOP+hh,WH-hh);
   $<HTMLButtonElement>('mapOut').disabled=MAPV.s<=MAPV.fit*1.01;
 }
 function drawBigMap(): void {
-  const c=$<HTMLCanvasElement>('bigmapC'), box=c.parentElement!.getBoundingClientRect(), dpr=Math.min(2,devicePixelRatio||1);
-  const w=Math.floor(box.width), h=Math.floor(box.height); if(w<10||h<10) return;
-  const fit=Math.min(w/WW,h/MAP_H);
-  if(!MAPV.s){ // first look: the whole fair, or on a narrow phone screen a closer view around you
-    MAPV.fit=fit; MAPV.s=fit; MAPV.cx=WW/2; MAPV.cy=MAP_TOP+MAP_H/2;
-    if(w/WW<.14){ MAPV.s=Math.min(.2,fit*2.4); MAPV.cx=P.x; MAPV.cy=P.y; } // a narrow, upright phone
-  } else { const was=MAPV.fit; MAPV.fit=fit; if(MAPV.s<=was*1.001) MAPV.s=fit; }
-  MAPV.w=w; MAPV.h=h; clampMapView();
-  c.style.width=w+'px'; c.style.height=h+'px'; c.width=Math.round(w*dpr); c.height=Math.round(h*dpr);
-  const g=c.getContext('2d')!; g.setTransform(dpr,0,0,dpr,0,0);
-  drawMap(g,{cx:MAPV.cx,cy:MAPV.cy,s:MAPV.s,w,h,big:true,k:clamp(MAPV.s/.16,.75,1.35)});
+  if(!MAPV.w) return;
+  clampMapView();
+  const c=$<HTMLCanvasElement>('bigmapC'), dpr=Math.min(2,devicePixelRatio||1), g=c.getContext('2d')!; g.setTransform(dpr,0,0,dpr,0,0);
+  drawMap(g,{cx:MAPV.cx,cy:MAPV.cy,s:MAPV.s,w:MAPV.w,h:MAPV.h,big:true,k:clamp(MAPV.s/.16,.75,1.35),focus:MAPV.focus});
 }
 function zoomMap(f: number, sx=MAPV.w/2, sy=MAPV.h/2): void {
   const mx0=MAPV.cx+(sx-MAPV.w/2)/MAPV.s, my0=MAPV.cy+(sy-MAPV.h/2)/MAPV.s;
   MAPV.s*=f; clampMapView();
   MAPV.cx=mx0-(sx-MAPV.w/2)/MAPV.s; MAPV.cy=my0-(sy-MAPV.h/2)/MAPV.s; drawBigMap();
+}
+// the row of zone buttons under the map: found zones are gold; tap one to fly the map to it
+function renderZoneChips(): void {
+  const row=$('mapZones'); row.innerHTML='';
+  for(const z of ZONES){ const b=document.createElement('button'), has=S.zones.includes(z.id);
+    b.className='zc'+(has?' on':''); b.style.setProperty('--hue',ZONE_HUE[z.id]||'#f4b63f');
+    b.innerHTML=`<b>${z.n}</b><span>${z.name}<small class="mm">${z.my}</small></span>`; b.title=has?`${z.name} · found`:z.name;
+    b.onclick=()=>{ MAPV.focus=MAPV.focus===z.id?'':z.id; row.querySelectorAll('.zc').forEach(e=>e.classList.toggle('sel',e===b&&!!MAPV.focus));
+      if(MAPV.focus){ MAPV.s=Math.max(MAPV.fit,Math.min(MAPV.w/(z.w+160),MAPV.h/(z.h+160),.5)); MAPV.cx=z.x+z.w/2; MAPV.cy=z.y+z.h/2; }
+      drawBigMap(); };
+    row.appendChild(b); }
 }
 {
   const c=$<HTMLCanvasElement>('bigmapC'), pts=new Map<number, {x:number;y:number}>(); let pd=0;
@@ -2105,18 +2204,18 @@ function zoomMap(f: number, sx=MAPV.w/2, sy=MAPV.h/2): void {
     const p=pts.get(e.pointerId); if(!p) return;
     if(pts.size===2){ pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); const [a,b]=[...pts.values()], d=Math.hypot(a.x-b.x,a.y-b.y), r=c.getBoundingClientRect();
       if(pd) zoomMap(d/pd,(a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top); pd=d; return; }
-    MAPV.cx-=(e.clientX-p.x)/MAPV.s; MAPV.cy-=(e.clientY-p.y)/MAPV.s; p.x=e.clientX; p.y=e.clientY; clampMapView(); drawBigMap();
+    MAPV.cx-=(e.clientX-p.x)/MAPV.s; MAPV.cy-=(e.clientY-p.y)/MAPV.s; p.x=e.clientX; p.y=e.clientY; drawBigMap();
   });
   const up=(e: PointerEvent)=>{ pts.delete(e.pointerId); pd=0; };
   c.addEventListener('pointerup',up); c.addEventListener('pointercancel',up);
   c.addEventListener('wheel',e=>{ e.preventDefault(); const [x,y]=local(e); zoomMap(Math.exp(-e.deltaY*.0015),x,y); },{passive:false});
   $('mapIn').onclick=()=>zoomMap(1.5); $('mapOut').onclick=()=>zoomMap(1/1.5);
-  $('mapMe').onclick=()=>{ if(MAPV.s<MAPV.fit*1.6) MAPV.s=Math.max(MAPV.fit*2.2,.16); MAPV.cx=P.x; MAPV.cy=P.y; clampMapView(); drawBigMap(); };
+  $('mapMe').onclick=()=>{ if(MAPV.s<MAPV.fit*1.6) MAPV.s=Math.max(MAPV.fit*2.2,.22); MAPV.cx=P.x; MAPV.cy=P.y; drawBigMap(); };
 }
 $('mini').addEventListener('click',openMap);
 $('bigmap').addEventListener('click',e=>{ if((e.target as HTMLElement).id==='bigmap') closeMap(); });
 $('bigmapClose').addEventListener('click',closeMap);
-window.addEventListener('resize',()=>{ if(bigMap) drawBigMap(); });
+window.addEventListener('resize',()=>{ if(bigMap){ layoutBigMap(); drawBigMap(); } });
 
 // ---------- title screen sky and a burst of confetti ----------
 function decorateTitle(): void {
