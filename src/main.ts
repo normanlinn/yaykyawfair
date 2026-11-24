@@ -4,6 +4,7 @@ import { Ctx, TAU, rand, pick, clamp, lerp, srng, rr, el, circ, ln, ks, MMF, DIS
 import { SHIRTS, LONS, SKINS, BALLOONS, AV_SHIRTS, AV_LONS, person, PersonOpts, Avatar, Gender, DEFAULT_AVATAR, avatarOpts, cleanAvatar, randomAvatar, genderStartingLook } from './people';
 import { meritGong, drumBeat } from './audio';
 import { A, audioInit, sfx, bell, horn, setChatter, setMaster, loadVoices, speak } from './audio';
+import { updateAmbience } from './ambience';
 import { CROWD_LINES, VENDOR_CALLS, REPLIES, VOICE_CLIPS } from './voices';
 import {
   WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, STATION, TRAIN_STOP, TRAIN_OFF, TRACK_LEN, ST, FV, PHOTO, TOYS_AT, UNCLE, ARCH_Y, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
@@ -1983,6 +1984,7 @@ function frame(now: number): void {
   chatT-=dt; if(chatT<=0){ chatT=.5; let n=0; if(S.mode==='walk'){ for(const q of NPC) if(Math.abs(q.x-P.x)<280&&Math.abs(q.y-P.y)<280) n++; n+=REMOTE.size; } setChatter(S.mode==='walk'?.25+.75*Math.min(1,n/12):S.mode==='title'?0:.2); }
   if(A.c&&A.music){ let v: number; if(S.mode==='walk'||S.mode==='title'){ const d=Math.hypot(P.x-ST.x,P.y-ST.y); v=.03+.5*clamp(1-d/650,0,1)+(P.dance?.15:0); } else if(S.mode==='scene'&&SC.kind==='carousel') v=.45; else v=.06;
     A.music.gain.setTargetAtTime(v,A.c.currentTime,.3); if(A.amb) A.amb.gain.setTargetAtTime(S.mode==='walk'?.22:.1,A.c.currentTime,.4); }
+  if(A.c) updateAmbience(dt,P.x,P.y,S.mode==='walk'?1:S.mode==='scene'?.55:S.mode==='mg'?.2:.3); // each zone's own sounds, by distance
   if((T*10|0)%3===0) showTime();
   requestAnimationFrame(frame);
 }
