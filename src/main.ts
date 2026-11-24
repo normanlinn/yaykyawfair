@@ -1221,7 +1221,7 @@ function chinStand(dt: number, mag: number): boolean {
 }
 
 // ---------- the fire balloon field (မီးပုံးပျံကွင်း): teams take turns filling a balloon at the launch frame and letting it go ----------
-interface Flight { kind: BalKind; x: number; y: number; h: number; t: number; vx: number; vy: number; mine: boolean; lit: number; team: number }
+interface Flight { kind: BalKind; x: number; y: number; h: number; t: number; tx: number; ty: number; hh: number; mine: boolean; lit: number; team: number }
 const BAL={ph:'wait' as 'wait'|'fill',next:12,u:0,kind:'elephant' as BalKind,team:1,mine:false,lit:0,heat:0,flights:[] as Flight[],
   scores:[0,0,0,0] as number[],judgeT:-1,judgeTeam:0,judgeScore:0,cheerT:0,launches:0};
 function balDay(): boolean { return S.clock>=6*60&&S.clock<17*60+30; }
@@ -1235,7 +1235,10 @@ function balPick(): BalKind | null {
 function balNear(): boolean { return S.mode==='walk'&&zoneAt(P.x,P.y)==='balloons'; }
 function balLaunch(score: number): void {
   const mine=BAL.mine, team=BAL.team, kn=balKindName(BAL.kind);
-  BAL.flights.push({kind:BAL.kind,x:BAL_PAD.x,y:BAL_PAD.y,h:0,t:0,vx:rand(8,16),vy:rand(-10,-4),mine,lit:BAL.kind==='lantern'?(mine?BAL.lit:1):1,team});
+  // each balloon gets its own spot over the field to hover at, as far as possible from the others already up
+  let tx=BAL_PAD.x, ty=BAL_PAD.y-300, best=-1;
+  for(let k=0;k<14;k++){ const x=rand(4800,5400), y=rand(450,2300), d=Math.min(1e9,...BAL.flights.map(f=>Math.hypot(f.tx-x,f.ty-y))); if(d>best){ best=d; tx=x; ty=y; } }
+  BAL.flights.push({kind:BAL.kind,x:BAL_PAD.x,y:BAL_PAD.y,h:0,t:0,tx,ty,hh:rand(20,38),mine,lit:BAL.kind==='lantern'?(mine?BAL.lit:1):1,team});
   BAL.ph='wait'; BAL.u=0; BAL.heat=0; BAL.mine=false; BAL.next=rand(35,60); BAL.launches++;
   BAL.judgeT=9; BAL.judgeTeam=team; BAL.judgeScore=score; BAL.cheerT=0;
   if(balNear()){ sfx('launch');
@@ -1252,9 +1255,8 @@ function updateBalloons(dt: number): void {
     if(BAL.next<=0){ const k=balPick(); if(!k){ BAL.next=8; } else { BAL.ph='fill'; BAL.kind=k; BAL.u=0; BAL.team=1+(BAL.launches%3); BAL.lit=0; } } }
   else if(!BAL.mine){ BAL.heat=.6+Math.sin(T*3)*.08; BAL.u=Math.min(1,BAL.u+dt/32); if(BAL.kind==='lantern'&&BAL.u>.75) BAL.lit=Math.min(1,BAL.lit+dt/6);
     if(BAL.u>=1&&(BAL.kind!=='lantern'||BAL.lit>=1)) balLaunch(Math.round(rand(58,88))); }
-  // balloons already up: they rise fast, slow down, drift off east with the wind and burn out far away
-  for(const f of BAL.flights){ f.t+=dt; const up=f.t<6?.6+f.t*.5:Math.max(.9,3.6-f.t*.03); f.h+=up*dt; f.x+=f.vx*dt*(1+f.t*.02); f.y+=f.vy*dt; }
-  BAL.flights=BAL.flights.filter(f=>f.t<95);
+  // balloons already up: they climb, ease off as they near their height, drift to their spot over the field and stay there
+  for(const f of BAL.flights){ f.t+=dt; f.h+=Math.max(0,Math.min(f.t<6?.6+f.t*.5:3,(f.hh-f.h)*.35))*dt; const k=Math.min(1,dt*.06); f.x+=(f.tx-f.x)*k; f.y+=(f.ty-f.y)*k; }
   // the crowd cheers as it goes up, and the judges give the score a little later
   if(BAL.judgeT>0){ BAL.judgeT-=dt; BAL.cheerT-=dt;
     if(BAL.cheerT<=0&&BAL.judgeT>4){ BAL.cheerT=rand(1,1.8); const n=NPC.find(q=>q.post&&!q.sit&&Math.hypot(q.x-BAL_PAD.x,q.y-BAL_PAD.y-260)<240&&Math.random()<.3); if(n&&balNear()) NPC_SAY.push({n,t:pick(CHEERS),until:T+2.5}); }
@@ -1270,7 +1272,7 @@ function openBalloon(): void {
   LEAD_HELLO.forEach((l,k)=>setTimeout(()=>c.say(l,false),k*500));
   optBtn(c,JOIN,()=>{ if(busy) return; c.say(JOIN,true);
     if(BAL.ph==='fill'&&!BAL.mine){ reply(JOIN_BUSY); return; }
-    const k=balPick(); if(!k){ reply(['မီးပုံးတွေ အကုန် တက်သွားပြီ၊ နောက်တစ်လုံး ကပ်နေတုန်း','They’re all up. We’re still gluing the next one.']); return; }
+    const k=balPick(); if(!k){ reply(['ကောင်းကင်မှာ မီးပုံးတွေ ပြည့်နေပြီ၊ နောက်တစ်လုံး ကပ်နေတုန်း','The sky is full of our balloons. We’re still gluing the next one.']); return; }
     reply(['ကောင်းပြီ၊ မီးထိုးပေး','Great, you feed the fire.'],()=>setTimeout(()=>balFill(k),700)); },'yay');
   LEAD_TOPICS.forEach(t=>optBtn(c,t.q,()=>{ if(busy) return; c.say(t.q,true); reply(t.a); }));
   optBtn(c,BYE_ME,()=>{ if(busy) return; c.say(BYE_ME,true); reply(LEAD_BYE,()=>setTimeout(closeModal,900)); },'bye');

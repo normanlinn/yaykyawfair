@@ -1,5 +1,12 @@
 [
   {
+    "v": "1.8.1", "date": "2026-11-24", "title": "Fire balloons stay up", "my": "မီးပုံးတွေ ကောင်းကင်မှာ ဆက်ရှိနေမယ်",
+    "notes": [
+      "Launched fire balloons no longer fly off and burn out. Each one climbs to its own spot over the balloon field and hovers there, gently bobbing, so the sky fills up through the evening.",
+      "Up to eight animal balloons and six sein na pan can hover at once. When the sky is full, Sai Htun’s crew waits for the next balloon to be glued."
+    ]
+  },
+  {
     "v": "1.8.0", "date": "2026-11-24", "title": "Tazaungdaing fire balloons", "my": "တန်ဆောင်တိုင် မီးပုံးပျံပွဲ",
     "notes": [
       "A new fire balloon field (မီးပုံးပျံပွဲ) east of the Tazaungdaing grounds, like the Taunggyi balloon festival.",

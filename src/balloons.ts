@@ -9,8 +9,8 @@ export const DAY_KINDS: Array<{ k: BalKind; name: string; my: string }> = [
   { k: 'owl', name: 'owl', my: 'ဇီးကွက်' }, { k: 'ox', name: 'ox', my: 'နွား' },
 ];
 export const NIGHT_KIND = { k: 'lantern' as BalKind, name: 'sein na pan', my: 'စိန်နားပန်' };
-/** How many of each balloon the 3D world keeps, so the game never asks for more at once. */
-export const BAL_POOL: Record<BalKind, number> = { elephant: 1, hintha: 1, owl: 1, ox: 1, lantern: 3 };
+/** How many of each balloon the 3D world keeps. Launched balloons stay up, so this is also how many can hover at once (one sein na pan is kept for filling). */
+export const BAL_POOL: Record<BalKind, number> = { elephant: 2, hintha: 2, owl: 2, ox: 2, lantern: 7 };
 /** Little lanterns hung under each night balloon. */
 export const BAL_LANTERNS = 48;
 
