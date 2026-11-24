@@ -5,9 +5,10 @@ import { TAU, srng, rand, pick, clamp, lerp, MMF, BODY, DISP } from './util';
 import { PersonOpts, bodyProfile } from './people';
 import { SHOPS, PWE_SHOPS, Shop, mmNum } from './shops';
 import { GIVINGS } from './nibbana';
+import { BalKind, BAL_POOL, BAL_LANTERNS } from './balloons';
 import {
   M, WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, KIDS, TRAIN, STATION, TRAIN_OFF, TRACK_LEN, ST, FV, PHOTO, TOYS_AT, ARCH_Y, SNACKS, CARTS, TEA_TABLES, BOOTHS, SECRETS,
-  STRINGS, TREES, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, RESTROOMS, PARKED, QUEUES, NIB_STALLS, NIB_GATE, LOOMS, MONEY_TREE, CHINLONE, DONOR_BOARD, WATER_POTS, PROC_PATH, MONK_PATH, pathAt, QUEUE_GAP, trackPos,
+  STRINGS, TREES, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, RESTROOMS, PARKED, QUEUES, NIB_STALLS, NIB_GATE, LOOMS, MONEY_TREE, CHINLONE, DONOR_BOARD, WATER_POTS, PROC_PATH, MONK_PATH, pathAt, QUEUE_GAP, trackPos, BAL_PAD, BAL_JUDGE, BAL_SHEDS,
 } from './layout';
 
 // ---------------------------------------------------------------- basics
@@ -369,7 +370,7 @@ function buildSkyAndCity(): void {
   }
 
   // lake between the fence and the city
-  const lake = new THREE.Mesh(new THREE.PlaneGeometry(400, 34), new THREE.MeshLambertMaterial({ color: '#0f1a3f', emissive: '#0a1030' }));
+  const lake = new THREE.Mesh(new THREE.PlaneGeometry(480, 34), new THREE.MeshLambertMaterial({ color: '#0f1a3f', emissive: '#0a1030' }));
   lake.rotation.x = -Math.PI / 2; lake.position.set(45, 0.01, Z(NORTH) - 17); scene.add(lake); anim.lake = lake;
   // city blocks with lit windows
   const winTex = [0, 1, 2].map(v => canvasTex(64, 128, c => { const rr = srng(40 + v); c.fillStyle = v === 1 ? '#1b1740' : '#151233'; c.fillRect(0, 0, 64, 128);
@@ -379,6 +380,11 @@ function buildSkyAndCity(): void {
   for (let i = 0; i < 70; i++) {
     const x = -70 + rb() * 230; if (x > 34 && x < 58) continue;
     const z = -6 - rb() * 45, h = 6 + rb() * 26, w = 4 + rb() * 7, d = 4 + rb() * 6;
+    const mat = new THREE.MeshBasicMaterial({ map: winTex[i % 3], color: '#bbbbbb' }); tod.city.push(mat);
+    box(w, h, d, mat, city, x, h / 2, z);
+  }
+  for (let i = 0; i < 26; i++) { // more of the city to the east, behind the balloon field
+    const x = 165 + rb() * 120, z = -6 - rb() * 45, h = 6 + rb() * 24, w = 4 + rb() * 7, d = 4 + rb() * 6;
     const mat = new THREE.MeshBasicMaterial({ map: winTex[i % 3], color: '#bbbbbb' }); tod.city.push(mat);
     box(w, h, d, mat, city, x, h / 2, z);
   }
@@ -1741,7 +1747,7 @@ function updateFountains(dt: number): void {
 
 export function build3d(): void {
   buildSkyAndCity(); buildGround(); buildTrees(); buildLanterns(); buildFerris(); buildCarousel(); buildPirate();
-  buildFood(); buildBooths(); buildKids(); buildStage(); buildFinaleAndGate(); buildSecrets(); buildWishPlace(); buildMidway(); buildCandles(); buildTeashop(); buildRestrooms(); buildQueueRopes(); buildNibbana(); buildTazaung();
+  buildFood(); buildBooths(); buildKids(); buildStage(); buildFinaleAndGate(); buildSecrets(); buildWishPlace(); buildMidway(); buildCandles(); buildTeashop(); buildRestrooms(); buildQueueRopes(); buildNibbana(); buildTazaung(); buildBalloons();
   glowPts = makeGlows(GLOWS, 1.1); scene.add(glowPts);
   buildDust(); buildSkyLanterns();
   crowd = new Crowd(400);
@@ -1763,6 +1769,178 @@ export function resize3d(w: number, h: number, dpr: number): void {
 export interface Look { o: PersonOpts; key: string }
 export interface Body3D { x: number; y: number; hd: number; moving: boolean; spd?: number; wave: boolean; dance?: boolean; look: Look; balloon: string | null }
 export type RideKind = 'ferris' | 'carousel' | 'pirate' | 'train' | 'bumper' | 'handwheel' | 'swinger' | 'finale' | 'wishes' | null;
+// ---------------------------------------------------------------- the fire balloon field (မီးပုံးပျံကွင်း)
+interface BalObj { g: THREE.Group; kind: BalKind; flame: THREE.Mesh; lamps?: THREE.InstancedMesh; halo?: THREE.Points; used: boolean }
+const bl = { objs: [] as BalObj[], board: null as THREE.Mesh, fire: [] as THREE.Mesh[], light: null as THREE.PointLight, crew: [] as Rig[], rope: null as THREE.Mesh, paper: null as THREE.MeshLambertMaterial, rows: [] as Array<[string, string, string]> };
+function panelTex(cols: string[]): THREE.CanvasTexture {
+  return canvasTex(256, 128, c => { const w = 256 / cols.length; cols.forEach((col, k) => { c.fillStyle = col; c.fillRect(k * w, 0, w + 1, 128); });
+    c.fillStyle = 'rgba(255,255,255,.18)'; for (let y = 10; y < 128; y += 24) c.fillRect(0, y, 256, 3); }, true);
+}
+/** A teardrop paper envelope, mouth at the bottom (y = 0), about `h` metres tall. */
+function envelope(h: number, r: number, mat: THREE.Material, parent: THREE.Object3D): THREE.Mesh {
+  const pts: THREE.Vector2[] = [];
+  for (let k = 0; k <= 16; k++) { const u = k / 16, y = u * h, rad = u < 0.12 ? r * 0.28 + u / 0.12 * r * 0.25 : r * Math.sin(Math.min(1, (u - 0.04) / 0.96) * Math.PI) ** 0.7 * (u > 0.9 ? 1 - (u - 0.9) * 4 : 1); pts.push(new THREE.Vector2(Math.max(0.01, rad), y)); }
+  pts.push(new THREE.Vector2(0, h));
+  return add(new THREE.Mesh(new THREE.LatheGeometry(pts, 20), mat), parent, 0, 0, 0);
+}
+function buildBalloonObj(kind: BalKind): BalObj {
+  const g = add(new THREE.Group(), scene, 0, -50, 0); g.visible = false;
+  const o: BalObj = { g, kind, flame: null, used: false };
+  const paper = (cols: string[]) => new THREE.MeshLambertMaterial({ map: panelTex(cols), side: DS });
+  if (kind === 'lantern') {
+    envelope(9, 3.4, bl.paper, g);
+    // the hoop under the mouth and the little lanterns hung below it in tiers, wide in the middle like a diamond
+    const R = [1.4, 2.3, 3.0, 3.0, 2.3, 1.4], m4 = new THREE.Matrix4(), cols = ['#ffd27a', '#ff5a4e', '#fff3c4', '#3fc7a5', '#ff8a3d', '#ff8ad8'];
+    const lamps = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.2, 0), new THREE.MeshBasicMaterial({ color: '#ffffff' }), BAL_LANTERNS);
+    const hp = new Float32Array(BAL_LANTERNS * 3), hc = new Float32Array(BAL_LANTERNS * 3), wire: number[] = [];
+    for (let k = 0; k < BAL_LANTERNS; k++) {
+      const tier = Math.floor(k / 8), a = (k % 8) / 8 * TAU + tier * 0.39, y = -1.2 - tier * 1.0, x = Math.sin(a) * R[tier], z = Math.cos(a) * R[tier];
+      lamps.setMatrixAt(k, m4.makeTranslation(x, y, z)); const col = new THREE.Color(cols[(k + tier) % 6]); lamps.setColorAt(k, col);
+      hp.set([x, y, z], k * 3); hc.set([col.r, col.g, col.b], k * 3);
+      if (tier === 5) wire.push(0, 0, 0, x, y, z);
+    }
+    for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; wire.push(Math.sin(a) * 1.4, -1.2, Math.cos(a) * 1.4, Math.sin(a) * 1.4, -6.2, Math.cos(a) * 1.4); }
+    g.add(lamps); lamps.count = BAL_LANTERNS; o.lamps = lamps;
+    const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.BufferAttribute(hp, 3)); hg.setAttribute('color', new THREE.BufferAttribute(hc, 3));
+    o.halo = new THREE.Points(hg, new THREE.PointsMaterial({ size: 1.3, map: glowSprite, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); g.add(o.halo);
+    g.add(new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(wire, 3)), new THREE.LineBasicMaterial({ color: '#6a5040' })));
+  } else if (kind === 'elephant') {
+    const skin = paper(['#f3efe6', '#e6e0d6']), cloth = paper(['#7a1f2b', '#d9a63a', '#7a1f2b']);
+    sphere(1, skin, g, 0, 4.2, 0, 16).scale.set(2.2, 1.9, 3.2);                  // body, trunk pointing north (-z)
+    sphere(1.5, skin, g, 0, 5.4, -3.4, 14);                                       // head
+    for (const sx of [-1, 1]) { const ear = add(new THREE.Mesh(new THREE.CircleGeometry(1.3, 14), skin), g, sx * 1.4, 5.5, -2.9); ear.rotation.y = sx * 1.1; }
+    const tr1 = cyl(0.45, 0.32, 2.0, skin, g, 0, 4.2, -4.6, 10); tr1.rotation.x = -0.5; const tr2 = cyl(0.32, 0.22, 1.4, skin, g, 0, 2.9, -5.0, 10); tr2.rotation.x = 0.4;
+    for (const sx of [-1.1, 1.1]) for (const sz of [-1.7, 1.7]) cyl(0.55, 0.5, 2.2, skin, g, sx, 1.6, sz, 10);
+    box(4.0, 0.25, 3.0, cloth, g, 0, 6.0, 0.2); box(4.1, 1.4, 0.06, cloth, g, 0, 5.4, -1.3);
+    sphere(0.22, glowMat('#15101c'), g, 0.9, 5.9, -4.4, 8); sphere(0.22, glowMat('#15101c'), g, -0.9, 5.9, -4.4, 8);
+  } else if (kind === 'hintha') {
+    const gold = paper(['#f4b63f', '#d9822b', '#f4b63f', '#ffd27a']);
+    sphere(1, gold, g, 0, 3.6, 0, 16).scale.set(2.0, 1.8, 3.0);
+    const neck = cyl(0.6, 0.9, 3.4, gold, g, 0, 5.6, -2.6, 12); neck.rotation.x = -0.45;
+    sphere(1.0, gold, g, 0, 7.4, -3.6, 12);
+    const beak = add(new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.2, 8), lam('#c2432a')), g, 0, 7.2, -4.8); beak.rotation.x = -Math.PI / 2;
+    for (let k = 0; k < 5; k++) { const f = add(new THREE.Mesh(new THREE.ConeGeometry(0.5, 3.0, 6), paper(['#c2432a', '#f4b63f'])), g, (k - 2) * 0.6, 5.0, 3.0); f.rotation.x = 0.9; f.rotation.z = (k - 2) * 0.25; }
+    for (const sx of [-1, 1]) sphere(1, gold, g, sx * 1.9, 4.2, 0.3, 10).scale.set(0.4, 1.1, 2.0);
+    sphere(0.16, glowMat('#15101c'), g, 0.6, 7.6, -4.2, 6); sphere(0.16, glowMat('#15101c'), g, -0.6, 7.6, -4.2, 6);
+  } else if (kind === 'owl') {
+    const brown = paper(['#8a5a32', '#a8743e', '#8a5a32', '#c9a46a']);
+    sphere(3.0, brown, g, 0, 4.4, 0, 18).scale.set(1, 1.2, 0.95);
+    for (const sx of [-1, 1]) {
+      const eye = add(new THREE.Mesh(new THREE.CircleGeometry(1.05, 18), lam('#ffd27a', { side: DS })), g, sx * 1.15, 5.6, -2.75); eye.rotation.y = Math.PI + sx * 0.25;
+      const pup = add(new THREE.Mesh(new THREE.CircleGeometry(0.5, 14), lam('#15101c', { side: DS })), g, sx * 1.15, 5.6, -2.8); pup.rotation.y = Math.PI + sx * 0.25;
+      const tuft = add(new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.6, 6), brown), g, sx * 1.4, 8.0, -0.6); tuft.rotation.z = -sx * 0.35;
+      sphere(1, brown, g, sx * 2.8, 4.0, 0, 10).scale.set(0.5, 1.6, 1.4);
+    }
+    const beak = add(new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 6), lam('#e0b040')), g, 0, 4.9, -2.9); beak.rotation.x = Math.PI;
+    box(4.0, 0.06, 2.4, paper(['#f3efe6', '#c9a46a']), g, 0, 2.4, -1.6).rotation.x = -0.5;
+  } else {
+    const hide = paper(['#6b3a22', '#8a5032']), cream = lam('#f3efe6');
+    sphere(1, hide, g, 0, 4.0, 0, 16).scale.set(2.0, 1.8, 3.4);
+    sphere(1, hide, g, 0, 5.5, 0.9, 10).scale.set(1.0, 0.9, 1.0);              // the hump
+    sphere(1, hide, g, 0, 4.6, -3.6, 12).scale.set(1.1, 1.2, 1.4);
+    for (const sx of [-1, 1]) { const h = add(new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.6, 6), cream), g, sx * 1.1, 6.0, -3.5); h.rotation.z = -sx * 0.8; }
+    for (const sx of [-1.0, 1.0]) for (const sz of [-1.8, 1.8]) cyl(0.4, 0.35, 2.4, hide, g, sx, 1.6, sz, 8);
+    box(0.3, 0.3, 1.8, hide, g, 0, 4.4, 3.6).rotation.x = 0.7;
+    sphere(0.18, glowMat('#15101c'), g, 0.75, 5.0, -4.7, 6); sphere(0.18, glowMat('#15101c'), g, -0.75, 5.0, -4.7, 6);
+  }
+  // the little fire in the mouth that keeps it aloft
+  o.flame = add(new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 8), glowMat('#ffb347')), g, 0, 0.3, 0);
+  if (kind !== 'lantern') o.flame.position.y = 1.0;
+  bl.objs.push(o); return o;
+}
+function boardTex(rows: Array<[string, string, string]>): THREE.CanvasTexture {
+  return canvasTex(512, 320, c => {
+    c.fillStyle = '#1c2a4a'; c.fillRect(0, 0, 512, 320); c.strokeStyle = '#f4b63f'; c.lineWidth = 10; c.strokeRect(5, 5, 502, 310);
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#ffd27a'; c.font = `700 32px ${MMF}`; c.fillText('မီးပုံးပျံ ပြိုင်ပွဲ ရလဒ်', 256, 44);
+    c.font = `600 15px ${BODY}`; c.fillStyle = '#c9d6f0'; c.fillText('FIRE BALLOON CONTEST · JUDGES’ SCORES', 256, 80);
+    rows.forEach(([my, en, pts], k) => { const y = 124 + k * 50; c.textAlign = 'left'; c.fillStyle = '#ffffff'; c.font = `24px ${MMF}`; c.fillText(my, 26, y - 6, 330);
+      c.fillStyle = '#9fb0d0'; c.font = `13px ${BODY}`; c.fillText(en, 26, y + 17); c.textAlign = 'right'; c.fillStyle = '#ffd27a'; c.font = `700 28px ${MMF}`; c.fillText(pts, 486, y); });
+  });
+}
+/** Repaints the judges' scoreboard (team name, its English name, best score in Myanmar numerals or a dash). */
+export function setBalloonBoard(rows: Array<[string, string, string]>): void {
+  bl.rows = rows; if (!bl.board) return;
+  const m = bl.board.material as THREE.MeshBasicMaterial, old = m.map; m.map = boardTex(rows); m.needsUpdate = true; old?.dispose();
+}
+function buildBalloons(): void {
+  bl.paper = new THREE.MeshLambertMaterial({ map: panelTex(['#c2432a', '#fff3d6', '#f4b63f', '#fff3d6', '#2f5d50', '#fff3d6']), side: DS, emissive: '#ff8a3a', emissiveIntensity: 0 });
+  (Object.keys(BAL_POOL) as BalKind[]).forEach(k => { for (let i = 0; i < BAL_POOL[k]; i++) buildBalloonObj(k); });
+  // the launch frame: two tall bamboo masts with a crossbar, a pulley rope down to the balloon's crown, and the fire pit between them
+  const px = X(BAL_PAD.x), pz = Z(BAL_PAD.y), bamboo = lam('#c9a86a');
+  for (const dx of [-7, 7]) { cyl(0.16, 0.2, 14, bamboo, scene, px + dx, 7, pz, 8); for (const dz of [-1.5, 1.5]) beam(new THREE.Vector3(px + dx, 4, pz), new THREE.Vector3(px + dx * 1.25, 0, pz + dz), 0.06, bamboo, scene); }
+  box(14.4, 0.25, 0.25, bamboo, scene, px, 13.8, pz);
+  bl.rope = cyl(0.03, 0.03, 1, lam('#e8dfcf'), scene, px, 12, pz, 4);
+  for (let k = 0; k < 9; k++) { const a = k / 9 * TAU; sphere(0.28, lam('#6a6470'), scene, px + Math.sin(a) * 1.1, 0.15, pz + Math.cos(a) * 1.1, 8); }
+  for (const a of [0.4, -0.4, 1.9]) { const lg = cyl(0.12, 0.12, 1.8, lam('#4a2e1c'), scene, px, 0.2, pz, 6); lg.rotation.z = Math.PI / 2; lg.rotation.y = a; }
+  bl.fire.push(add(new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.6, 10), glowMat('#ff7a2a')), scene, px, 0.9, pz), add(new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.1, 8), glowMat('#ffe27a')), scene, px, 0.75, pz));
+  bl.light = new THREE.PointLight('#ff9a4a', 0, 18, 2); bl.light.position.set(px, 2.5, pz); scene.add(bl.light);
+  // the crew around the fire, holding the balloon's mouth open over it
+  for (let k = 0; k < 4; k++) { const a = k / 4 * TAU + 0.5, r = buildPerson({ shirt: pick(['#ffffff', '#f2d49b', '#9fd3f0']), lon: pick(['#283a6b', '#5a3a24', '#2f5d50']), skin: pick(['#c58c5c', '#a8714a', '#d9a77a']), outfit: k === 3 ? 'taikpon' : 'longyi', hair: 'short', head: k % 2 ? 'gaungbaung' : 'none' });
+    r.g.position.set(px + Math.sin(a) * 2.2, 0, pz + Math.cos(a) * 2.2); r.g.rotation.y = a + Math.PI; scene.add(r.g); bl.crew.push(r); }
+  // the rope keeping the crowd back, strung with bulbs
+  const ry = Z(BAL_PAD.y + 212);
+  for (let k = 0; k <= 8; k++) cyl(0.05, 0.05, 1.1, lam('#5a3a24'), scene, px - 11 + k * 2.75, 0.55, ry, 6);
+  box(22, 0.04, 0.04, lam('#c2432a'), scene, px, 1.0, ry);
+  for (let k = 0; k < 12; k++) GLOWS.push([px - 11 + k * 2, 1.05, ry, LANTERN_COLS[k % 5], 0.6]);
+  // bamboo posts with Tazaungdaing paper lanterns along the field's walkways
+  for (let y = 450; y <= 2350; y += 190) for (const x of [4790, 5420]) { cyl(0.06, 0.06, 3.6, bamboo, scene, X(x), 1.8, Z(y), 6); paperLantern(scene, X(x), 3.2, Z(y), LANTERN_COLS[(y / 190 + (x > 5000 ? 2 : 0)) % 5 | 0]); GLOWS.push([X(x), 3.2, Z(y), '#ffe7a3', 0.9]); }
+  // a welcome arch on the west side, where you come over from the Tazaungdaing grounds
+  const ax = X(4740), az = Z(BAL_PAD.y);
+  for (const dz of [-7, 7]) { cyl(0.22, 0.26, 5.4, lam('#283a6b'), scene, ax, 2.7, az + dz, 10); sphere(0.3, lam('#d9a63a'), scene, ax, 5.5, az + dz, 10); }
+  box(0.4, 0.4, 14.6, lam('#283a6b'), scene, ax, 5.2, az);
+  board(signTex('တန်ဆောင်တိုင် မီးပုံးပျံပွဲ', 'Tazaungdaing fire balloons', '#283a6b', 640, 180), 8, 2.25, scene, ax - 0.05, 6.4, az, -Math.PI / 2);
+  board(signTex('တန်ဆောင်တိုင် မီးပုံးပျံပွဲ', 'Tazaungdaing fire balloons', '#283a6b', 640, 180), 8, 2.25, scene, ax + 0.05, 6.4, az, Math.PI / 2);
+  for (let k = 0; k < 14; k++) GLOWS.push([ax - 0.25, 5.0, az - 6.5 + k, LANTERN_COLS[k % 5], 1]);
+  // the judges' tent, open to the north, with the scoreboard high behind the judges
+  const jx = X(BAL_JUDGE.x), jz = Z(BAL_JUDGE.y), tent = add(new THREE.Group(), scene, jx, 0, jz);
+  for (const sx of [-5.4, 5.4]) for (const sz of [-1.0, 2.4]) cyl(0.08, 0.08, 2.6, lam('#5a3a24'), tent, sx, 1.3, sz, 6);
+  const roof = add(new THREE.Mesh(new THREE.ConeGeometry(5.6, 0.9, 4, 1, true), new THREE.MeshLambertMaterial({ map: stripes('#ffffff', '#283a6b', 10), side: DS })), tent, 0, 3.05, 0.7); roof.rotation.y = Math.PI / 4; roof.scale.set(1.4, 1, 0.45);
+  box(10, 0.8, 1.0, lam('#f3efe6'), tent, 0, 0.4, 0); box(10.05, 0.25, 1.02, lam('#283a6b'), tent, 0, 0.7, 0);
+  board(signTex('ဒိုင်လူကြီးများ', 'Judges', '#283a6b', 400, 120), 2.4, 0.72, tent, 0, 0.45, -0.52, Math.PI);
+  for (const sx of [-2.8, 2.8]) cyl(0.08, 0.08, 5.6, lam('#5a3a24'), tent, sx, 2.8, 2.7, 6);
+  bl.board = board(boardTex(bl.rows), 5.6, 3.5, tent, 0, 4.4, 2.66, Math.PI);
+  const jl = new THREE.PointLight('#ffe1a6', 24, 12, 2); jl.position.set(0, 3, -1); tent.add(jl);
+  // the paper workshops, where the next balloons are glued sheet by sheet and hung up to dry
+  BAL_SHEDS.forEach((s, i) => {
+    const sh = add(new THREE.Group(), scene, X(s.x), 0, Z(s.y)); sh.rotation.y = -Math.PI / 2; // open to the west
+    for (const sx of [-4.2, 4.2]) for (const sz of [-2.6, 2.6]) cyl(0.07, 0.07, 3.2, lam('#7a5232'), sh, sx, 1.6, sz, 6);
+    const r = add(new THREE.Mesh(new THREE.ConeGeometry(6.2, 1.3, 4, 1, true), lam('#e6d3b0', { side: DS, k: 'shedroof' })), sh, 0, 3.8, 0); r.rotation.y = Math.PI / 4; r.scale.set(1, 1, 0.65);
+    box(8.4, 2.4, 0.05, lam('#e6d3b0'), sh, 0, 1.5, -2.6);
+    box(6, 0.08, 1.6, lam('#a8743e'), sh, 0, 0.85, 0.4); for (const sx of [-2.6, 2.6]) box(0.1, 0.85, 1.4, lam('#7a5232'), sh, sx, 0.42, 0.4);
+    const cols = ['#c2432a', '#fff3d6', '#f4b63f', '#2f5d50', '#ff8ad8'];
+    for (let k = 0; k < 7; k++) box(0.7, 0.02, 0.9, lam(cols[(k + i) % 5]), sh, -2.4 + k * 0.8, 0.9 + (k % 2) * 0.02, 0.4);
+    for (let k = 0; k < 6; k++) { const sheet = add(new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.2), lam(cols[(k + i * 2) % 5], { side: DS })), sh, -3 + k * 1.2, 2.5, -1.6); sheet.rotation.y = 0.1; }
+    box(8.2, 0.03, 0.03, lam('#3a3030'), sh, 0, 3.1, -1.6);
+    const half = add(new THREE.Mesh(new THREE.SphereGeometry(1.6, 16, 10, 0, TAU, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ map: panelTex([cols[i], '#fff3d6']), side: DS })), sh, 2.6, 0, -0.9); half.scale.y = 1.2;
+    board(signTex('မီးပုံး ကပ်နေဆဲ', 'Balloon workshop · Shan paper', '#5a3a24', 512, 140), 3.6, 1.0, sh, 0, 3.4, 2.62);
+    const pl = new THREE.PointLight('#ffe1a6', 16, 9, 2); pl.position.set(0, 2.8, 0.5); sh.add(pl);
+  });
+}
+function updateBalloons3d(f: Frame, t: number): void {
+  if (!bl.light || !f.bal) return;
+  const B = f.bal, flick = 0.85 + Math.sin(t * 17) * 0.1 + Math.sin(t * 7.3) * 0.08, heat = clamp(B.heat, 0, 1);
+  bl.fire.forEach((m, k) => { m.visible = heat > 0.03; m.scale.set(0.6 + heat * 0.6, (0.5 + heat) * flick * (k ? 0.9 : 1), 0.6 + heat * 0.6); });
+  bl.light.intensity = heat * 60 * flick;
+  bl.paper.emissiveIntensity = f.night * 0.28;
+  bl.crew.forEach((r, k) => { animatePerson(r, t + k, false, false); if (B.u >= 0) { r.armL.rotation.x = r.armR.rotation.x = -2.7 + Math.sin(t * 2 + k) * 0.08; } });
+  for (const o of bl.objs) { o.used = false; o.g.visible = false; }
+  const take = (k: BalKind) => { const o = bl.objs.find(q => q.kind === k && !q.used); if (o) { o.used = true; o.g.visible = true; } return o; };
+  const lit = (o: BalObj, u: number) => { if (!o.lamps) return; const n = Math.round(clamp(u, 0, 1) * BAL_LANTERNS); o.lamps.count = n; o.halo.geometry.setDrawRange(0, n); (o.halo.material as THREE.PointsMaterial).opacity = 0.35 + f.night * 0.65; };
+  const px = X(BAL_PAD.x), pz = Z(BAL_PAD.y);
+  if (B.u >= 0) {
+    const o = take(B.kind);
+    if (o) { const s = 0.3 + 0.7 * B.u; o.g.position.set(px, o.kind === 'lantern' ? 1.6 : 0.8, pz); o.g.scale.set(0.35 + 0.65 * B.u, s, 0.35 + 0.65 * B.u); o.g.rotation.set(0, Math.sin(t * 0.6) * 0.15, Math.sin(t * 1.3) * 0.03 * B.u);
+      o.flame.visible = false; lit(o, B.kind === 'lantern' ? B.lit : 0);
+      const top = o.g.position.y + 9 * s; bl.rope.visible = true; bl.rope.scale.y = Math.max(0.1, 13.7 - top); bl.rope.position.y = (13.7 + top) / 2; }
+  } else bl.rope.visible = false;
+  for (const fl of B.flights) {
+    const o = take(fl.kind); if (!o) continue;
+    o.g.position.set(X(fl.x), (o.kind === 'lantern' ? 1.6 : 0.8) + fl.h, Z(fl.y)); o.g.scale.setScalar(1);
+    o.g.rotation.set(Math.sin(t * 0.7 + fl.t) * 0.06, fl.t * 0.08, Math.sin(t * 0.9 + fl.t) * 0.05);
+    o.flame.visible = true; o.flame.scale.setScalar(0.8 + Math.sin(t * 15 + fl.t) * 0.2); lit(o, fl.lit);
+  }
+}
+
 export interface Frame {
   t: number; dt: number; night: number; clock: number; quality: 'low' | 'high';
   me: Body3D & { hidden: boolean; sit?: boolean };
@@ -1781,6 +1959,8 @@ export interface Frame {
   tea?: { table: number; seat: number; items: string[] };
   taz?: { notes: number; robe: number; weaving: boolean; ball: [number, number, number]; kicker: number; me: boolean;
     bird: number; flower: number; fan: number; reqs: number; proc: number; monk: number; monkStop: boolean };
+  /** The balloon field: the one being filled at the pad (u < 0 when the pad is empty), and those already flying. */
+  bal?: { u: number; kind: BalKind; lit: number; heat: number; flights: Array<{ kind: BalKind; x: number; y: number; h: number; t: number; lit: number }> };
 }
 
 // ---------------------------------------------------------------- the Nibbana market (နိဗ္ဗာန်ဈေး) and the Tazaungdaing grounds
@@ -2278,7 +2458,7 @@ export function render3d(f: Frame): { atTop: boolean } {
   if (fpArm.visible) fpArm.rotation.z = 0.5 + Math.sin(t * 12) * 0.35;
   const fov = (mode === 'finale' ? 66 : 55) + (mode === 'walk' ? clamp(((f.me.spd ?? 0) - 1.05) * 12, 0, 6) : 0);
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-dt * 4)); camera.updateProjectionMatrix(); }
-  updateDust(dt); updateSkyLanterns(t, dt, f.night); updateWishes(t, f.night); updatePond(t, dt); updateMidway(f, t, dt); updateFountains(dt); updateCandles(f, t); updateTeashop(t); updateTeaDishes(f); updateTazaung(f, t);
+  updateDust(dt); updateSkyLanterns(t, dt, f.night); updateWishes(t, f.night); updatePond(t, dt); updateMidway(f, t, dt); updateFountains(dt); updateCandles(f, t); updateTeashop(t); updateTeaDishes(f); updateTazaung(f, t); updateBalloons3d(f, t);
   for (const e of embers) e.emissiveIntensity = 0.8 + Math.sin(t * 5 + Math.sin(t * 13)) * 0.25;
   glowPts.material.size = 1.1 * (1 + 0.05 * Math.sin(t * 2.3));
   renderer.render(scene, camera);

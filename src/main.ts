@@ -9,13 +9,15 @@ import {
   WW, WH, NORTH, ROAD, ZONES, FW, CR, PS, STATION, TRAIN_STOP, TRAIN_OFF, TRACK_LEN, ST, FV, PHOTO, TOYS_AT, UNCLE, ARCH_Y, SNACKS, Snack, CARTS, BOOTHS, SECRETS,
   STALLFRONTS, VENDOR_POSTS, POND, WISH_STALL, BUMPER, HAND_WHEEL, SWINGER, PWE_FOOD, CANDLE, CANDLE_N, FLOWER_N, TEA, TEA_TABS, teaStools, RESTROOMS, QUEUES, QUEUE_GAP, WATCHERS, M, blocked, trackPos,
   NIB_STALLS, nibFront, NIB_GATE, LOOMS, MONEY_TREE, CHINLONE, ROBE_STRIPS, TRUSTEE, WATER_POTS, PROC_PATH, MONK_PATH, pathLen, pathAt,
+  BAL_PAD, BAL_LEAD, BAL_JUDGE,
 } from './layout';
 import { friends } from './friends';
 import CHANGES from './changelog.json';
 import { GIVINGS, Giving, DONATE_SAY, SADHU, THANKS, BYE_ME, BYE_THEM, WEAVE_LINES, NIB_CALLS, AHMYA, YAY_SET, YAY_SAID, TRUSTEE_WHO, TRUSTEE_HELLO, TREE_GIFTS, TreeGift, TRUSTEE_TOPICS, DONORS0, ALMS_SAY, ALMS_MONK, PROC_LINES } from './nibbana';
-import { SHOPS, PWE_SHOPS, TEA_MENU, WAITER, LOCAL_LINES, Shop, Line, MenuItem, kyatMy, countMy } from './shops';
+import { BalKind, DAY_KINDS, NIGHT_KIND, BAL_POOL, BAL_LANTERNS, TEAMS, LEAD_WHO, LEAD_HELLO, JOIN, JOIN_BUSY, LEAD_TOPICS, LEAD_BYE, FIRE_LINES, LIGHT_LINE, LET_GO, CHEERS, JUDGED } from './balloons';
+import { SHOPS, PWE_SHOPS, TEA_MENU, WAITER, LOCAL_LINES, Shop, Line, MenuItem, kyatMy, countMy, mmNum } from './shops';
 import { openWishes, Wish, WishKind, WISH_PRICE, WISH_IDEAS, WISH_MAX_LEN, cleanWish } from './wishes';
-import { init3d, build3d, resize3d, render3d, launchFirework, fountain, renderPreview, capture, project, rigKey, setWishes, wishSpot, setDonors, BUMPER_N, CANDLE_MINE, CrowdItem, Frame, Look, RideKind } from './world3d';
+import { init3d, build3d, resize3d, render3d, launchFirework, fountain, renderPreview, capture, project, rigKey, setWishes, wishSpot, setDonors, setBalloonBoard, BUMPER_N, CANDLE_MINE, CrowdItem, Frame, Look, RideKind } from './world3d';
 
 // ---------- canvases ----------
 const world = $<HTMLCanvasElement>('world');
@@ -101,6 +103,8 @@ IT.push({x:WATER_POTS.x,y:WATER_POTS.y+40,r:45,label:()=>'Drink from the water p
 const almsIT: Interactable={x:-9999,y:-9999,r:75,label:()=>MONK.pause>0?'The monks bless you · ကျန်းမာ ချမ်းသာကြပါစေ':'Kneel and offer rice to the monks · ဆွမ်းလောင်းမယ်',act:offerAlms}; IT.push(almsIT);
 IT.push({x:LOOMS.x,y:LOOMS.y+70,r:70,label:()=>`Help weave the monk’s robe · မသိုးသင်္ကန်း ရက်ကူမယ် (${robePct()}% woven)`,act:openWeave});
 IT.push({x:CHINLONE.x,y:CHINLONE.y+CHINLONE.R+34,r:50,label:()=>'Join the chinlone circle · ခြင်းလုံး ခတ်မယ်',act:joinChin});
+IT.push({x:BAL_LEAD.x,y:BAL_LEAD.y+45,r:55,label:()=>'Talk to Sai Htun, the balloon crew leader · မီးပုံးအဖွဲ့',act:openBalloon});
+IT.push({x:BAL_PAD.x,y:BAL_PAD.y+80,r:60,label:()=>BAL.ph==='fill'&&!BAL.mine?`The ${TEAMS[BAL.team].en} are filling their ${balKindName(BAL.kind).name} balloon (${Math.round(BAL.u*100)}%) · ${TEAMS[BAL.team].my}`:'Fly a fire balloon with Sai Htun’s crew · မီးပုံးလွှတ်မယ်',act:openBalloon});
 TEA_TABS.forEach((_,i)=>{ const [x,y]=teaStools(i)[teaFree(i)];
   const ox=TEA_TABS[i][0]+(x-TEA_TABS[i][0])/17*46, oy=TEA_TABS[i][1]+(y-TEA_TABS[i][1])/17*46;
   IT.push({x:ox,y:oy,r:34,label:()=>P.sit&&P.table===i?(TEAO.state==='atTable'?'Talk to the waiter · ညီလေး':TEAO.state==='idle'?'Call the waiter · ညီလေး':'The waiter is on the way…'):'Sit down at this table · ထိုင်မယ်',act:()=>P.sit&&P.table===i?callWaiter():sitAt(i)}); });
@@ -122,6 +126,7 @@ function mk(o: Partial<Npc>): Npc { return Object.assign({x:0,y:0,tx:0,ty:0,sp:r
 function spawnCrowd(): void {
   const n={low:28,med:60,high:110}[S.settings.density]||60;
   NPC=VENDOR_POSTS.map(v=>{ const r=srng(v.seed+5); return mk({x:v.x,y:v.y,hd:0,post:true,hat:v.hat,bun:!v.hat&&r()<.5,shirt:SHIRTS[Math.floor(r()*SHIRTS.length)],lon:LONS[Math.floor(r()*LONS.length)],skin:SKINS[Math.floor(r()*SKINS.length)]}); });
+  NPC.forEach(n=>{ if(Math.abs(n.y-BAL_JUDGE.y-20)<2&&Math.abs(n.x-BAL_JUDGE.x)<70) n.hd=Math.PI; }); // the balloon judges look north, at the launch frame
   NPC.push(mk({x:UNCLE.x,y:UNCLE.y,hd:0,post:true,shirt:'#ffffff',lon:'#3c5a2a',skin:'#a8714a',bun:false}));
   // people sitting at the teashop tables, and kneeling to light lamps at the candle festival
   TEA_TABS.forEach((_,i)=>teaStools(i).forEach(([x,y,hd],k)=>{ if(k===teaFree(i)) return; NPC.push(mk({x,y,hd,post:true,sit:.5,nod:rand(0,9)})); }));
@@ -1215,6 +1220,113 @@ function chinStand(dt: number, mag: number): boolean {
   return true;
 }
 
+// ---------- the fire balloon field (မီးပုံးပျံကွင်း): teams take turns filling a balloon at the launch frame and letting it go ----------
+interface Flight { kind: BalKind; x: number; y: number; h: number; t: number; vx: number; vy: number; mine: boolean; lit: number; team: number }
+const BAL={ph:'wait' as 'wait'|'fill',next:12,u:0,kind:'elephant' as BalKind,team:1,mine:false,lit:0,heat:0,flights:[] as Flight[],
+  scores:[0,0,0,0] as number[],judgeT:-1,judgeTeam:0,judgeScore:0,cheerT:0,launches:0};
+function balDay(): boolean { return S.clock>=6*60&&S.clock<17*60+30; }
+function balKindName(k: BalKind): { name: string; my: string } { return k==='lantern'?NIGHT_KIND:DAY_KINDS.find(d=>d.k===k)!; }
+/** A balloon the 3D world still has a free copy of: by day an animal that isn't already up, at night a sein na pan. */
+function balPick(): BalKind | null {
+  const free=(k: BalKind)=>BAL.flights.filter(f=>f.kind===k).length<BAL_POOL[k]-(k==='lantern'?1:0);
+  if(!balDay()) return free('lantern')?'lantern':null;
+  const ks=DAY_KINDS.map(d=>d.k).filter(free); return ks.length?pick(ks):null;
+}
+function balNear(): boolean { return S.mode==='walk'&&zoneAt(P.x,P.y)==='balloons'; }
+function balLaunch(score: number): void {
+  const mine=BAL.mine, team=BAL.team, kn=balKindName(BAL.kind);
+  BAL.flights.push({kind:BAL.kind,x:BAL_PAD.x,y:BAL_PAD.y,h:0,t:0,vx:rand(8,16),vy:rand(-10,-4),mine,lit:BAL.kind==='lantern'?(mine?BAL.lit:1):1,team});
+  BAL.ph='wait'; BAL.u=0; BAL.heat=0; BAL.mine=false; BAL.next=rand(35,60); BAL.launches++;
+  BAL.judgeT=9; BAL.judgeTeam=team; BAL.judgeScore=score; BAL.cheerT=0;
+  if(balNear()){ sfx('launch');
+    if(!mine) toast(`<span class="z">မီးပုံး တက်ပြီ</span>The ${TEAMS[team].en} let their ${kn.name} balloon go! <span class="mm">${TEAMS[team].my} · ${kn.my}</span>`); }
+}
+function balScoreboard(): void {
+  setBalloonBoard(TEAMS.map((tm,i)=>[tm.my+(i===0&&BAL.scores[0]?' ★':''),tm.en,BAL.scores[i]?mmNum(BAL.scores[i]):'-'] as [string,string,string]));
+}
+let balBoardShown=false;
+function updateBalloons(dt: number): void {
+  if(!balBoardShown){ balBoardShown=true; balScoreboard(); }
+  // the crews' turns: a short wait, then about half a minute filling the balloon over the fire, then up it goes
+  if(BAL.ph==='wait'){ BAL.heat=Math.max(0,BAL.heat-dt*.5); BAL.next-=dt;
+    if(BAL.next<=0){ const k=balPick(); if(!k){ BAL.next=8; } else { BAL.ph='fill'; BAL.kind=k; BAL.u=0; BAL.team=1+(BAL.launches%3); BAL.lit=0; } } }
+  else if(!BAL.mine){ BAL.heat=.6+Math.sin(T*3)*.08; BAL.u=Math.min(1,BAL.u+dt/32); if(BAL.kind==='lantern'&&BAL.u>.75) BAL.lit=Math.min(1,BAL.lit+dt/6);
+    if(BAL.u>=1&&(BAL.kind!=='lantern'||BAL.lit>=1)) balLaunch(Math.round(rand(58,88))); }
+  // balloons already up: they rise fast, slow down, drift off east with the wind and burn out far away
+  for(const f of BAL.flights){ f.t+=dt; const up=f.t<6?.6+f.t*.5:Math.max(.9,3.6-f.t*.03); f.h+=up*dt; f.x+=f.vx*dt*(1+f.t*.02); f.y+=f.vy*dt; }
+  BAL.flights=BAL.flights.filter(f=>f.t<95);
+  // the crowd cheers as it goes up, and the judges give the score a little later
+  if(BAL.judgeT>0){ BAL.judgeT-=dt; BAL.cheerT-=dt;
+    if(BAL.cheerT<=0&&BAL.judgeT>4){ BAL.cheerT=rand(1,1.8); const n=NPC.find(q=>q.post&&!q.sit&&Math.hypot(q.x-BAL_PAD.x,q.y-BAL_PAD.y-260)<240&&Math.random()<.3); if(n&&balNear()) NPC_SAY.push({n,t:pick(CHEERS),until:T+2.5}); }
+    if(BAL.judgeT<=0){ const i=BAL.judgeTeam; BAL.scores[i]=Math.max(BAL.scores[i],BAL.judgeScore); balScoreboard();
+      if(balNear()&&i!==0) toast(`<span class="z">${JUDGED[0]}</span>${TEAMS[i].en}: <b>${BAL.judgeScore}</b> points <span class="mm">(${mmNum(BAL.judgeScore)} မှတ်)</span>`); } }
+}
+/** Sai Htun's crew: talk, ask about the tradition, and take your turn at the fire when the pad is free. */
+function openBalloon(): void {
+  const keeper=NPC.find(n=>n.post&&Math.hypot(n.x-BAL_LEAD.x,n.y-BAL_LEAD.y)<8);
+  if(keeper){ keeper.hd=Math.atan2(P.x-keeper.x,P.y-keeper.y); P.hd=Math.atan2(keeper.x-P.x,keeper.y-P.y); }
+  const c=chatBox('Help or ask:'); let busy=false;
+  const reply=(l: Line, then?: () => void, ms=750)=>{ busy=true; setTimeout(()=>{ c.say(l,false); sfx('chat'); if(keeper) NPC_SAY.push({n:keeper,t:l,until:T+4}); busy=false; then?.(); },ms); };
+  LEAD_HELLO.forEach((l,k)=>setTimeout(()=>c.say(l,false),k*500));
+  optBtn(c,JOIN,()=>{ if(busy) return; c.say(JOIN,true);
+    if(BAL.ph==='fill'&&!BAL.mine){ reply(JOIN_BUSY); return; }
+    const k=balPick(); if(!k){ reply(['မီးပုံးတွေ အကုန် တက်သွားပြီ၊ နောက်တစ်လုံး ကပ်နေတုန်း','They’re all up. We’re still gluing the next one.']); return; }
+    reply(['ကောင်းပြီ၊ မီးထိုးပေး','Great, you feed the fire.'],()=>setTimeout(()=>balFill(k),700)); },'yay');
+  LEAD_TOPICS.forEach(t=>optBtn(c,t.q,()=>{ if(busy) return; c.say(t.q,true); reply(t.a); }));
+  optBtn(c,BYE_ME,()=>{ if(busy) return; c.say(BYE_ME,true); reply(LEAD_BYE,()=>setTimeout(closeModal,900)); },'bye');
+  openModal(`${LEAD_WHO[1]} · ${LEAD_WHO[0]}`,c.wrap);
+}
+/** Your turn: hold the button to feed the fire and keep the heat in the gold band until the balloon is full,
+ *  light the lanterns if it's a night balloon, then let go. */
+function balFill(kind: BalKind): void {
+  BAL.ph='fill'; BAL.kind=kind; BAL.team=0; BAL.mine=true; BAL.u=0; BAL.lit=0; BAL.heat=.3;
+  const kn=balKindName(kind), night=kind==='lantern';
+  const w=document.createElement('div'); w.className='talk balfill';
+  w.innerHTML=`<p class="muted" style="margin:0 0 8px">Hold <b>Feed the fire</b> to send hot air into the ${esc(kn.name)} balloon <span class="mm">(${kn.my})</span>. Keep the heat in the gold band: too little and it sags, too much and the paper scorches.${night?' Then light the little lanterns before you let go.':''}</p>
+    <div class="bal"><div class="env"><i></i></div><div class="heat"><span class="band"></span><b></b></div></div>
+    <div class="wstat"></div><div class="tl wsay"></div>
+    <button type="button" class="cta bfire">Feed the fire · မီးထိုးမယ် <kbd>E</kbd></button>
+    <button type="button" class="cta blight" hidden>Light a lantern · မီးအိမ်ထွန်းမယ် <kbd>E</kbd></button>
+    <button type="button" class="cta bgo" hidden>Let go! · လွှတ်မယ် <kbd>E</kbd></button>`;
+  const env=w.querySelector('.env i') as HTMLElement, needle=w.querySelector('.heat b') as HTMLElement, stat=w.querySelector('.wstat') as HTMLElement, sayEl=w.querySelector('.wsay') as HTMLElement;
+  const bFire=w.querySelector('.bfire') as HTMLButtonElement, bLight=w.querySelector('.blight') as HTMLButtonElement, bGo=w.querySelector('.bgo') as HTMLButtonElement;
+  const LO=.45, HI=.75; let hold=false, last=performance.now(), good=0, total=0, ph='fill' as 'fill'|'light'|'go'|'done', said='', lit=0, gust=0;
+  const say=(l: Line)=>{ if(said===l[1]) return; said=l[1]; sayEl.innerHTML=`<span class="mm">${esc(l[0])}</span><small>${esc(l[1])}</small>`; };
+  say(LEAD_HELLO[1]);
+  const loop=(now: number)=>{ if(!w.isConnected) return; const dt=Math.min(.05,(now-last)/1000); last=now;
+    if(ph==='fill'){
+      gust-=dt; if(gust<=0) gust=rand(1.5,3);
+      BAL.heat=clamp(BAL.heat+(hold?.55:-.34)*dt+(gust<.4?-.25*dt:0),0,1); total+=dt;
+      const ok=BAL.heat>=LO&&BAL.heat<=HI; if(ok) good+=dt;
+      BAL.u=Math.min(1,BAL.u+dt*(ok?.07:BAL.heat<LO?.012:0));
+      say(BAL.heat>HI?FIRE_LINES.hot:BAL.heat<LO-.1?FIRE_LINES.cold:FIRE_LINES.good[Math.floor(total/4)%3]);
+      if(BAL.u>=1){ ph=night?'light':'go'; bFire.hidden=true; (night?bLight:bGo).hidden=false; say(night?LIGHT_LINE:LET_GO); sfx('ding'); }
+    }
+    needle.style.left=(BAL.heat*100)+'%'; needle.classList.toggle('hot',BAL.heat>HI);
+    env.style.transform=`scale(${.35+.65*BAL.u},${.25+.75*BAL.u})`;
+    stat.innerHTML=ph==='fill'?`The balloon is <b>${Math.round(BAL.u*100)}%</b> full`:ph==='light'?`Lanterns lit <b>${lit}/${BAL_LANTERNS}</b>`:'Full and ready. Let it go!';
+    requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+  const light=()=>{ if(ph!=='light') return; lit=Math.min(BAL_LANTERNS,lit+4); BAL.lit=lit/BAL_LANTERNS; sfx('pop');
+    if(lit>=BAL_LANTERNS){ ph='go'; bLight.hidden=true; bGo.hidden=false; say(LET_GO); } };
+  const go=()=>{ if(ph!=='go') return; ph='done';
+    const q=total>0?good/total:0, score=clamp(Math.round(40+q*50+(night?lit/BAL_LANTERNS*10:rand(4,10))),40,100);
+    closeModal(); P.hd=Math.atan2(BAL_PAD.x-P.x,BAL_PAD.y-P.y); balLaunch(score);
+    toast(`<span class="z">လွှတ်! · ${kn.my} မီးပုံး</span>Your crew lets the ${esc(kn.name)} balloon go. It sways, catches the air and climbs over the fair.`,true);
+    setTimeout(()=>{ const won=1+Math.floor(score/25); S.tix+=won; S.ticketsWon+=won; updateHUD();
+      merit(2,`The judges give your crew <b>${score}</b> points <span class="mm">(${mmNum(score)} မှတ်)</span> and <b>+${won} tickets</b>. A balloon is an offering to the Sulamani stupa.`); },8200); };
+  const down=(e?: Event)=>{ e?.preventDefault(); if(ph==='fill') hold=true; else if(ph==='light') light(); else go(); };
+  const up=()=>{ hold=false; };
+  bFire.addEventListener('pointerdown',down); bFire.addEventListener('pointerup',up); bFire.addEventListener('pointerleave',up); bFire.addEventListener('pointercancel',up);
+  bLight.onclick=()=>light(); bGo.onclick=()=>go();
+  const key=(e: KeyboardEvent)=>{ if(!w.isConnected){ window.removeEventListener('keydown',key,true); window.removeEventListener('keyup',keyUp,true); return; }
+    if(e.code==='KeyE'||e.code==='Space'||e.code==='Enter'){ e.preventDefault(); e.stopImmediatePropagation(); if(ph==='fill') hold=true; else if(!e.repeat) down(); } };
+  const keyUp=(e: KeyboardEvent)=>{ if(e.code==='KeyE'||e.code==='Space'||e.code==='Enter') hold=false; };
+  window.addEventListener('keydown',key,true); window.addEventListener('keyup',keyUp,true);
+  openModal(`Fill the balloon · ${kn.my} မီးပုံး`,w,()=>{ window.removeEventListener('keydown',key,true); window.removeEventListener('keyup',keyUp,true);
+    if(BAL.mine&&ph!=='done'){ BAL.mine=false; BAL.ph='wait'; BAL.u=0; BAL.next=6; toast('The crew lets the air out and folds the balloon for later.'); } });
+}
+
 // ---------- the teashop waiter: comes to your table, takes your order, brings it, and brings the bill ----------
 let waiter: Npc | null=null;
 const TEAO={table:-1,state:'idle' as 'idle'|'coming'|'atTable'|'fetching'|'bringing'|'returning',path:[] as Array<[number,number]>,wait:0,pending:[] as string[],served:[] as string[],bill:0,greeted:false,leaveT:0};
@@ -1841,6 +1953,7 @@ function frameData(dt: number): Frame {
     candles:{lamps:CAND.lamps,mine:CAND.mine,flowers:CAND.flowers},
     bumperPov:DRIVE.pov,
     taz:{bird:MT.bird,flower:MT.flower,fan:MT.fan,reqs:MT.reqs,proc:PROC.d,monk:MONK.d,monkStop:MONK.pause>0,notes:Math.min(160,MT.notes),robe:ROBE.strips/ROBE_STRIPS,weaving:T<ROBE.myUntil,ball:CHIN.ball,kicker:CHIN.kicker,me:CHIN.on},
+    bal:{u:BAL.ph==='fill'?BAL.u:-1,kind:BAL.kind,lit:BAL.lit,heat:BAL.heat,flights:BAL.flights},
     tea:P.table>=0?{table:P.table,seat:teaFree(P.table),items:TEAO.served}:undefined,
   };
 }
@@ -1858,7 +1971,7 @@ function frame(now: number): void {
   CAM.dist+=(CAM.zoom-CAM.dist)*(1-Math.exp(-dt*8));
   updateTrain(dt);
   for(const n of NPC) updateNPC(n,dt);
-  updateBikes(dt); updateBumpers(dt); updateCandles(dt); updateQueues(dt); updateChin(dt); updateTazaung(dt);
+  updateBikes(dt); updateBumpers(dt); updateCandles(dt); updateQueues(dt); updateChin(dt); updateTazaung(dt); updateBalloons(dt);
   const glide=(room as { slow?: boolean } | null)?.slow?2.6:8; // relayed positions come about once a second: glide between them
   for(const r of REMOTE.values()){ const k=Math.min(1,dt*glide); r.moving=Math.hypot(r.tx-r.x,r.ty-r.y)>1.5; r.x=lerp(r.x,r.tx,k); r.y=lerp(r.y,r.ty,k); }
   updateNpcSay(dt); updateCrowdTalk(dt);
@@ -2060,4 +2173,4 @@ const hot=window.claude&&window.claude.hot;
 if(hot&&hot.ready) hot.ready(boot); else boot(hot&&hot.data||{});
 // audio needs a gesture; also unlock on first tap after a reload
 window.addEventListener('pointerdown',()=>{ if(S.mode!=='title'){ audioInit(S.settings.sound); loadVoices(VOICE_CLIPS); if(A.c&&A.c.state==='suspended') A.c.resume(); } });
-window.__ykn={CHIN,ROBE,MT,PROC,MONK,openTree,offerAlms,openGiving,openWeave,joinChin,PQ,joinQueue,QUEUES,openShop,SHOPS,callWaiter,TEAO,useRestroom,launchFirework,checkUpdate,S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};
+window.__ykn={BAL,openBalloon,balFill,CHIN,ROBE,MT,PROC,MONK,openTree,offerAlms,openGiving,openWeave,joinChin,PQ,joinQueue,QUEUES,openShop,SHOPS,callWaiter,TEAO,useRestroom,launchFirework,checkUpdate,S,P,CAM,startScene,startGame,TRN,buyTrain,startDrive,DRIVE,syncPeers,BIKES,say,BUMPS,DODGE,CAND,NPC,MINI,LOOK,askFireworks,openTalk,nearNpc,sitAt,toggleDance,lightLamp,offerFlowers};
