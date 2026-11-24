@@ -1,5 +1,14 @@
 [
   {
+    "v": "1.8.1", "date": "2026-11-24", "title": "A clearer map of the fair", "my": "ပွဲတော်မြေပုံ အသစ်",
+    "notes": [
+      "The full map is redrawn: every zone has its own colour and a numbered name tag, and no names sit on top of each other any more.",
+      "The fire balloon field now shows on the map: the launch fire, the judges and the paper workshops.",
+      "The map fits your screen: on a wide screen it fills the card, and on a phone it fills the screen and starts where you are.",
+      "Tap a zone under the map to fly straight to it. Found zones turn gold."
+    ]
+  },
+  {
     "v": "1.8.0", "date": "2026-11-24", "title": "Tazaungdaing fire balloons", "my": "တန်ဆောင်တိုင် မီးပုံးပျံပွဲ",
     "notes": [
       "A new fire balloon field (မီးပုံးပျံပွဲ) east of the Tazaungdaing grounds, like the Taunggyi balloon festival.",

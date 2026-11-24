@@ -113,22 +113,33 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 #tools kbd{font-family:var(--body);font-size:10px;opacity:.6;margin-left:4px}
 #mini{position:fixed;right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:170px;height:170px;border-radius:16px;border:2px solid rgba(244,182,63,.55);background:var(--panel);box-shadow:0 6px 24px rgba(0,0,0,.45);cursor:pointer;pointer-events:auto;transition:transform .15s}
 #mini:hover{transform:scale(1.04)}
-#bigmap{position:fixed;inset:0;z-index:30;background:rgba(6,4,18,.72);display:flex;align-items:center;justify-content:center;padding:12px;animation:mfade .22s ease-out}
+#bigmap{position:fixed;inset:0;z-index:30;background:rgba(6,4,18,.72);display:flex;align-items:center;justify-content:center;padding:16px;animation:mfade .22s ease-out}
 #bigmap[hidden]{display:none}
-#bigmap .mapcard{background:var(--panel-solid);border:1px solid var(--line);border-radius:16px;width:min(1200px,100%);height:min(100%,900px);display:flex;flex-direction:column;padding:10px 14px;box-sizing:border-box;animation:mpop .3s cubic-bezier(.2,1.3,.4,1)}
-#bigmap header{display:flex;align-items:center;justify-content:space-between;gap:10px}
-#bigmap h2{font-family:var(--display);font-weight:400;font-size:18px;color:var(--gold);margin:4px 0}
+#bigmap .mapcard{background:var(--panel-solid);border:1px solid var(--line);border-radius:18px;width:min(1560px,100%);height:min(100%,1000px);display:flex;flex-direction:column;gap:8px;padding:12px 16px;box-sizing:border-box;box-shadow:0 20px 60px rgba(0,0,0,.5);animation:mpop .3s cubic-bezier(.2,1.3,.4,1)}
+#bigmap header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+#bigmap h2{font-family:var(--display);font-weight:400;font-size:18px;color:var(--gold);margin:2px 0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+#bigmap h2 .mm{font-family:var(--mm);font-size:16px;color:#f4d58a}
 #bigmap .mapwrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
-#bigmap canvas{border-radius:12px;touch-action:none;cursor:grab;display:block}
+#bigmap canvas{border-radius:14px;touch-action:none;cursor:grab;display:block;box-shadow:inset 0 0 0 1px rgba(244,182,63,.18)}
 #bigmap canvas:active{cursor:grabbing}
-#bigmap .mapbtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-#bigmap .mapbtns button{min-width:38px;padding:6px 10px}
+#bigmap .mapbtns{display:flex;gap:6px;flex-wrap:nowrap;justify-content:flex-end;margin-left:auto}
+#bigmap .mapbtns button{min-width:40px;min-height:36px;padding:6px 10px}
 #bigmap .mapbtns button:disabled{opacity:.4}
+#bigmap .mapzones{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin;padding:2px 1px 4px;-webkit-overflow-scrolling:touch;flex:none}
+#bigmap .zc{flex:none;display:flex;align-items:center;gap:7px;padding:5px 11px 5px 5px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--muted);font:600 12px/1.15 var(--body);text-align:left;cursor:pointer;min-height:36px}
+#bigmap .zc b{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--hue);color:#1a1230;font-size:11px;flex:none;opacity:.85}
+#bigmap .zc span{display:flex;flex-direction:column;white-space:nowrap}
+#bigmap .zc small{font:500 10.5px/1.5 var(--mm);color:#c9a960}
+#bigmap .zc.on{color:#ffe7a3;border-color:rgba(244,182,63,.55)}
+#bigmap .zc.on b{background:var(--gold);opacity:1}
+#bigmap .zc.sel{background:rgba(244,182,63,.18);border-color:#fff3d6;color:#fff3d6}
+#bigmap .zc:hover{border-color:rgba(244,182,63,.6)}
 #bigmap .lg{display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap}
-#bigmap .lg i{width:10px;height:10px;border-radius:50%;display:inline-block;box-sizing:border-box}
-@media (max-width:600px){#bigmap{padding:6px}#bigmap .mapcard{padding:8px;height:100%}#bigmap h2{font-size:15px}#bigmap .mapbtns button{padding:6px 9px}#bigmap p{font-size:11px;line-height:1.7}}
-@media (max-height:500px) and (orientation:landscape){#bigmap{padding:4px}#bigmap .mapcard{padding:4px 8px 6px;height:100%}#bigmap header{min-height:0}#bigmap h2{font-size:14px;margin:0}#bigmap .mapbtns button{padding:3px 9px;font-size:12px}#bigmap p{display:none}}
-#bigmap p{margin:6px 0 2px;font-size:12px}
+#bigmap .lg i{width:10px;height:10px;border-radius:50%;display:inline-block;box-sizing:border-box;font-style:normal}
+#bigmap .lg i.em{width:auto;height:auto;border-radius:0;font-size:12px}
+#bigmap p{margin:0;font-size:12px;line-height:1.8}
+@media (max-width:600px){#bigmap{padding:0}#bigmap .mapcard{padding:10px 8px calc(8px + env(safe-area-inset-bottom));height:100%;border-radius:0;border:0;gap:6px}#bigmap h2{font-size:15px}#bigmap h2 .mm{font-size:13px}#bigmap .mapbtns button{padding:6px 9px;min-width:38px}#bigmap p{font-size:11px;line-height:1.7}#bigmap .lg{margin-right:8px}#bigmap .hint{display:none}}
+@media (max-height:500px) and (orientation:landscape){#bigmap{padding:0}#bigmap .mapcard{padding:6px 10px calc(6px + env(safe-area-inset-bottom));height:100%;border-radius:0;border:0;gap:5px}#bigmap header{min-height:0}#bigmap h2{font-size:14px;margin:0}#bigmap h2 .mm{font-size:12px}#bigmap .mapbtns button{padding:3px 9px;font-size:12px;min-height:30px}#bigmap .zc{min-height:30px;padding:3px 9px 3px 3px}#bigmap .zc small{display:none}#bigmap p{display:none}}
 
 #prompt{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(26px + env(safe-area-inset-bottom,0px));background:var(--panel);border:1px solid var(--gold);border-radius:999px;padding:8px 16px;font-size:16px;font-weight:700;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis;pointer-events:auto;cursor:pointer}
 #prompt .key{font-family:var(--display);font-size:12px;background:var(--gold);color:#2a1606;border-radius:6px;padding:1px 6px;margin-right:8px}
@@ -455,7 +466,7 @@ button:active{transform:scale(.94)}
   <button id="bSound">Sound on</button>
 </div>
 <canvas id="mini" width="340" height="340" hidden title="Open the map (M)"></canvas>
-<div id="bigmap" hidden><div class="mapcard"><header><h2>Map of the fair · <span class="mm">ပွဲတော်မြေပုံ</span></h2><div class="mapbtns"><button id="mapMe" title="Show where I am">📍 Me</button><button id="mapOut" aria-label="Zoom out">−</button><button id="mapIn" aria-label="Zoom in">+</button><button id="bigmapClose">Close</button></div></header><div class="mapwrap"><canvas id="bigmapC"></canvas></div><p class="muted"><span class="lg"><i style="background:#ff5a4e"></i>You</span><span class="lg"><i style="background:#3fc7a5"></i>Other players</span><span class="lg"><i style="background:#e0b040"></i>Mini train</span><span class="lg"><i style="border:2px solid #f4b63f;background:none"></i>Zones you found</span> Drag to move, pinch or scroll to zoom.</p></div></div>
+<div id="bigmap" hidden><div class="mapcard"><header><h2>Map of the fair <span class="mm">ပွဲတော်မြေပုံ</span></h2><div class="mapbtns"><button id="mapMe" title="Show where I am">📍 Me</button><button id="mapOut" aria-label="Zoom out">−</button><button id="mapIn" aria-label="Zoom in">+</button><button id="bigmapClose">Close</button></div></header><div class="mapwrap"><canvas id="bigmapC"></canvas></div><div class="mapzones" id="mapZones" aria-label="Zones"></div><p class="muted"><span class="lg"><i style="background:#ff5a4e"></i>You</span><span class="lg"><i style="background:#3fc7a5"></i>Other players</span><span class="lg"><i style="background:#e0b040"></i>Mini train</span><span class="lg"><i style="border:2px solid #f4b63f;background:none"></i>Zones you found</span><span class="lg"><i class="em">🚻</i>Restroom</span><span class="hint">Drag to move, pinch or scroll to zoom, or tap a zone to go there.</span></p></div></div>
 <div id="prompt" hidden></div>
 <div id="toasts" aria-live="polite"></div>
 <div id="chat" hidden>
